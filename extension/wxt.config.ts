@@ -15,6 +15,8 @@ export default defineConfig({
     permissions: ["storage"],
     host_permissions: [
       "https://x-spam-sentinel-edge.zuoluotv.workers.dev/*",
+      "https://github.com/*",
+      "https://api.github.com/*",
       "http://127.0.0.1:8787/*",
       "http://localhost:8787/*",
     ],

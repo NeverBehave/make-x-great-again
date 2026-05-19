@@ -35,6 +35,30 @@ function articleOf(node: Element | null): HTMLElement | null {
   return (node?.closest("article") as HTMLElement) ?? null;
 }
 
+/** Find a currently-rendered tweet authored by this account (by numeric id
+ *  from the avatar URL, else by the @handle profile link). */
+function findArticleFor(userId?: string, handle?: string): HTMLElement | null {
+  for (const art of document.querySelectorAll<HTMLElement>(
+    'article[data-testid="tweet"]',
+  )) {
+    if (userId) {
+      const img = art.querySelector<HTMLImageElement>('img[src*="profile_images/"]');
+      if (img?.src.match(/profile_images\/(\d+)\//)?.[1] === userId) return art;
+    }
+    if (handle) {
+      const nb = art.querySelector('[data-testid="User-Name"]');
+      if (
+        nb &&
+        [...nb.querySelectorAll<HTMLAnchorElement>('a[href^="/"]')].some(
+          (a) => (a.getAttribute("href") ?? "").toLowerCase() === `/${handle.toLowerCase()}`,
+        )
+      )
+        return art;
+    }
+  }
+  return null;
+}
+
 function hideTweet(node: Element | null) {
   const cell =
     node?.closest('[data-testid="cellInnerDiv"]') ?? node?.closest("article");
@@ -77,38 +101,54 @@ async function apiBlock(userId?: string, handle?: string): Promise<boolean> {
   }
 }
 
+const waitFor = async <T>(fn: () => T, tries = 24, gap = 80): Promise<T | null> => {
+  for (let i = 0; i < tries; i++) {
+    const v = fn();
+    if (v) return v;
+    await sleep(gap);
+  }
+  return null;
+};
+
 /**
- * Fallback only: drive X's own block flow via DOM (caret → Block → confirm).
- * Brittle; used if the authenticated endpoint call fails.
+ * PRIMARY block path: drive X's OWN block UI (caret → Block → confirm). X's
+ * own JS issues the correctly-signed request (incl. the per-request
+ * transaction id we can't forge), so it genuinely blocks on the account and
+ * syncs to every client. Returns true ONLY when the confirm was clicked and
+ * the dialog closed (real success — never a false positive).
  */
-async function nativeBlock(anchor: HTMLElement): Promise<boolean> {
+async function nativeBlock(art: HTMLElement): Promise<boolean> {
   try {
-    const art = articleOf(anchor);
-    const caret = art?.querySelector<HTMLElement>('[data-testid="caret"]');
+    const caret = art.querySelector<HTMLElement>('[data-testid="caret"]');
     if (!caret) return false;
     caret.click();
-    for (let i = 0; i < 20; i++) {
-      await sleep(80);
-      const items = document.querySelectorAll<HTMLElement>('[role="menuitem"]');
-      const block = [...items].find((m) =>
-        /\bblock\b|屏蔽|拉黑|封锁/i.test(m.innerText),
+    const item = await waitFor(() => {
+      const direct = document.querySelector<HTMLElement>(
+        '[data-testid="block"], [role="menuitem"][data-testid="block"]',
       );
-      if (block) {
-        block.click();
-        for (let j = 0; j < 20; j++) {
-          await sleep(80);
-          const ok = document.querySelector<HTMLElement>(
-            '[data-testid="confirmationSheetConfirm"]',
-          );
-          if (ok) {
-            ok.click();
-            return true;
-          }
-        }
-        return false;
-      }
+      if (direct) return direct;
+      const items = document.querySelectorAll<HTMLElement>(
+        '[role="menuitem"], [data-testid="Dropdown"] [role="menuitem"]',
+      );
+      return [...items].find((m) => /\bblock\b|屏蔽|封锁|拉黑/i.test(m.innerText)) ?? null;
+    });
+    if (!item) {
+      document.body.click(); // close the menu
+      return false;
     }
-    return false;
+    item.click();
+    const confirm = await waitFor(() =>
+      document.querySelector<HTMLElement>('[data-testid="confirmationSheetConfirm"]'),
+    );
+    if (!confirm) return false;
+    confirm.click();
+    // Real success: the confirm sheet goes away.
+    const gone = await waitFor(
+      () => !document.querySelector('[data-testid="confirmationSheetConfirm"]'),
+      20,
+      80,
+    );
+    return !!gone;
   } catch {
     return false;
   }
@@ -189,9 +229,25 @@ export default defineContentScript({
       if (!dismissed) bubbleApi?.update(findings);
     }
 
-    async function blockAccount(key: string, sig: Signals) {
-      const anchor = anchorByKey.get(key);
-      await addBlocked(key); // fast short-circuit set
+    /** Returns true only if the account was REALLY blocked on X. */
+    // The ONLY reliable real block = drive X's own UI so X's JS issues the
+    // request with its per-request x-client-transaction-id (can't be forged
+    // or replayed). API call is a best-effort fallback that usually fails.
+    async function tryRealBlock(sig: Signals): Promise<boolean> {
+      let art =
+        articleOf(anchorByKey.get(sig.userId || `h:${sig.handle}`) ?? null) ??
+        findArticleFor(sig.userId, sig.handle);
+      if (art) {
+        art.scrollIntoView({ block: "center" });
+        await sleep(300);
+        art = findArticleFor(sig.userId, sig.handle) ?? art;
+      }
+      if (art && (await nativeBlock(art))) return true;
+      return apiBlock(sig.userId, sig.handle);
+    }
+
+    async function finalizeBlocked(key: string, sig: Signals) {
+      await addBlocked(key);
       if (sig.userId) await addBlocked(sig.userId);
       const f = findings.find((x) => (x.userId || x.handle) === (sig.userId || sig.handle));
       await addBlockRecord({
@@ -204,17 +260,81 @@ export default defineContentScript({
         ...(f?.verdict ? { verdict: f.verdict, reason: f.verdict.reasons[0] } : {}),
       });
       await bumpStats({ blocks: 1 });
-      // REAL X block on the user's account (syncs to every browser/client).
-      const blocked = await apiBlock(sig.userId, sig.handle);
-      if (!blocked && anchor) void nativeBlock(anchor); // DOM fallback only
-      if (anchor) hideTweet(anchor); // also hide locally for instant feedback
-      // User block = the human-confirm signal → eligible for the public DB
-      // (governance: AI alone never auto-publishes).
-      void send({ type: "confirm_spam", signals: sig });
-      const i = findings.findIndex((f) => (f.userId || f.handle) === (sig.userId || sig.handle));
+      hideTweet(anchorByKey.get(key) ?? null);
+      void send({ type: "confirm_spam", signals: sig }); // human-confirm signal
+      const i = findings.findIndex((x) => (x.userId || x.handle) === (sig.userId || sig.handle));
       if (i >= 0) findings.splice(i, 1);
       if (!dismissed) bubbleApi?.update(findings);
     }
+
+    async function blockAccount(key: string, sig: Signals): Promise<boolean> {
+      if (await tryRealBlock(sig)) {
+        await finalizeBlocked(key, sig);
+        return true;
+      }
+      const f0 = findings.find((x) => (x.userId || x.handle) === (sig.userId || sig.handle));
+      if (f0) f0.blockFailed = true;
+      if (!dismissed) bubbleApi?.update(findings);
+      return false;
+    }
+
+    // ---- Durable, non-blocking, rate-limit-aware bulk block queue ----
+    type QItem = { key: string; sig: Signals; tries: number };
+    let queue: QItem[] = [];
+    let draining = false;
+    const QK = "xss:blockQueue";
+    const persistQ = () =>
+      chrome.storage.local.set({ [QK]: queue.map((q) => ({ key: q.key, sig: q.sig, tries: q.tries })) });
+
+    async function drain() {
+      if (draining) return;
+      draining = true;
+      while (queue.length) {
+        const it = queue[0];
+        if (!it) break;
+        bubbleApi?.setScanning(queue.length); // progress: 拉黑中 N
+        const ok = await tryRealBlock(it.sig).catch(() => false);
+        if (ok) {
+          await finalizeBlocked(it.key, it.sig);
+          queue.shift();
+          await persistQ();
+          await sleep(1800); // pace: stay under X's block rate limit
+        } else {
+          it.tries++;
+          if (it.tries >= 6) {
+            const f = findings.find(
+              (x) => (x.userId || x.handle) === (it.sig.userId || it.sig.handle),
+            );
+            if (f) f.blockFailed = true;
+            queue.shift();
+            if (!dismissed) bubbleApi?.update(findings);
+          } else {
+            // X rate-limited / not found yet → exponential backoff, keep it.
+            await sleep(Math.min(30000, 2000 * 2 ** it.tries));
+          }
+          await persistQ();
+        }
+      }
+      draining = false;
+      bubbleApi?.setScanning(0);
+    }
+
+    function enqueueBlocks(items: { key: string; sig: Signals }[]) {
+      for (const x of items) {
+        if (!queue.some((q) => q.key === x.key)) queue.push({ ...x, tries: 0 });
+      }
+      void persistQ();
+      void drain(); // non-blocking; returns immediately
+    }
+
+    // Resume a queue interrupted by reload/navigation.
+    void chrome.storage.local.get(QK).then((g) => {
+      const saved = g[QK] as QItem[] | undefined;
+      if (saved?.length) {
+        queue = saved;
+        void drain();
+      }
+    });
 
     function badgeFor(
       anchor: HTMLElement,
@@ -375,23 +495,23 @@ export default defineContentScript({
         container.appendChild(st);
         const bubble = createBubble({
           onBlockAll(fs: Finding[]) {
-            // Sequential with spacing — each is a real X API block; don't
-            // hammer the endpoint (rate limits).
-            void (async () => {
-              for (const f of fs) {
-                const key = f.userId || `h:${f.handle}`;
-                await blockAccount(key, {
-                  isProfile: false,
+            // Non-blocking: enqueue all; a durable paced queue drains in the
+            // background (survives reload, backs off on X's rate limit).
+            enqueueBlocks(
+              fs.map((f) => ({
+                key: f.userId || `h:${f.handle}`,
+                sig: {
+                  isProfile: false as const,
                   handle: f.handle,
-                  displayName: "",
+                  displayName: f.displayName ?? "",
                   bio: "",
                   hasDefaultAvatar: false,
                   recentTweets: [],
                   ...(f.userId ? { userId: f.userId } : {}),
-                });
-                await sleep(350);
-              }
-            })();
+                  ...(f.avatarUrl ? { avatarUrl: f.avatarUrl } : {}),
+                },
+              })),
+            );
           },
           onBlockOne(f: Finding) {
             void blockAccount(f.userId || `h:${f.handle}`, {

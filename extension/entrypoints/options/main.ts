@@ -1,3 +1,4 @@
+import { getGhClientId, getGhLogin, setGhClientId } from "../../lib/auth";
 import {
   type BlockRecord,
   type CacheRow,
@@ -7,6 +8,14 @@ import {
   removeBlock,
 } from "../../lib/store";
 import type { Label } from "../../lib/types";
+
+function bg<T = Record<string, unknown>>(
+  msg: unknown,
+): Promise<{ ok: boolean; data?: T; error?: string }> {
+  return new Promise((r) =>
+    chrome.runtime.sendMessage(msg, (resp) => r(resp ?? { ok: false })),
+  );
+}
 
 const TAG: Record<Label, [string, string]> = {
   spam: ["t-danger", "垃圾"],
@@ -20,8 +29,15 @@ const esc = (s: string) =>
 const when = (ts: number) => new Date(ts).toLocaleString("zh-CN", { hour12: false });
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
 
-function avatar(url?: string) {
-  return url ? `<img src="${esc(url)}" alt="">` : `<span class="ph"></span>`;
+function avatar(url?: string, name?: string) {
+  const mono = (name || "?").replace(/^@/, "").charAt(0).toUpperCase();
+  return url
+    ? `<img src="${esc(url)}" referrerpolicy="no-referrer" alt="">`
+    : `<span class="ph">${esc(mono)}</span>`;
+}
+/** show ` · <id>` only when it's a real numeric id distinct from the handle */
+function idTail(id: string, handle: string) {
+  return /^\d+$/.test(id) && id !== handle && !/^\d+$/.test(handle) ? ` · ${id}` : "";
 }
 function tag(label: Label, conf?: number) {
   const [cls, zh] = TAG[label] ?? ["t-neutral", label];
@@ -59,11 +75,11 @@ async function renderOverview() {
 async function renderBlocklist() {
   const list = (await getBlocklist()).sort((a, b) => b.ts - a.ts);
   const row = (r: BlockRecord) => `<tr data-id="${esc(r.id)}">
-    <td><div class="u">${avatar(r.avatarUrl)}<div>
+    <td><div class="u">${avatar(r.avatarUrl, r.displayName || r.handle)}<div>
       <div class="name">${esc(r.displayName || "@" + r.handle)}</div>
-      <div class="h">@${esc(r.handle)}${/^\d+$/.test(r.id) ? ` · ${r.id}` : ""}</div></div></div></td>
+      <div class="h">@${esc(r.handle)}${esc(idTail(r.id, r.handle))}</div></div></div></td>
     <td>${r.verdict ? tag(r.verdict.label, r.verdict.confidence) : "—"}</td>
-    <td class="h">${esc(r.reason || "")}</td>
+    <td class="reason">${esc(r.reason || "")}</td>
     <td class="h">${{ manual: "手动", block_all: "一键全部", list_hit: "名单命中" }[r.source]}</td>
     <td class="h">${when(r.ts)}</td>
     <td><button class="btn" data-unblock="${esc(r.id)}">取消拉黑</button></td></tr>`;
@@ -127,10 +143,64 @@ function renderAbout() {
     </div>`;
 }
 
+async function renderSettings() {
+  const m = $("main");
+  const login = await getGhLogin();
+  const cid = await getGhClientId();
+  m.innerHTML = `
+    <h1>设置</h1>
+    <div class="sub">登录与令牌仅存于本机</div>
+    <div class="about">
+      <p><b>GitHub 登录</b> — 上报与服务端 AI 分析需要（防滥用）。</p>
+      <p id="ghs">${login ? `已登录 <code>@${login}</code> · <a href="#" id="ghout">登出</a>` : '<button class="btn" id="ghin">用 GitHub 登录</button>'}</p>
+      <p id="ghflow" style="color:var(--warn)"></p>
+      <p style="margin-top:18px;color:#8b949e;font-size:12px">审核（守门员）已独立为单独网页，仅维护者使用：
+        <a href="https://x-spam-sentinel-edge.zuoluotv.workers.dev/admin" target="_blank" rel="noopener">审核台</a>。</p>
+      <p style="margin-top:18px;color:#8b949e;font-size:12px">GitHub OAuth client_id（默认已内置，一般无需改）<br>
+        <input id="cid" value="${cid}" style="width:320px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:#8b949e;border-radius:8px;padding:6px 10px;font:12px system-ui">
+        <button class="btn" id="cidsave">保存</button></p>
+    </div>`;
+  document.getElementById("ghout")?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    await bg({ type: "gh_logout" });
+    renderSettings();
+  });
+  document.getElementById("ghin")?.addEventListener("click", async () => {
+    const f = $("ghflow");
+    f.textContent = "正在获取设备码…";
+    const s = await bg<{ user_code: string; verification_uri: string; device_code: string; interval: number }>(
+      { type: "gh_start" },
+    );
+    if (!s.ok || !s.data) {
+      f.textContent = `失败：${s.error ?? "请确认 OAuth App 已勾选 Enable Device Flow"}`;
+      return;
+    }
+    const { user_code, verification_uri, device_code, interval } = s.data;
+    window.open(verification_uri, "_blank", "noopener");
+    f.innerHTML = `在打开的页面输入码：<code>${user_code}</code>，授权后自动完成…`;
+    const poll = async () => {
+      const r = await bg<{ login?: string; pending?: string }>({
+        type: "gh_poll",
+        deviceCode: device_code,
+      });
+      if (r.ok && r.data?.login) {
+        renderSettings();
+        return;
+      }
+      setTimeout(poll, Math.max(5, interval || 5) * 1000);
+    };
+    setTimeout(poll, (interval || 5) * 1000);
+  });
+  document.getElementById("cidsave")?.addEventListener("click", async () => {
+    await setGhClientId((document.getElementById("cid") as HTMLInputElement).value);
+  });
+}
+
 const tabs: Record<string, () => void> = {
   overview: renderOverview,
   blocklist: renderBlocklist,
   cache: renderCache,
+  settings: renderSettings,
   about: renderAbout,
 };
 

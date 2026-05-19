@@ -53,5 +53,7 @@ const $ = (id: string) => document.getElementById(id) as HTMLElement;
 })();
 
 document.getElementById("panel")?.addEventListener("click", () => {
-  chrome.runtime.openOptionsPage();
+  // Always a full standalone tab/page (not the cramped embedded modal).
+  chrome.tabs.create({ url: chrome.runtime.getURL("options.html") });
+  window.close();
 });

@@ -152,6 +152,7 @@ export interface Finding {
   avatarUrl?: string;
   displayName?: string;
   snippet?: string;
+  blockFailed?: boolean;
   verdict: Verdict;
 }
 
@@ -255,8 +256,9 @@ export function createBubble(h: BubbleHandlers) {
                 <div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
                 <div style="font-size:11px;color:${col}">@${esc(f.handle)} · ${m.zh} ${(f.verdict.confidence * 100).toFixed(0)}%</div>
                 ${snip ? `<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${snip}</div>` : ""}
+                ${f.blockFailed ? `<div style="font-size:11px;color:var(--warn)">自动屏蔽失败 · <a href="https://x.com/${esc(f.handle)}" target="_blank" rel="noopener" style="color:var(--warn)">手动屏蔽</a></div>` : ""}
               </div>
-              <button class="xss-act" data-one="${f.userId || "h:" + f.handle}">拉黑</button>
+              <button class="xss-act" data-one="${f.userId || "h:" + f.handle}">${f.blockFailed ? "重试" : "拉黑"}</button>
             </div>`;
           })
           .join("")}

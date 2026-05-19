@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { z } from "zod";
 
@@ -7,6 +7,45 @@ interface Env {
   LLM_BASE_URL: string;
   LLM_MODEL: string;
   LLM_API_KEY: string;
+  // "1" => enforce GitHub auth on classify/report/confirm. Default off so
+  // deploying T6 doesn't break the still-anonymous shipped extension; flip
+  // on once the extension's GitHub login ships.
+  REQUIRE_AUTH?: string;
+  ADMIN_TOKEN?: string; // bearer for the admin moderation endpoints
+}
+
+type Ctx = Context<{ Bindings: Env }>;
+
+const AUTO_CONF = 0.9; // AI confidence floor for auto-publish
+const AUTO_REPORTERS = 3; // distinct GitHub reporters required for auto-publish
+
+/** Verify a GitHub token → stable reporter id. null = not a valid identity. */
+async function ghIdentity(req: Request): Promise<string | null> {
+  const auth = req.headers.get("authorization") ?? "";
+  const tok = auth.replace(/^Bearer\s+/i, "").trim();
+  if (!tok) return null;
+  try {
+    const r = await fetch("https://api.github.com/user", {
+      headers: {
+        authorization: `Bearer ${tok}`,
+        "user-agent": "x-spam-sentinel",
+        accept: "application/vnd.github+json",
+      },
+    });
+    if (!r.ok) return null;
+    const u = (await r.json()) as { id?: number };
+    return u.id ? `gh:${u.id}` : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Enforce identity only when REQUIRE_AUTH is on. Returns reporter id (or
+ *  "anon" when enforcement is off and no token). null => reject. */
+async function requireReporter(c: Ctx): Promise<string | null> {
+  const id = await ghIdentity(c.req.raw);
+  if (id) return id;
+  return c.env.REQUIRE_AUTH === "1" ? null : "anon";
 }
 
 const Signals = z.object({
@@ -21,6 +60,7 @@ const Signals = z.object({
   followersCount: z.number().optional(),
   followingCount: z.number().optional(),
   hasDefaultAvatar: z.boolean().optional(),
+  avatarUrl: z.string().optional(),
 });
 type Signals = z.infer<typeof Signals>;
 
@@ -117,6 +157,9 @@ app.get("/v1/check", async (c) => {
 });
 
 app.post("/v1/classify", async (c) => {
+  // Cost endpoint — GitHub identity required (when enforcement is on).
+  const who = await requireReporter(c);
+  if (!who) return c.json({ error: "github_login_required" }, 401);
   const s = Signals.parse(await c.req.json());
   const h = sigHash(s);
   const uid = s.userId ?? null;
@@ -134,31 +177,126 @@ app.post("/v1/classify", async (c) => {
   const verdict = await classify(c.env, s);
   const now = Date.now();
   await c.env.DB.prepare(
-    `INSERT INTO accounts (x_user_id,handle,display_name,verdict_label,confidence,reasons,model,status,source,signals_hash,first_seen,last_scored)
-     VALUES (?,?,?,?,?,?,?, 'auto_pending_review','auto_scan', ?, ?, ?)
+    `INSERT INTO accounts (x_user_id,handle,display_name,avatar_url,verdict_label,confidence,reasons,model,status,source,signals_hash,first_seen,last_scored)
+     VALUES (?,?,?,?,?,?,?,?, 'auto_pending_review','auto_scan', ?, ?, ?)
      ON CONFLICT(x_user_id,handle) DO UPDATE SET
        verdict_label=excluded.verdict_label, confidence=excluded.confidence, reasons=excluded.reasons,
-       model=excluded.model, signals_hash=excluded.signals_hash, last_scored=excluded.last_scored`,
-  ).bind(uid, s.handle, s.displayName, verdict.label, verdict.confidence, JSON.stringify(verdict.reasons), c.env.LLM_MODEL, h, now, now).run();
+       model=excluded.model, signals_hash=excluded.signals_hash, last_scored=excluded.last_scored,
+       avatar_url=COALESCE(excluded.avatar_url, accounts.avatar_url)`,
+  ).bind(uid, s.handle, s.displayName, s.avatarUrl ?? null, verdict.label, verdict.confidence, JSON.stringify(verdict.reasons), c.env.LLM_MODEL, h, now, now).run();
   return c.json({ cached: false, record: { verdict, status: "auto_pending_review" } });
 });
 
-// User block/report = the human-confirm signal → eligible for the public list.
-async function confirm(c: { env: Env; req: { json: () => Promise<unknown> } }, source: string) {
+/**
+ * A user block/report is a SIGNAL, not a verdict. Auto-publish only when
+ * AI is high-confidence spam AND ≥3 *distinct GitHub reporters* corroborate
+ * (the human signal — governance red line intact). Otherwise it queues for
+ * admin review.
+ */
+async function submitReport(c: Ctx, source: string) {
+  const who = await requireReporter(c);
+  if (!who) return c.json({ error: "github_login_required" }, 401);
   const s = Signals.parse(await c.req.json());
   const uid = s.userId ?? null;
   const now = Date.now();
+
+  // one report per (target, reporter)
   await c.env.DB.prepare(
-    `INSERT INTO accounts (x_user_id,handle,display_name,verdict_label,confidence,reasons,status,source,first_seen,last_scored,published_at)
-     VALUES (?,?,?, 'spam', 0.99, '["user-confirmed"]', 'human_confirmed', ?, ?, ?, ?)
-     ON CONFLICT(x_user_id,handle) DO UPDATE SET status='human_confirmed', published_at=?, source=excluded.source`,
-  ).bind(uid, s.handle, s.displayName, source, now, now, now, now).run();
+    `INSERT OR IGNORE INTO reports (id,x_user_id,handle,reporter_fp,evidence,status,created_at)
+     VALUES (?,?,?,?,?, 'pending', ?)`,
+  )
+    .bind(crypto.randomUUID(), uid, s.handle, who, JSON.stringify(s).slice(0, 4000), now)
+    .run();
+
+  const cnt = await c.env.DB.prepare(
+    "SELECT count(DISTINCT reporter_fp) n FROM reports WHERE handle=? AND (x_user_id IS ? OR x_user_id=?)",
+  )
+    .bind(s.handle, uid, uid)
+    .first<{ n: number }>();
+  const reporters = cnt?.n ?? 1;
+
+  // reuse a recent AI verdict if present, else classify now
+  const prev = await c.env.DB.prepare(
+    "SELECT verdict_label, confidence FROM accounts WHERE handle=? AND (x_user_id IS ? OR x_user_id=?)",
+  )
+    .bind(s.handle, uid, uid)
+    .first<{ verdict_label: string; confidence: number }>();
+  let vLabel: string;
+  let vConf: number;
+  if (prev) {
+    vLabel = prev.verdict_label;
+    vConf = prev.confidence;
+  } else {
+    const cl = await classify(c.env, s);
+    vLabel = cl.label;
+    vConf = cl.confidence;
+  }
+
+  const aiSpam = (vLabel === "spam" || vLabel === "porn_bot") && vConf >= AUTO_CONF;
+  const auto = aiSpam && reporters >= AUTO_REPORTERS;
+  const status = auto ? "human_confirmed" : "auto_pending_review";
+
+  await c.env.DB.prepare(
+    `INSERT INTO accounts (x_user_id,handle,display_name,avatar_url,verdict_label,confidence,reasons,status,source,first_seen,last_scored,published_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(x_user_id,handle) DO UPDATE SET status=?, source=excluded.source, published_at=?,
+       avatar_url=COALESCE(excluded.avatar_url, accounts.avatar_url)`,
+  )
+    .bind(
+      uid, s.handle, s.displayName, s.avatarUrl ?? null, vLabel, vConf,
+      '["reported"]', status, source, now, now, auto ? now : null,
+      status, auto ? now : null,
+    )
+    .run();
   await c.env.DB.prepare(
     "INSERT INTO review_log (x_user_id,handle,action,actor,note,at) VALUES (?,?,?,?,?,?)",
-  ).bind(uid, s.handle, "confirm_spam", "user", source, now).run();
+  )
+    .bind(uid, s.handle, auto ? "auto_confirm" : "report_queued", who, `${source} r=${reporters}`, now)
+    .run();
+  return c.json({ ok: true, status, reporters, auto });
 }
-app.post("/v1/confirm", async (c) => { await confirm(c, "block"); return c.json({ ok: true }); });
-app.post("/v1/report", async (c) => { await confirm(c, "report"); return c.json({ ok: true }); });
+app.post("/v1/confirm", (c) => submitReport(c, "block"));
+app.post("/v1/report", (c) => submitReport(c, "report"));
+
+// ---- Admin (守门员) ----
+function admin(c: Ctx): boolean {
+  const t = c.env.ADMIN_TOKEN;
+  return !!t && c.req.raw.headers.get("x-admin-token") === t;
+}
+app.get("/v1/admin/queue", async (c) => {
+  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  const rows = await c.env.DB.prepare(
+    `SELECT a.x_user_id, a.handle, a.display_name, a.avatar_url, a.verdict_label, a.confidence,
+            a.last_scored,
+            (SELECT count(DISTINCT reporter_fp) FROM reports r
+              WHERE r.handle=a.handle) reporters
+       FROM accounts a WHERE a.status='auto_pending_review'
+       ORDER BY a.last_scored DESC LIMIT 200`,
+  ).all();
+  return c.json({ queue: rows.results ?? [] });
+});
+app.post("/v1/admin/decide", async (c) => {
+  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  const { handle, xUserId, action } = (await c.req.json()) as {
+    handle: string;
+    xUserId?: string;
+    action: "approve" | "reject" | "remove";
+  };
+  const status =
+    action === "approve" ? "human_confirmed" : action === "remove" ? "removed" : "rejected";
+  const now = Date.now();
+  await c.env.DB.prepare(
+    "UPDATE accounts SET status=?, published_at=? WHERE handle=? AND (x_user_id IS ? OR x_user_id=?)",
+  )
+    .bind(status, action === "approve" ? now : null, handle, xUserId ?? null, xUserId ?? null)
+    .run();
+  await c.env.DB.prepare(
+    "INSERT INTO review_log (x_user_id,handle,action,actor,note,at) VALUES (?,?,?,?,?,?)",
+  )
+    .bind(xUserId ?? null, handle, action, "admin", "panel", now)
+    .run();
+  return c.json({ ok: true, status });
+});
 
 app.get("/v1/list/meta", async (c) => {
   const r = await c.env.DB.prepare(
@@ -166,5 +304,62 @@ app.get("/v1/list/meta", async (c) => {
   ).first<{ n: number; latest: number }>();
   return c.json({ count: r?.n ?? 0, generatedAt: r?.latest ?? null, version: `d1-${r?.n ?? 0}` });
 });
+
+// Standalone admin console (separate from the consumer extension). The
+// ADMIN_TOKEN is entered here by the maintainer and kept in localStorage —
+// it never ships in the public extension.
+app.get("/admin", (c) =>
+  c.html(`<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>x-spam-sentinel · 审核台</title><style>
+:root{color-scheme:dark}*{box-sizing:border-box;margin:0}
+body{font:14px system-ui,-apple-system,"Segoe UI",sans-serif;background:#0d1117;color:#e6edf3;padding:28px 32px;max-width:1000px;margin:0 auto}
+h1{font-size:20px}.sub{color:#8b949e;font-size:13px;margin:4px 0 20px}
+input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:#e6edf3;border-radius:8px;padding:8px 12px;font:13px system-ui;width:340px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:14px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.06);white-space:nowrap;vertical-align:middle}
+th{color:#8b949e;font-size:12px}.tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid currentColor}
+.d{color:#ef4444}.w{color:#f59e0b}.btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#e6edf3;border-radius:7px;padding:5px 11px;font-size:12px;cursor:pointer;margin-right:6px}
+.btn:hover{background:rgba(255,255,255,.12)}.empty{color:#8b949e;padding:40px 0;text-align:center}a{color:#38bdf8}
+</style></head><body>
+<h1>审核台 · 守门员</h1>
+<div class="sub">仅维护者使用 · 通过=入公共名单，驳回/移除=不公开。治理见
+<a href="https://github.com/onenorthlab/x-spam-sentinel/blob/main/GOVERNANCE.md" target="_blank">GOVERNANCE</a></div>
+<p><input id="t" type="password" placeholder="ADMIN_TOKEN"> <button class="btn" onclick="save()">保存并加载</button>
+<span id="s" style="color:#8b949e;margin-left:10px"></span></p>
+<div id="box"></div>
+<script>
+const E=s=>s.replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+let TOK=localStorage.getItem('xss_admin')||'';
+document.getElementById('t').value=TOK?'********':'';
+function save(){const v=document.getElementById('t').value;if(v&&v!=='********'){TOK=v;localStorage.setItem('xss_admin',v);}load();}
+async function api(p,o){return fetch(p,{...o,headers:{'x-admin-token':TOK,...(o&&o.headers||{})}});}
+async function load(){
+ const s=document.getElementById('s');s.textContent='加载中…';
+ const r=await api('/v1/admin/queue');
+ if(r.status===403){s.textContent='令牌无效';document.getElementById('box').innerHTML='<div class=empty>ADMIN_TOKEN 不正确</div>';return;}
+ const {queue}=await r.json();s.textContent='待审 '+queue.length+' 条';
+ document.getElementById('box').innerHTML=queue.length?('<table><thead><tr><th>账号</th><th>AI 判定</th><th>上报</th><th></th></tr></thead><tbody>'+
+  queue.map(a=>{const cls=a.confidence>=.9&&(a.verdict_label=='spam'||a.verdict_label=='porn_bot')?'d':'w';
+  const av=a.avatar_url||('https://unavatar.io/twitter/'+encodeURIComponent(a.handle));
+  return '<tr><td><div style="display:flex;align-items:center;gap:10px">'+
+  '<img src="'+E(av)+'" referrerpolicy="no-referrer" width="36" height="36" style="border-radius:50%;flex:none;background:#21262d;object-fit:cover">'+
+  '<div style="min-width:0"><b>'+E(a.display_name||('@'+a.handle))+'</b><br>'+
+  '<a href="https://x.com/'+E(a.handle)+'" target="_blank" rel="noopener" style="color:#38bdf8;font-size:12px">@'+E(a.handle)+'↗</a>'+
+  (a.x_user_id&&a.x_user_id!=a.handle?('<span style="color:#8b949e;font-size:12px"> · '+E(a.x_user_id)+'</span>'):'')+
+  '</div></div></td>'+
+  '<td><span class="tag '+cls+'">'+a.verdict_label+' '+Math.round(a.confidence*100)+'%</span></td>'+
+  '<td style="color:#8b949e">'+a.reporters+' 人</td>'+
+  '<td><button class=btn onclick="dec(this,\\''+E(a.handle)+'\\',\\''+(a.x_user_id||'')+'\\',\\'approve\\')">通过</button>'+
+  '<button class=btn onclick="dec(this,\\''+E(a.handle)+'\\',\\''+(a.x_user_id||'')+'\\',\\'reject\\')">驳回</button>'+
+  '<button class=btn onclick="dec(this,\\''+E(a.handle)+'\\',\\''+(a.x_user_id||'')+'\\',\\'remove\\')">移除</button></td></tr>';}).join('')+
+  '</tbody></table>'):'<div class=empty>队列为空</div>';
+}
+async function dec(btn,handle,xUserId,action){btn.textContent='…';
+ await api('/v1/admin/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({handle,xUserId:xUserId||undefined,action})});
+ btn.closest('tr').remove();}
+if(TOK)load();
+</script></body></html>`),
+);
 
 export default app;

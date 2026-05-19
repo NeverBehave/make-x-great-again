@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   x_user_id     TEXT,                       -- numeric id (immutable key); NULL if handle-only
   handle        TEXT,
   display_name  TEXT,
+  avatar_url    TEXT,
   verdict_label TEXT NOT NULL,              -- spam|porn_bot|likely_spam|uncertain|legit
   confidence    REAL NOT NULL,
   reasons       TEXT,                       -- json array
@@ -31,6 +32,10 @@ CREATE TABLE IF NOT EXISTS reports (
   status        TEXT NOT NULL DEFAULT 'pending',
   created_at    INTEGER NOT NULL
 );
+
+-- one report per (target, reporter) — makes INSERT OR IGNORE dedupe
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_unique
+  ON reports(handle, x_user_id, reporter_fp);
 
 CREATE TABLE IF NOT EXISTS review_log (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,

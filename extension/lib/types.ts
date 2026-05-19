@@ -36,7 +36,11 @@ export type BgRequest =
   | { type: "records" }
   | { type: "lookup"; userId: string }
   | { type: "classify"; signals: Omit<Signals, "isProfile"> }
-  | { type: "confirm_spam"; signals: Omit<Signals, "isProfile"> };
+  | { type: "confirm_spam"; signals: Omit<Signals, "isProfile"> }
+  | { type: "gh_start" }
+  | { type: "gh_poll"; deviceCode: string }
+  | { type: "gh_status" }
+  | { type: "gh_logout" };
 
 export interface BgResponse {
   ok: boolean;
