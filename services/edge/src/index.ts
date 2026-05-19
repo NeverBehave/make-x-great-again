@@ -298,6 +298,27 @@ app.post("/v1/admin/decide", async (c) => {
   return c.json({ ok: true, status });
 });
 
+// Paginated AI/decision audit trail. Keyset pagination on the id PK
+// (DESC) — O(limit), no OFFSET scan, cheap on D1 at any size.
+app.get("/v1/admin/log", async (c) => {
+  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  const before = Number(c.req.query("before")) || null;
+  const limit = Math.min(100, Number(c.req.query("limit")) || 50);
+  const rows = await c.env.DB.prepare(
+    `SELECT id, x_user_id, handle, action, actor, note, at
+       FROM review_log
+       WHERE (?1 IS NULL OR id < ?1)
+       ORDER BY id DESC LIMIT ?2`,
+  )
+    .bind(before, limit)
+    .all();
+  const list = rows.results ?? [];
+  return c.json({
+    log: list,
+    nextCursor: list.length === limit ? (list[list.length - 1] as { id: number }).id : null,
+  });
+});
+
 app.get("/v1/list/meta", async (c) => {
   const r = await c.env.DB.prepare(
     "SELECT count(*) n, max(published_at) latest FROM accounts WHERE status='human_confirmed'",
@@ -321,20 +342,26 @@ th,td{text-align:left;padding:9px 10px;border-bottom:1px solid rgba(255,255,255,
 th{color:#8b949e;font-size:12px}.tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid currentColor}
 .d{color:#ef4444}.w{color:#f59e0b}.btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#e6edf3;border-radius:7px;padding:5px 11px;font-size:12px;cursor:pointer;margin-right:6px}
 .btn:hover{background:rgba(255,255,255,.12)}.empty{color:#8b949e;padding:40px 0;text-align:center}a{color:#38bdf8}
+#tabs button.on{color:#38bdf8;border-color:#38bdf8}
 </style></head><body>
 <h1>审核台 · 守门员</h1>
 <div class="sub">仅维护者使用 · 通过=入公共名单，驳回/移除=不公开。治理见
 <a href="https://github.com/onenorthlab/x-spam-sentinel/blob/main/GOVERNANCE.md" target="_blank">GOVERNANCE</a></div>
 <p><input id="t" type="password" placeholder="ADMIN_TOKEN"> <button class="btn" onclick="save()">保存并加载</button>
 <span id="s" style="color:#8b949e;margin-left:10px"></span></p>
+<div id="tabs" style="margin:6px 0 4px">
+<button class="btn on" data-v="queue" onclick="tab('queue')">待审队列</button>
+<button class="btn" data-v="log" onclick="tab('log')">审计日志</button></div>
 <div id="box"></div>
 <script>
 const E=s=>s.replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-let TOK=localStorage.getItem('xss_admin')||'';
+let TOK=localStorage.getItem('xss_admin')||'';let VIEW='queue';
 document.getElementById('t').value=TOK?'********':'';
+function tab(v){VIEW=v;document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));load();}
+function load(){return VIEW==='log'?loadLog():loadQueue();}
 function save(){const v=document.getElementById('t').value;if(v&&v!=='********'){TOK=v;localStorage.setItem('xss_admin',v);}load();}
 async function api(p,o){return fetch(p,{...o,headers:{'x-admin-token':TOK,...(o&&o.headers||{})}});}
-async function load(){
+async function loadQueue(){
  const s=document.getElementById('s');s.textContent='加载中…';
  const r=await api('/v1/admin/queue');
  if(r.status===403){s.textContent='令牌无效';document.getElementById('box').innerHTML='<div class=empty>ADMIN_TOKEN 不正确</div>';return;}
@@ -358,6 +385,25 @@ async function load(){
 async function dec(btn,handle,xUserId,action){btn.textContent='…';
  await api('/v1/admin/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({handle,xUserId:xUserId||undefined,action})});
  btn.closest('tr').remove();}
+async function loadLog(more){
+ const s=document.getElementById('s'),box=document.getElementById('box');
+ if(!more){box.innerHTML='<table><thead><tr><th>时间</th><th>动作</th><th>角色</th><th>账号</th><th>备注</th></tr></thead><tbody id=lg></tbody></table><div style="text-align:center;padding:14px"><button class=btn id=lm onclick="loadLog(true)">加载更多</button></div>';loadLog.cur=null;}
+ s.textContent='加载中…';
+ const u='/v1/admin/log?limit=50'+(loadLog.cur?('&before='+loadLog.cur):'');
+ const r=await api(u);
+ if(r.status===403){s.textContent='令牌无效';box.innerHTML='<div class=empty>ADMIN_TOKEN 不正确</div>';return;}
+ const {log,nextCursor}=await r.json();
+ const tb=document.getElementById('lg');
+ tb.insertAdjacentHTML('beforeend',log.map(e=>'<tr><td style="color:#8b949e">'+new Date(e.at).toLocaleString('zh-CN',{hour12:false})+
+  '</td><td><b>'+E(e.action||'')+'</b></td><td style="color:#8b949e">'+E(e.actor||'')+
+  '</td><td>'+(e.handle?('<a href="https://x.com/'+E(e.handle)+'" target="_blank" rel="noopener">@'+E(e.handle)+'</a>'):'—')+
+  (e.x_user_id&&e.x_user_id!=e.handle?(' <span style="color:#8b949e">'+E(e.x_user_id)+'</span>'):'')+
+  '</td><td style="color:#8b949e;white-space:normal;max-width:360px">'+E(e.note||'')+'</td></tr>').join(''));
+ loadLog.cur=nextCursor;
+ const lm=document.getElementById('lm');if(lm)lm.style.display=nextCursor?'':'none';
+ s.textContent='审计日志'+(nextCursor?'（还有更多）':'（已到底）');
+ if(!log.length&&!more)tb.innerHTML='<tr><td colspan=5 class=empty>暂无记录</td></tr>';
+}
 if(TOK)load();
 </script></body></html>`),
 );
