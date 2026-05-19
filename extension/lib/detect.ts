@@ -173,7 +173,21 @@ export function extractProfile(): Signals | null {
   };
 }
 
+const AD_LABEL = /^(广告|推广|Promoted|Ad|プロモーション|광고)$/;
+
+/** X's own paid promoted post — NOT spam, must be skipped entirely. */
+function isPromoted(article: HTMLElement): boolean {
+  if (article.querySelector('[data-testid="placementTracking"]')) return true;
+  const tweetText = article.querySelector('[data-testid="tweetText"]');
+  for (const el of article.querySelectorAll<HTMLElement>("span,div")) {
+    if (tweetText?.contains(el)) continue; // ignore the post body itself
+    if (AD_LABEL.test(el.textContent?.trim() ?? "")) return true;
+  }
+  return false;
+}
+
 export function extractFromArticle(article: HTMLElement): Signals | null {
+  if (isPromoted(article)) return null; // official X ad → not spam
   const { userId, hasDefaultAvatar, avatarUrl } = avatarInfo(article);
   const nameBlock = article.querySelector<HTMLElement>('[data-testid="User-Name"]');
   if (!nameBlock) return null;
