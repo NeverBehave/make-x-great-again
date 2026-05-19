@@ -1,6 +1,6 @@
 // The only place that talks to the service / GitHub, so page CSP/CORS never
 // blocks us. Edge Worker /v1 API + GitHub Device-Flow login + admin proxy.
-import { getGhClientId, getGhToken, setGh } from "../lib/auth";
+import { GH_CLIENT_ID, getGhToken, setGh } from "../lib/auth";
 import type { BgRequest, BgResponse, CurationRecord } from "../lib/types";
 
 const DEFAULT_BASE = "https://x-spam-sentinel-edge.zuoluotv.workers.dev";
@@ -36,7 +36,7 @@ async function authedPost(signals: unknown) {
 
 // ---- GitHub Device Flow (background = cross-origin allowed via host perms) ----
 async function ghStart() {
-  const clientId = await getGhClientId();
+  const clientId = GH_CLIENT_ID;
   if (!clientId) throw new Error("未配置 GitHub OAuth App client_id（管理面板·设置）");
   const r = await fetch("https://github.com/login/device/code", {
     method: "POST",
@@ -53,7 +53,7 @@ async function ghStart() {
 }
 
 async function ghPoll(deviceCode: string) {
-  const clientId = await getGhClientId();
+  const clientId = GH_CLIENT_ID;
   const r = await fetch("https://github.com/login/oauth/access_token", {
     method: "POST",
     headers: { accept: "application/json", "content-type": "application/json" },

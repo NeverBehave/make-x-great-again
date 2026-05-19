@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getGhClientId, getGhLogin, setGhClientId } from "../../lib/auth";
+import { clearAllLocal, getGhLogin } from "../../lib/auth";
 import {
   type BlockRecord,
   type CacheRow,
@@ -10,7 +10,6 @@ import {
 } from "../../lib/store";
 import type { BgResponse, Label } from "../../lib/types";
 
-const ADMIN_URL = "https://x-spam-sentinel-edge.zuoluotv.workers.dev/admin";
 const REPO = "https://github.com/onenorthlab/x-spam-sentinel";
 
 function bg<T = Record<string, unknown>>(msg: unknown): Promise<BgResponse & { data?: T }> {
@@ -231,13 +230,10 @@ function Cache() {
 
 function Settings() {
   const [login, setLogin] = useState("");
-  const [cid, setCid] = useState("");
   const [flow, setFlow] = useState("");
+  const [cleared, setCleared] = useState(false);
   const refresh = () => getGhLogin().then(setLogin);
-  useEffect(() => {
-    refresh();
-    getGhClientId().then(setCid);
-  }, []);
+  useEffect(() => void refresh(), []);
   async function ghLogin() {
     setFlow("正在获取设备码…");
     const s = await bg<{ user_code: string; verification_uri: string; device_code: string; interval: number }>(
@@ -293,29 +289,24 @@ function Settings() {
           )}
         </p>
         {flow && <p className="text-[#f59e0b]">{flow}</p>}
-        <p className="pt-4 text-xs text-[#8b949e]">
-          审核（守门员）已独立为单独网页，仅维护者使用：{" "}
-          <a href={ADMIN_URL} target="_blank" rel="noopener" className="text-[#38bdf8]">
-            审核台
-          </a>
-          。
-        </p>
-        <div className="pt-4 text-xs text-[#8b949e]">
-          GitHub OAuth client_id（默认已内置，一般无需改）
-          <div className="mt-1 flex gap-2">
-            <input
-              value={cid}
-              onChange={(e) => setCid(e.target.value)}
-              className="w-[320px] rounded-lg border border-white/[0.12] bg-white/5 px-2.5 py-1.5 text-xs text-[#8b949e]"
-            />
-            <button
-              type="button"
-              onClick={() => setGhClientId(cid)}
-              className="cursor-pointer rounded-md border border-white/[0.12] bg-white/[0.06] px-2.5 py-1 text-xs hover:bg-white/[0.12]"
-            >
-              保存
-            </button>
-          </div>
+
+        <div className="pt-6">
+          <p>
+            <b>数据与隐私</b> — 检测缓存、拉黑记录、统计、登录态均仅存于本机，无 PII。
+          </p>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!confirm("清除全部本地数据（缓存/拉黑记录/统计/登录）？不可恢复。")) return;
+              await clearAllLocal();
+              setCleared(true);
+              refresh();
+            }}
+            className="mt-2 cursor-pointer rounded-md border border-[#ef4444]/40 bg-[#ef4444]/10 px-3 py-1.5 text-[13px] text-[#fca5a5] hover:bg-[#ef4444]/20"
+          >
+            清除本地数据
+          </button>
+          {cleared && <span className="ml-3 text-xs text-[#22c55e]">已清除</span>}
         </div>
       </div>
     </Page>
