@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BRAND } from "../../lib/brand";
 import { getSettings } from "../../lib/settings";
 import type { BgResponse } from "../../lib/types";
 
@@ -27,7 +28,7 @@ const Shield = () => (
 
 export function App() {
   const [status, setStatus] = useState<{ ok: boolean; n: number } | null>(null);
-  const [edgeBase, setEdgeBase] = useState("https://x-spam-sentinel-edge.zuoluotv.workers.dev");
+  const [edgeBase, setEdgeBase] = useState<string>(BRAND.edgeBase);
 
   useEffect(() => {
     bg<{ records: number }>({ type: "health" }).then((h) =>
@@ -97,7 +98,7 @@ export function App() {
           看公榜
         </a>
         <a
-          href="https://github.com/onenorthlab/x-spam-sentinel"
+          href={BRAND.repo}
           target="_blank"
           rel="noopener"
           className="rounded-md border border-border-2 bg-card px-2.5 py-1.5 text-center text-[12px] text-fg-2 transition hover:border-border-2 hover:bg-card-hi hover:text-fg"
@@ -108,7 +109,7 @@ export function App() {
 
       <footer className="mt-3 border-t border-border pt-2.5 text-[11px] leading-[1.6] text-fg-3">
         <a
-          href="https://github.com/onenorthlab/x-spam-sentinel/blob/main/docs/GOVERNANCE.md"
+          href={BRAND.governance}
           target="_blank"
           rel="noopener"
           className="text-accent hover:underline"

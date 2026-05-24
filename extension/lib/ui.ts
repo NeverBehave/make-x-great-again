@@ -1,6 +1,7 @@
 // Design system + components, all rendered inside a Shadow DOM so X's CSS
 // cannot bleed in and ours cannot leak out. Vanilla DOM — no framework
 // weight injected into the page. Tokens per docs/UX.md.
+import { BRAND } from "./brand";
 import type { Label, Verdict } from "./types";
 
 export const STYLE = `
@@ -225,11 +226,7 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
         <div class="row"><span class="lnk" data-gov>为什么 / 治理</span></div>`;
       card.querySelector("[data-x]")?.addEventListener("click", collapse);
       card.querySelector("[data-gov]")?.addEventListener("click", () =>
-        window.open(
-          "https://github.com/onenorthlab/x-spam-sentinel/blob/main/GOVERNANCE.md",
-          "_blank",
-          "noopener",
-        ),
+        window.open(BRAND.governance, "_blank", "noopener"),
       );
       return;
     }

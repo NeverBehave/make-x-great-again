@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { clearAllLocal, getGhLogin } from "../../lib/auth";
+import { BRAND } from "../../lib/brand";
 import { type Settings, getSettings, setSetting } from "../../lib/settings";
 import {
   type BlockRecord,
@@ -11,8 +12,8 @@ import {
 } from "../../lib/store";
 import type { BgResponse, Label } from "../../lib/types";
 
-const REPO = "https://github.com/onenorthlab/x-spam-sentinel";
-const EDGE_DEFAULT = "https://x-spam-sentinel-edge.zuoluotv.workers.dev";
+const REPO = BRAND.repo;
+const EDGE_DEFAULT = BRAND.edgeBase;
 
 function bg<T = Record<string, unknown>>(msg: unknown): Promise<BgResponse & { data?: T }> {
   return new Promise((r) => chrome.runtime.sendMessage(msg, (x) => r(x ?? { ok: false })));
@@ -525,7 +526,7 @@ const About = () => (
             rel="noopener"
             className="mt-1 inline-block text-[13px] text-accent hover:underline"
           >
-            github.com/onenorthlab/x-spam-sentinel ↗
+            github.com/{BRAND.owner}/x-spam-sentinel ↗
           </a>
         </div>
         <div className="rounded-xl border border-border bg-card p-4">

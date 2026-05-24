@@ -2,9 +2,20 @@ name = "x-spam-sentinel-edge"
 main = "src/index.ts"
 compatibility_date = "2026-05-01"
 compatibility_flags = ["nodejs_compat"]
-# Personal account (meleilei@gmail.com) — chosen explicitly by the owner;
-# pinned because the auth has multiple accounts.
+# Personal Cloudflare account, pinned because the auth has multiple accounts.
 account_id = "cfab318ffd80d3f933cb6742534e88f3"
+
+# Custom domain — public entry point. Requires the parent zone (`zuoluo.tv`)
+# to be active in this Cloudflare account, and `workers_routes:write` on the
+# API token (already present per `wrangler whoami`).
+routes = [
+  { pattern = "x.zuoluo.tv", custom_domain = true },
+]
+
+# Keep the auto-generated *.workers.dev URL alive so installs that still hold
+# an old `edgeBase` setting continue to work during the migration window.
+# Can be flipped to `false` once the extension has rolled out widely.
+workers_dev = true
 
 # D1 — curation source of truth. Create with:
 #   npx wrangler d1 create xss-db
@@ -14,11 +25,14 @@ binding = "DB"
 database_name = "xss-db"
 database_id = "c3a73f50-9af1-4b85-9b5b-db19dd33f175"
 
-[vars]
-LLM_BASE_URL = "https://api.ttttt.ai/v1"
-LLM_MODEL = "gpt-5.5"
-# LLM_API_KEY is a secret, NOT a var:
-#   npx wrangler secret put LLM_API_KEY
+# No public [vars]. ALL LLM provider config lives in Worker secrets so the
+# repo can stay public without doxxing the inference dependency:
+#   npx wrangler secret put LLM_API_BASE    # OpenAI-compatible base URL
+#   npx wrangler secret put LLM_API_MODEL   # model id
+#   npx wrangler secret put LLM_API_KEY     # bearer token
+#   npx wrangler secret put ADMIN_TOKEN     # /admin gate
+# Optional:
+#   npx wrangler secret put REQUIRE_AUTH    # "1" => /v1/classify requires GH login
 
 # R2 (published bloom/JSON artifact) — phase 2, uncomment when wiring publish:
 # [[r2_buckets]]

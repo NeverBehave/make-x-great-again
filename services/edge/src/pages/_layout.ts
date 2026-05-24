@@ -2,9 +2,11 @@
 // Everything self-contained — no external fonts / JS / CSS so the page is
 // servable under a strict CSP and stays well under 1.5s LCP on cold edge.
 
-const GH_REPO = "https://github.com/onenorthlab/x-spam-sentinel";
+import { BRAND } from "../brand";
+
+const GH_REPO = BRAND.repo;
 // Latest GitHub Release; the redirect resolves to the newest .zip asset.
-const RELEASE_URL = `${GH_REPO}/releases/latest`;
+const RELEASE_URL = BRAND.release;
 
 /** Dark-glass design tokens + reusable utility classes; bytes are cheap. */
 const CSS = `:root{
@@ -123,12 +125,12 @@ ${o.head ?? ""}
 ${o.body}
 </main>
 <footer class="wrap foot" role="contentinfo">
-  <span>© 2026 OneNorth Lab<span class="sep">·</span>AGPL-3.0</span>
+  <span>© 2026 ${BRAND.owner}<span class="sep">·</span>${BRAND.license}</span>
   <span>
-    <a href="${GH_REPO}">仓库</a><span class="sep">·</span>
-    <a href="${GH_REPO}/blob/main/docs/GOVERNANCE.md">治理</a><span class="sep">·</span>
-    <a href="${GH_REPO}/blob/main/docs/PRIVACY.md">隐私</a><span class="sep">·</span>
-    <a href="${GH_REPO}/issues">反馈</a>
+    <a href="${BRAND.repo}">仓库</a><span class="sep">·</span>
+    <a href="${BRAND.governance}">治理</a><span class="sep">·</span>
+    <a href="${BRAND.privacy}">隐私</a><span class="sep">·</span>
+    <a href="${BRAND.issues}">反馈</a>
   </span>
 </footer>
 ${o.script ? `<script>${o.script}</script>` : ""}

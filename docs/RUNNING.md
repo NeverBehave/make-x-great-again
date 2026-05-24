@@ -1,6 +1,6 @@
 # Running locally (T3 classifier spike)
 
-This is the first runnable slice of [T3](https://github.com/onenorthlab/x-spam-sentinel)
+This is the first runnable slice of [T3](https://github.com/foru17/x-spam-sentinel)
 — the local LLM classifier + private append-only curation store. The browser
 extension采集 (DOM ingestion) and the public list publishing are separate tracks.
 

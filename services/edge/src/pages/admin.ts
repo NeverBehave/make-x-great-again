@@ -4,7 +4,8 @@
 // the maintainer pastes once and we keep in localStorage. NEVER ships in
 // the consumer extension build.
 
-const GH_REPO = "https://github.com/onenorthlab/x-spam-sentinel";
+import { BRAND } from "../brand";
+const GH_REPO = BRAND.repo;
 
 const CSS = `:root{
   color-scheme:dark;

@@ -7,8 +7,15 @@ import { listHtml } from "./pages/list";
 
 interface Env {
   DB: D1Database;
-  LLM_BASE_URL: string;
-  LLM_MODEL: string;
+  // LLM provider config — ALL three are Worker secrets (NOT in wrangler.toml).
+  // The provider URL + model name are treated as sensitive (so the project can
+  // be open-sourced without doxxing the inference dependency); the API key
+  // obviously also is.
+  //   wrangler secret put LLM_API_BASE   (OpenAI-compatible /chat/completions)
+  //   wrangler secret put LLM_API_MODEL  (model id)
+  //   wrangler secret put LLM_API_KEY    (bearer token)
+  LLM_API_BASE: string;
+  LLM_API_MODEL: string;
   LLM_API_KEY: string;
   // "1" => enforce GitHub auth on classify/report/confirm. Default off so
   // deploying T6 doesn't break the still-anonymous shipped extension; flip
@@ -125,11 +132,11 @@ ${s.recentTweets.map((t, i) => `  ${i + 1}. ${t}`).join("\n") || "  (none)"}`;
 }
 
 async function classify(env: Env, s: Signals): Promise<Verdict> {
-  const res = await fetch(`${env.LLM_BASE_URL}/chat/completions`, {
+  const res = await fetch(`${env.LLM_API_BASE}/chat/completions`, {
     method: "POST",
     headers: { authorization: `Bearer ${env.LLM_API_KEY}`, "content-type": "application/json" },
     body: JSON.stringify({
-      model: env.LLM_MODEL,
+      model: env.LLM_API_MODEL,
       temperature: 0,
       max_tokens: 600,
       messages: [
@@ -227,7 +234,7 @@ app.post("/v1/classify", async (c) => {
       verdict.label,
       verdict.confidence,
       JSON.stringify(verdict.reasons),
-      c.env.LLM_MODEL,
+      c.env.LLM_API_MODEL,
       h,
       now,
       now,

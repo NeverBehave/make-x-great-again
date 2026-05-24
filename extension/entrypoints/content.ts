@@ -1,4 +1,5 @@
 import { isBlockedSync, warm as warmBlocklist, addBlocked } from "../lib/blocklist";
+import { BRAND } from "../lib/brand";
 import { onSettingsChange, getSettings } from "../lib/settings";
 import { addBlockRecord, bumpStats } from "../lib/store";
 import { type Cached, cacheGet, cacheSet, signalsHash } from "../lib/cache";
@@ -19,8 +20,7 @@ import {
   createStatusBadge,
 } from "../lib/ui";
 
-const APPEAL_URL =
-  "https://github.com/onenorthlab/x-spam-sentinel/issues/new?template=appeal.yml";
+const APPEAL_URL = BRAND.appealNewIssue;
 
 function send<T = unknown>(msg: unknown): Promise<BgResponse & { data?: T }> {
   return new Promise((r) =>

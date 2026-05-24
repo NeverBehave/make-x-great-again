@@ -24,7 +24,7 @@ toolchain** for the classifier.
         /v1/check (anon) · /v1/classify·report·confirm (gh)
                 ▼
  ┌── Cloudflare Worker (Hono) — DEPLOYED ───────────────┐
- │ x-spam-sentinel-edge.zuoluotv.workers.dev            │
+ │ x.zuoluo.tv  (custom domain; *.workers.dev fallback) │
  │ D1 (accounts/reports/review_log) · LLM classify ·    │
  │ report→AI+≥3 gh reporters→auto / else queue ·        │
  │ /admin standalone console (ADMIN_TOKEN)              │
@@ -53,9 +53,9 @@ Wrangler 4 · @cloudflare/workers-types · @types/chrome。
 
 | 依赖 | 用途 | 风险 |
 |---|---|---|
-| **LLM `api.ttttt.ai` (gpt-5.5)** | 服务端分类 | 第三方、单点、经常性成本、ToS 未明；key=Worker secret |
-| **Cloudflare**（Workers+D1） | 边缘服务/数据库 | 部署在**个人账号** meleilei@gmail.com（非 org），bus-factor |
-| **GitHub OAuth App "X-Master"** | 上报/分类鉴权 | client_id Ov23li…（luolei-onl 拥有）；REQUIRE_AUTH 开启后强依赖 |
+| **LLM 推理（外部 OpenAI 兼容供应商）** | 服务端分类 | 第三方、单点、经常性成本；`LLM_API_BASE` / `LLM_API_MODEL` / `LLM_API_KEY` 全部 Worker secret，**不入仓** |
+| **Cloudflare**（Workers + D1） | 边缘服务 / 数据库 | 个人账号，bus-factor 风险 |
+| **GitHub OAuth App** | 上报 / 分类鉴权 | client_id 公开常量；REQUIRE_AUTH 开启后强依赖 |
 | **X 内部接口/DOM** | 真·拉黑 + 页面解析 | `blocks/create.json`+不可伪造 transaction-id→只能 DOM 驱动；X 改版即坏，**最脆环节** |
 | **unavatar.io** | 审核台老数据头像兜底 | 第三方，仅维护者侧、非关键 |
 
@@ -71,8 +71,9 @@ Wrangler 4 · @cloudflare/workers-types · @types/chrome。
 
 ## 6. 部署/运行现状
 
-- Worker 已部署：`https://x-spam-sentinel-edge.zuoluotv.workers.dev`
-  （个人 CF 账号 cfab318…）；secrets：`LLM_API_KEY`、`ADMIN_TOKEN`。
+- Worker 已部署，对外通过自定义域 `https://x.zuoluo.tv`（个人 CF 账号）；
+  历史 URL `*.workers.dev` 仍可用作 fallback。
+  Secrets：`LLM_API_BASE` / `LLM_API_MODEL` / `LLM_API_KEY` / `ADMIN_TOKEN`。
 - **`REQUIRE_AUTH` 仍 = 关**（匿名仍可调用 /v1/classify → LLM 成本暴露未关闭）。
 - 审核台：`/admin`（ADMIN_TOKEN 进入）。
 - 扩展加载：`extension/.output/chrome-mv3`（生产构建，方案 B：改完 `wxt
