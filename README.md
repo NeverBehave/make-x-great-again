@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./services/edge/static/mxga-mark.png" width="160" alt="Make X Great Again — 小蓝 mascot">
+  <img src="./services/edge/static/mxga-hero.png" width="180" alt="Make X Great Again — 小蓝 full-body mascot">
 </p>
 
 <p align="center">
