@@ -1,8 +1,24 @@
 {
   "schema": 1,
-  "generatedAt": 1779712202234,
-  "count": 529,
+  "generatedAt": 1779712342171,
+  "count": 527,
   "list": [
+    {
+      "handle": "pperrsephone",
+      "x_user_id": "2050278505963761664",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "linkless redirect bait pattern",
+        "sexual solicitation wording",
+        "mentions another account as redirect",
+        "garbled filler text",
+        "same template in recent tweet"
+      ],
+      "evidence_text": "'>线下saoa货没人比她sao pm \n@TuudoPelaLua_\n  >",
+      "reporters": 1,
+      "published_at": 1779712202737
+    },
     {
       "handle": "Warren1118344",
       "x_user_id": "2058879600902463488",
@@ -1621,22 +1637,6 @@
       "published_at": 1779711598863
     },
     {
-      "handle": "Wayne6486468932",
-      "x_user_id": "2058880399074287616",
-      "verdict_label": "porn_bot",
-      "confidence": 0.92,
-      "reasons": [
-        "display name contains escort-style promo wording",
-        "blank/invisible triggering comment",
-        "off-topic engagement on unrelated thread",
-        "random-looking handle with digits",
-        "recent tweet also blank/invisible"
-      ],
-      "evidence_text": "​\n\n\n ͏",
-      "reporters": 1,
-      "published_at": 1779711595675
-    },
-    {
       "handle": "Dennis669040881",
       "x_user_id": "2058863288549511168",
       "verdict_label": "porn_bot",
@@ -1935,21 +1935,6 @@
       "evidence_text": null,
       "reporters": 1,
       "published_at": 1779711568532
-    },
-    {
-      "handle": "Kadriye_Atmacaa",
-      "x_user_id": "1117485050692612097",
-      "verdict_label": "porn_bot",
-      "confidence": 0.95,
-      "reasons": [
-        "linkless sexual redirect bait",
-        "@mention promotes another account",
-        "off-topic to thread",
-        "template-like repeated recent tweet"
-      ],
-      "evidence_text": "zs3,比她好看的没她骚s比她骚的没她好看\n@Xxiaodai05",
-      "reporters": 1,
-      "published_at": 1779711566856
     },
     {
       "handle": "Byzagltkn",
@@ -3420,23 +3405,6 @@
       "evidence_text": null,
       "reporters": 0,
       "published_at": 1779708237667
-    },
-    {
-      "handle": "gulcuum",
-      "x_user_id": "1473017338337402892",
-      "verdict_label": "porn_bot",
-      "confidence": 0.96,
-      "reasons": [
-        "linkless redirect bait pattern",
-        "sexual solicitation/innuendo in Chinese",
-        "@mention redirects to another account",
-        "garbled filler characters",
-        "off-topic to thread topic",
-        "same template repeated in recent tweet"
-      ],
-      "evidence_text": null,
-      "reporters": 1,
-      "published_at": 1779708229322
     },
     {
       "handle": "Tureish",
