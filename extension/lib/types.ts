@@ -34,6 +34,7 @@ export interface Signals {
 export type BgRequest =
   | { type: "health" }
   | { type: "records" }
+  | { type: "stats" }
   | { type: "lookup"; userId: string }
   | { type: "classify"; signals: Omit<Signals, "isProfile"> }
   | { type: "confirm_spam"; signals: Omit<Signals, "isProfile"> }

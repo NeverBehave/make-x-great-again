@@ -3,6 +3,7 @@
 import { GH_CLIENT_ID, getGhToken, setGh } from "../lib/auth";
 import { BRAND } from "../lib/brand";
 import { getSettings } from "../lib/settings";
+import { bumpStat, getStats } from "../lib/stats";
 import type { BgRequest, BgResponse, CurationRecord } from "../lib/types";
 
 const DEFAULT_BASE = BRAND.edgeBase;
@@ -80,6 +81,8 @@ export default defineBackground(() => {
             sendResponse({ ok: true, data: { records: (h.published as number) ?? 0 } });
           } else if (msg.type === "records") {
             sendResponse({ ok: true, data: { records: [] } });
+          } else if (msg.type === "stats") {
+            sendResponse({ ok: true, data: await getStats() });
           } else if (msg.type === "lookup") {
             const r = await call(`/v1/check?ids=${encodeURIComponent(msg.userId)}`);
             const hits = (r.hits as Record<string, { label: string; confidence: number }>) ?? {};
@@ -97,11 +100,15 @@ export default defineBackground(() => {
                   model: "",
                 }
               : null;
+            // Only count a hit (not a miss) as a public-board win.
+            if (hit) void bumpStat("hitPublic");
             sendResponse({ ok: true, data: { hit } });
           } else if (msg.type === "classify") {
             const r = await call("/v1/classify", await authedPost(msg.signals));
             const rec = r.record as { verdict: CurationRecord["verdict"]; status: string };
             const s = msg.signals as { userId?: string; handle: string };
+            // Only count fresh LLM work, not cache returns (server tells us via `cached`).
+            if (!r.cached) void bumpStat("scanned");
             sendResponse({
               ok: true,
               data: {
@@ -117,6 +124,7 @@ export default defineBackground(() => {
             });
           } else if (msg.type === "confirm_spam") {
             await call("/v1/confirm", await authedPost(msg.signals));
+            void bumpStat("blocked");
             sendResponse({ ok: true });
           } else if (msg.type === "gh_start") {
             sendResponse({ ok: true, data: await ghStart() });

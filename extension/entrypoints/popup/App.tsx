@@ -9,42 +9,89 @@ function bg<T = Record<string, unknown>>(msg: unknown): Promise<BgResponse & { d
   );
 }
 
-const Shield = () => (
-  <svg
-    width="20"
-    height="20"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z" />
-    <path d="m9 12 2 2 4-4" />
-  </svg>
-);
+interface LocalStats {
+  scanned: number;
+  hitPublic: number;
+  blocked: number;
+  firstUsedAt: number;
+}
+
+// 小蓝 mascot — same PNG that powers the toolbar icon; using the runtime
+// URL helper so the popup picks up theme-correct + retina-correct rendering
+// without bundling a duplicate asset.
+const MASCOT_URL = chrome.runtime.getURL("icon/128.png");
+
+function fmt(n: number): string {
+  return n.toLocaleString("zh-CN");
+}
+function daysWith(ms: number): number {
+  if (!ms) return 0;
+  return Math.max(0, Math.floor((Date.now() - ms) / 86_400_000));
+}
+
+function Stat({
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: number;
+  hint: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      title={hint}
+      className={`rounded-md border px-2 py-1.5 ${
+        accent ? "border-ok/30 bg-ok-soft" : "border-border bg-card-hi"
+      }`}
+    >
+      <div className={`text-[10px] font-medium ${accent ? "text-ok" : "text-fg-3"} tracking-tight`}>
+        {label}
+      </div>
+      <div
+        className={`mt-0.5 font-mono text-[15px] font-semibold leading-none tabular-nums ${
+          accent ? "text-ok" : "text-fg"
+        }`}
+      >
+        {fmt(value)}
+      </div>
+    </div>
+  );
+}
 
 export function App() {
   const [status, setStatus] = useState<{ ok: boolean; n: number } | null>(null);
+  const [stats, setStats] = useState<LocalStats | null>(null);
   const [edgeBase, setEdgeBase] = useState<string>(BRAND.edgeBase);
 
   useEffect(() => {
     bg<{ records: number }>({ type: "health" }).then((h) =>
       setStatus(h.ok && h.data ? { ok: true, n: h.data.records } : { ok: false, n: 0 }),
     );
+    bg<LocalStats>({ type: "stats" }).then((r) => {
+      if (r.ok && r.data) setStats(r.data);
+    });
     getSettings().then((s) => {
       if (s.edgeBase) setEdgeBase(s.edgeBase);
     });
   }, []);
 
+  const totalAssist = stats ? stats.scanned + stats.hitPublic + stats.blocked : 0;
+  const days = stats ? daysWith(stats.firstUsedAt) : 0;
+
   return (
     <div className="p-4">
       <header className="flex items-center gap-2">
-        <span className="text-fg">
-          <Shield />
-        </span>
+        <img
+          src={MASCOT_URL}
+          alt=""
+          width={26}
+          height={26}
+          className="rounded-md"
+          // Crisp at retina; keep the cute shadow flat against light popup bg.
+        />
         <b className="text-[14px] font-semibold tracking-[-.005em]">{BRAND.acronym}</b>
         <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-fg-4">{BRAND.name}</span>
         <span
@@ -55,8 +102,30 @@ export function App() {
         />
       </header>
 
+      {/* Achievement hero — the line the user actually feels proud about. */}
+      <div className="mt-3 rounded-md border border-border bg-card px-3 py-2.5">
+        <div className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-fg-3">
+          小蓝陪你
+          <span className="mx-1 font-mono text-fg-2 tabular-nums">{fmt(days)}</span>
+          天 · 一起干掉
+        </div>
+        <div className="mt-1 flex items-baseline gap-1.5">
+          <span className="font-mono text-[26px] font-bold leading-none tabular-nums tracking-tight text-fg">
+            {fmt(totalAssist)}
+          </span>
+          <span className="text-[11.5px] text-fg-3">个垃圾号</span>
+        </div>
+      </div>
+
+      {/* Per-stat breakdown */}
+      <div className="mt-2 grid grid-cols-3 gap-1.5">
+        <Stat label="AI 扫描" value={stats?.scanned ?? 0} hint="新账号 LLM 判定次数" />
+        <Stat label="命中公榜" value={stats?.hitPublic ?? 0} hint="直接拉黑，零成本" accent />
+        <Stat label="亲手拉黑" value={stats?.blocked ?? 0} hint="你按的拉黑按钮" />
+      </div>
+
       <div
-        className={`mt-3 flex items-baseline justify-between gap-2 rounded-md border px-3 py-2.5 text-xs ${
+        className={`mt-3 flex items-baseline justify-between gap-2 rounded-md border px-3 py-2 text-xs ${
           status?.ok
             ? "border-border bg-card text-fg"
             : status?.ok === false
@@ -69,8 +138,8 @@ export function App() {
         ) : status.ok ? (
           <>
             <span className="text-fg-3">公共名单</span>
-            <span className="font-mono text-[14px] font-semibold tabular-nums tracking-tight">
-              {status.n.toLocaleString("zh-CN")}
+            <span className="font-mono text-[13px] font-semibold tabular-nums tracking-tight">
+              {fmt(status.n)}
               <span className="ml-1 font-sans text-[11px] font-normal text-fg-3">条</span>
             </span>
           </>

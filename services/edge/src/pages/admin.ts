@@ -105,6 +105,13 @@ button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
 .btn.danger:hover{background:var(--danger-soft)}
 .btn.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
 .btn.ok:hover{background:color-mix(in srgb,var(--ok) 10%,transparent)}
+/* blacklist = primary action on a spam queue: solid red.
+   Semantic: "approve" verdict → entry goes on public board (i.e. blacklisted). */
+.btn.blacklist{background:var(--danger);color:#fff;border-color:var(--danger);font-weight:600}
+.btn.blacklist:hover{background:color-mix(in srgb,var(--danger) 88%,#000)}
+/* muted = secondary destructive (remove from dataset, not a public action) */
+.btn.muted{color:var(--fg-3);border-color:var(--border-strong)}
+.btn.muted:hover{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 30%,transparent);background:var(--danger-soft)}
 .btn.sm{padding:5px 10px;font-size:12px;border-radius:var(--r-sm)}
 
 /* Inputs */
@@ -187,13 +194,13 @@ input::placeholder{color:var(--fg-4)}
   align-items:center;gap:6px;flex-wrap:wrap}
 .qrow .who .sub a{color:var(--fg-2)}.qrow .who .sub a:hover{color:var(--accent)}
 .qrow .who .sub .sep{color:var(--fg-4);opacity:.5}
-/* Confidence cell — number on top, fat bar below */
-.qrow .conf{display:flex;flex-direction:column;gap:5px;align-items:flex-start;min-width:90px}
-.qrow .conf .pct{font-size:14px;color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums;
-  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1}
-.qrow .conf .pct .lbl{font-size:9.5px;color:var(--fg-3);margin-left:4px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;font-family:inherit}
-.qrow .conf .bar{width:96px;height:4px;background:var(--card-hi);border-radius:2px;overflow:hidden;position:relative}
-.qrow .conf .bar i{display:block;height:100%;background:var(--ec,var(--fg-3));border-radius:2px;transition:width .3s ease}
+/* Confidence cell — single line: big % colored by verdict severity.
+   We removed the fat bar (Wave 12c feedback: it left a blank-looking
+   rectangle below the % in light mode). Conf% IS the entire signal. */
+.qrow .conf{display:flex;align-items:baseline;gap:6px;min-width:80px;justify-content:flex-start}
+.qrow .conf .pct{font-size:18px;color:var(--ec,var(--fg));font-weight:700;font-variant-numeric:tabular-nums;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1;letter-spacing:-.01em}
+.qrow .conf .pct .lbl{font-size:9.5px;color:var(--fg-3);margin-left:4px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;font-family:inherit}
 /* Reporters cell — chip when ≥3, muted text otherwise */
 .qrow .rep{font-size:12px;color:var(--fg-3);font-variant-numeric:tabular-nums;text-align:right}
 .qrow .rep .chip-ok{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;
@@ -225,9 +232,11 @@ input::placeholder{color:var(--fg-4)}
 .lrow.head:hover{background:var(--card)}
 .lrow .t{color:var(--fg-3);font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
 .lrow .act{font-weight:600;font-size:12px}
-.lrow .act.approve,.lrow .act.whitelist_add{color:var(--ok)}
-.lrow .act.reject,.lrow .act.remove,.lrow .act.whitelist_remove{color:var(--danger)}
-.lrow .act.whitelist{color:var(--ok)}
+/* approve == "blacklist": entry goes on the public board → danger red.
+   whitelist_add == admin marks safe → ok green. */
+.lrow .act.approve,.lrow .act.auto_confirm{color:var(--danger)}
+.lrow .act.whitelist_add,.lrow .act.whitelist{color:var(--ok)}
+.lrow .act.reject,.lrow .act.remove,.lrow .act.whitelist_remove{color:var(--fg-3)}
 .lrow .actor{color:var(--fg-3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
 .lrow .h a{color:var(--fg)}.lrow .h a:hover{color:var(--accent)}
 .lrow .n{color:var(--fg-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -288,7 +297,7 @@ const SCRIPT = String.raw`
     $('app').innerHTML=
       '<div class="bar">'
       +'<div><h1>'+ ${JSON.stringify(LOGO_SVG)} +'<span>'+ ${JSON.stringify(BRAND.acronym)} +' · 审核台 · 守门员</span></h1>'
-      +'<div class="sub">守门员才能进 · 通过 = 进公榜 · 驳回 / 移除 = 不公开 · 规则见 <a href="'+GH+'/blob/main/docs/GOVERNANCE.md" target="_blank">GOVERNANCE</a></div></div>'
+      +'<div class="sub">守门员才能进 · <b style="color:var(--danger)">拉黑</b>=进公榜 · <b style="color:var(--ok)">白名单</b>=永不扫 · 驳回/移除=不公开 · 规则见 <a href="'+GH+'/blob/main/docs/GOVERNANCE.md" target="_blank">GOVERNANCE</a></div></div>'
       +'<div class="right"><span class="ok">已认证</span><button class="btn sm" onclick="window.__xss.logout()">退出</button>'+themeBtnHtml()+'</div>'
       +'</div>'
       +'<div class="tabs">'
@@ -353,11 +362,11 @@ const SCRIPT = String.raw`
       '<div class="toolbar">'
         +'<div class="chips">'
           +chip('all','全部')
-          +chip('spam','spam')
-          +chip('porn_bot','porn_bot')
-          +chip('likely_spam','likely_spam')
-          +chip('uncertain','uncertain')
-          +chip('legit','legit')
+          +chip('spam','垃圾营销')
+          +chip('porn_bot','色情广告号')
+          +chip('likely_spam','疑似垃圾')
+          +chip('uncertain','不确定')
+          +chip('legit','正常账号')
         +'</div>'
         +'<div class="r"><label class="status">排序</label>'
           +'<select id="sort">'
@@ -371,9 +380,9 @@ const SCRIPT = String.raw`
       +'<div class="batch" id="batch">'
         +'<div class="meta">已选 <b id="selN">0</b> 条 · 仅当前过滤范围</div>'
         +'<div class="actions">'
-          +'<button class="btn sm primary" onclick="window.__xss.batch(\'approve\')">批量通过</button>'
+          +'<button class="btn sm blacklist" onclick="window.__xss.batch(\'approve\')">批量拉黑</button>'
           +'<button class="btn sm" onclick="window.__xss.batch(\'reject\')">批量驳回</button>'
-          +'<button class="btn sm danger" onclick="window.__xss.batch(\'remove\')">批量移除</button>'
+          +'<button class="btn sm muted" onclick="window.__xss.batch(\'remove\')">批量移除</button>'
           +'<button class="btn sm" onclick="window.__xss.clearSel()">清空选择</button>'
         +'</div>'
       +'</div>'
@@ -394,8 +403,9 @@ const SCRIPT = String.raw`
       var fb=E((a.handle||'?').slice(0,1).toUpperCase());
       var reps=a.reporters||0;
       var lbl=a.verdict_label||'uncertain';
-      // Verdict inline label as a small uppercase marker right of name
-      var vlbl='<span class="vlbl">'+E(lbl)+'</span>';
+      // Verdict inline label — Chinese, small marker right of name.
+      var lblZh={spam:'垃圾营销',porn_bot:'色情广告',likely_spam:'疑似垃圾',uncertain:'不确定',legit:'正常'}[lbl]||lbl;
+      var vlbl='<span class="vlbl">'+E(lblZh)+'</span>';
       // Reporters: chip when ≥3, muted otherwise
       var repHtml=reps>=3
         ? '<span class="chip-ok">'+reps+' 人 ✓</span>'
@@ -412,15 +422,14 @@ const SCRIPT = String.raw`
           +'</div>'
         +'</div>'
         +'<div class="conf">'
-          +'<div class="pct">'+conf+'%<span class="lbl">conf</span></div>'
-          +'<div class="bar"><i style="width:'+conf+'%"></i></div>'
+          +'<div class="pct">'+conf+'%<span class="lbl">把握</span></div>'
         +'</div>'
         +'<div class="rep">'+repHtml+'</div>'
         +'<div class="acts">'
-          +'<button class="btn sm primary" data-act="approve">通过</button>'
-          +'<button class="btn sm ok" data-act="whitelist" title="加入白名单，永不再扫">白名单</button>'
-          +'<button class="btn sm" data-act="reject">驳回</button>'
-          +'<button class="btn sm danger" data-act="remove">移除</button>'
+          +'<button class="btn sm blacklist" data-act="approve" title="加入黑名单：进公榜，所有用户都会看到">拉黑</button>'
+          +'<button class="btn sm ok" data-act="whitelist" title="加入白名单：永不再扫，举报也忽略">白名单</button>'
+          +'<button class="btn sm" data-act="reject" title="不公开，但保留判定记录">驳回</button>'
+          +'<button class="btn sm muted" data-act="remove" title="从数据集移除（误判账号）">移除</button>'
         +'</div>'
       +'</div>';
     }).join('');
@@ -454,7 +463,7 @@ const SCRIPT = String.raw`
   }
   function batch(action){
     if(!sel.size)return;
-    var label={approve:'通过',reject:'驳回',remove:'移除'}[action]||action;
+    var label={approve:'拉黑',reject:'驳回',remove:'移除'}[action]||action;
     if(!confirm('确认对已选 '+sel.size+' 条执行「'+label+'」？此操作会写 review_log。'))return;
     var ks=Array.from(sel);
     setStatus('批量'+label+'…');
