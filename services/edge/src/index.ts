@@ -259,12 +259,19 @@ app.post("/v1/classify", async (c) => {
   // but the next /v1/classify hit still gets a free cache return.
   const writeStatus =
     verdict.label === "legit" && verdict.confidence >= 0.85 ? "auto_legit" : "auto_pending_review";
+  // Pick the most-relevant public X snippet that triggered this verdict so
+  // a third party (or the maintainer 6 months later) can audit "what did
+  // this account actually say". 240 chars covers typical spam templates
+  // with some thread context; ≥1 candidate is virtually always present.
+  const evidenceText =
+    (s.triggeringComment ?? s.recentTweets[0] ?? s.bio ?? "").trim().slice(0, 240) || null;
   await c.env.DB.prepare(
-    `INSERT INTO accounts (x_user_id,handle,display_name,avatar_url,verdict_label,confidence,reasons,model,status,source,signals_hash,first_seen,last_scored)
-     VALUES (?,?,?,?,?,?,?,?, ?,'auto_scan', ?, ?, ?)
+    `INSERT INTO accounts (x_user_id,handle,display_name,avatar_url,verdict_label,confidence,reasons,model,status,source,signals_hash,evidence_text,first_seen,last_scored)
+     VALUES (?,?,?,?,?,?,?,?, ?,'auto_scan', ?,?,?, ?)
      ON CONFLICT(x_user_id,handle) DO UPDATE SET
        verdict_label=excluded.verdict_label, confidence=excluded.confidence, reasons=excluded.reasons,
        model=excluded.model, signals_hash=excluded.signals_hash, last_scored=excluded.last_scored,
+       evidence_text=COALESCE(excluded.evidence_text, accounts.evidence_text),
        avatar_url=COALESCE(excluded.avatar_url, accounts.avatar_url),
        status=CASE
                 WHEN accounts.status IN ('human_confirmed','rejected','removed','whitelisted')
@@ -283,6 +290,7 @@ app.post("/v1/classify", async (c) => {
       c.env.LLM_API_MODEL,
       writeStatus,
       h,
+      evidenceText,
       now,
       now,
     )
@@ -431,7 +439,7 @@ app.get("/v1/admin/queue", async (c) => {
   if (!admin(c)) return c.json({ error: "forbidden" }, 403);
   const rows = await c.env.DB.prepare(
     `SELECT a.x_user_id, a.handle, a.display_name, a.avatar_url, a.verdict_label, a.confidence,
-            a.last_scored,
+            a.reasons, a.evidence_text, a.last_scored,
             (SELECT count(DISTINCT reporter_fp) FROM reports r
               WHERE r.handle=a.handle) reporters
        FROM accounts a WHERE a.status='auto_pending_review'
@@ -597,7 +605,7 @@ app.get("/v1/admin/blacklist", async (c) => {
   const limit = Math.min(200, Math.max(1, Number(c.req.query("limit")) || 100));
   const rows = await c.env.DB.prepare(
     `SELECT a.x_user_id, a.handle, a.display_name, a.avatar_url,
-            a.verdict_label, a.confidence, a.reasons, a.published_at,
+            a.verdict_label, a.confidence, a.reasons, a.evidence_text, a.published_at,
             (SELECT count(DISTINCT r.reporter_fp) FROM reports r
               WHERE r.handle=a.handle
                 AND ifnull(r.x_user_id,'')=ifnull(a.x_user_id,'')) reporters
@@ -686,7 +694,7 @@ app.get("/v1/list", async (c) => {
         GROUP BY handle, x_user_id
      )
      SELECT a.x_user_id, a.handle, a.display_name, a.avatar_url,
-            a.verdict_label, a.confidence, a.published_at,
+            a.verdict_label, a.confidence, a.reasons, a.evidence_text, a.published_at,
             coalesce(rep.n, 0) AS reporters
        FROM accounts a
        LEFT JOIN rep ON rep.handle = a.handle
@@ -706,6 +714,8 @@ app.get("/v1/list", async (c) => {
       avatar_url: string | null;
       verdict_label: string;
       confidence: number;
+      reasons: string | null;
+      evidence_text: string | null;
       published_at: number;
       reporters: number;
     }>();
@@ -762,21 +772,46 @@ app.get("/admin", (c) => {
 
 // Wave 12b — scheduled mirror of the curated whitelist/blacklist into the
 // upstream GitHub repo as data/whitelist/v1.json and data/blacklist/v1.json.
-// Bypasses needing to keep the extension hammering /v1/* on every install:
-// users get a CDN-served JSON they can also audit by reading the repo.
+// The repo itself becomes the audit log: anyone can clone and verify
+// "which accounts were on the list at any past timestamp" via git history.
 //
 // Disabled (no-op) when WHITELIST_SYNC_TOKEN is unset — the rest of the
-// system works fine without it; this is purely an availability + audit
+// system works fine without it; this is purely a transparency + audit
 // enhancement. Cron trigger in wrangler.toml.
 async function mirrorToGitHub(env: Env): Promise<void> {
   const token = env.WHITELIST_SYNC_TOKEN;
   if (!token) return; // PAT not provided yet — mirror disabled.
   const repo = env.WHITELIST_SYNC_REPO ?? "foru17/make-x-great-again";
 
-  async function publish(path: string, data: unknown): Promise<void> {
+  /** UTF-8 safe base64 (btoa() only handles latin-1). */
+  function b64utf8(s: string): string {
+    return btoa(unescape(encodeURIComponent(s)));
+  }
+  /** Tiny stable hash for "content already up-to-date?" checks. */
+  function contentHash(s: string): string {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+  }
+
+  /**
+   * PUT a file to GitHub. Skips the write entirely if the existing file's
+   * content already matches (so git history isn't polluted with empty syncs).
+   * Returns the commit-message-ready delta string or `null` if no-op.
+   */
+  async function publish(
+    path: string,
+    payload: object,
+    commitMessage: string,
+  ): Promise<"skipped" | "committed" | "failed"> {
     const url = `https://api.github.com/repos/${repo}/contents/${path}`;
-    // Need SHA of existing file (if any) for the upsert.
+    const nextBody = JSON.stringify(payload, null, 2) + "\n";
+    const nextHash = contentHash(nextBody);
+
+    // GET current file (if any) — need both sha (for upsert) and content
+    // (for diff-aware skip).
     let sha: string | undefined;
+    let unchanged = false;
     const head = await fetch(url, {
       headers: {
         authorization: `Bearer ${token}`,
@@ -785,10 +820,21 @@ async function mirrorToGitHub(env: Env): Promise<void> {
       },
     });
     if (head.ok) {
-      const j = (await head.json()) as { sha?: string };
+      const j = (await head.json()) as { sha?: string; content?: string };
       sha = j.sha;
+      if (j.content) {
+        try {
+          const decoded = decodeURIComponent(
+            escape(atob(j.content.replace(/\n/g, ""))),
+          );
+          if (contentHash(decoded) === nextHash) unchanged = true;
+        } catch {
+          /* ignore decode errors — treat as changed */
+        }
+      }
     }
-    const body = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2) + "\n")));
+    if (unchanged) return "skipped";
+
     const put = await fetch(url, {
       method: "PUT",
       headers: {
@@ -798,42 +844,103 @@ async function mirrorToGitHub(env: Env): Promise<void> {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        message: `chore(data): sync ${path} from Worker`,
-        content: body,
+        message: commitMessage,
+        content: b64utf8(nextBody),
         ...(sha ? { sha } : {}),
       }),
     });
     if (!put.ok) {
       console.warn(`mirror ${path} failed`, put.status, (await put.text()).slice(0, 200));
+      return "failed";
     }
+    return "committed";
   }
 
   const wl = await env.DB.prepare(
-    `SELECT x_user_id, handle, last_scored FROM accounts WHERE status='whitelisted' ORDER BY last_scored DESC LIMIT 5000`,
+    `SELECT x_user_id, handle, last_scored FROM accounts
+      WHERE status='whitelisted' ORDER BY last_scored DESC LIMIT 5000`,
   ).all<{ x_user_id: string | null; handle: string; last_scored: number }>();
+
+  // Blacklist export carries the FULL audit fields — reasons + evidence_text +
+  // reporter count — so a third party reading data/blacklist/v1.json can
+  // verify "why was this account flagged" without trusting our server.
   const bl = await env.DB.prepare(
-    `SELECT x_user_id, handle, verdict_label, confidence, published_at
-       FROM accounts WHERE status='human_confirmed' AND published_at IS NOT NULL
-       ORDER BY published_at DESC LIMIT 10000`,
+    `WITH rep AS (
+       SELECT handle, x_user_id, count(DISTINCT reporter_fp) AS n
+         FROM reports WHERE reporter_fp IS NOT NULL
+        GROUP BY handle, x_user_id
+     )
+     SELECT a.x_user_id, a.handle, a.verdict_label, a.confidence,
+            a.reasons, a.evidence_text, a.published_at,
+            coalesce(rep.n, 0) AS reporters
+       FROM accounts a
+       LEFT JOIN rep ON rep.handle = a.handle
+                    AND ifnull(rep.x_user_id,'') = ifnull(a.x_user_id,'')
+      WHERE a.status='human_confirmed' AND a.published_at IS NOT NULL
+      ORDER BY a.published_at DESC LIMIT 10000`,
   ).all<{
     x_user_id: string | null;
     handle: string;
     verdict_label: string;
     confidence: number;
+    reasons: string | null;
+    evidence_text: string | null;
     published_at: number;
+    reporters: number;
   }>();
+
   const now = Date.now();
-  await publish("data/whitelist/v1.json", {
-    generatedAt: now,
-    count: wl.results?.length ?? 0,
-    list: wl.results ?? [],
-  });
-  await publish("data/blacklist/v1.json", {
-    generatedAt: now,
-    count: bl.results?.length ?? 0,
-    list: bl.results ?? [],
-  });
+  const today = new Date(now).toISOString().slice(0, 10); // YYYY-MM-DD
+  const wlCount = wl.results?.length ?? 0;
+  const blCount = bl.results?.length ?? 0;
+
+  await publish(
+    "data/whitelist/v1.json",
+    {
+      schema: 1,
+      generatedAt: now,
+      count: wlCount,
+      list: (wl.results ?? []).map((r) => ({
+        handle: r.handle,
+        x_user_id: r.x_user_id,
+        last_scored: r.last_scored,
+      })),
+    },
+    `data(whitelist): sync · ${wlCount} total · ${today}`,
+  );
+
+  await publish(
+    "data/blacklist/v1.json",
+    {
+      schema: 1,
+      generatedAt: now,
+      count: blCount,
+      list: (bl.results ?? []).map((r) => ({
+        handle: r.handle,
+        x_user_id: r.x_user_id,
+        verdict_label: r.verdict_label,
+        confidence: r.confidence,
+        reasons: r.reasons ? JSON.parse(r.reasons) : [],
+        evidence_text: r.evidence_text,
+        reporters: r.reporters,
+        published_at: r.published_at,
+      })),
+    },
+    `data(blacklist): sync · ${blCount} total · ${today}`,
+  );
 }
+
+/** Admin-only manual trigger — handy after a batch of admin decisions when
+ *  you don't want to wait for the next 6h cron tick. Same code path as the
+ *  scheduled handler; cron just calls mirrorToGitHub directly. */
+app.post("/v1/admin/sync-mirror", async (c) => {
+  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!c.env.WHITELIST_SYNC_TOKEN) {
+    return c.json({ error: "mirror_disabled", reason: "WHITELIST_SYNC_TOKEN not set" }, 503);
+  }
+  await mirrorToGitHub(c.env);
+  return c.json({ ok: true });
+});
 
 export default {
   fetch: app.fetch,

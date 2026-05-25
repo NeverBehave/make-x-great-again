@@ -456,7 +456,7 @@ const SCRIPT = `
   }
 
   function renderInitial(){
-    if(!rows.length){feedEl.innerHTML='<div class="feed-skel">暂时还没有公开条目。</div>';return}
+    if(!rows.length){feedEl.innerHTML='<div class="feed-skel">暂无公开条目。</div>';return}
     // initial render — no "new" flash, just appear
     feedEl.innerHTML=rows.map(function(r,i){return rowHtml(r,false,i+1)}).join('');
   }
@@ -469,7 +469,7 @@ const SCRIPT = `
       renderInitial();
       feedAgo.textContent='已同步 '+rows.length+' 条';
     }).catch(function(){
-      feedEl.innerHTML='<div class="feed-skel">连接失败，稍后重试</div>';
+      feedEl.innerHTML='<div class="feed-skel">连接失败，稍后重试。</div>';
     })
   }
 
@@ -478,7 +478,7 @@ const SCRIPT = `
     fetch('/v1/list?limit=6&since='+latestAt).then(function(r){return r.json()}).then(function(j){
       lastPollAt=Date.now();
       var fresh=(j.list||[]).filter(function(r){return !rows.some(function(x){return key(x)===key(r)})});
-      if(!fresh.length){feedAgo.textContent='暂时没有新增 · '+agoLong(lastPollAt);return}
+      if(!fresh.length){feedAgo.textContent='暂无新增 · '+agoLong(lastPollAt);return}
       // Prepend new rows (newest first, animated). Cap at 10 total.
       var added=fresh.slice(0,6);
       latestAt=j.latestAt||latestAt;
@@ -496,8 +496,8 @@ const SCRIPT = `
       rows=added.concat(rows).slice(0,6);
       Array.prototype.forEach.call(feedEl.querySelectorAll('.feed-row .idx'),
         function(el,i){el.textContent='#'+String(i+1).padStart(2,'0')});
-      feedAgo.innerHTML='<strong>+'+added.length+' 个新条目</strong> · '+agoLong(lastPollAt);
-    }).catch(function(){feedAgo.textContent='网络不太顺 · '+agoLong(lastPollAt)})
+      feedAgo.innerHTML='<strong>+'+added.length+' 条新增</strong> · '+agoLong(lastPollAt);
+    }).catch(function(){feedAgo.textContent='网络不稳 · '+agoLong(lastPollAt)})
   }
 
   // ---- Boot ----
@@ -515,7 +515,7 @@ export function landingHtml(): string {
     title: `${BRAND.name} · ${BRAND.tagline}`,
     current: "home",
     css: CSS,
-    head: `<meta name="description" content="MXGA 是开源 X 扩展：标出广告号和色情引流号，拉黑前由你确认；公开名单可查，误伤可申诉。">`,
+    head: `<meta name="description" content="MXGA 是开源 X 扩展：标出广告号和色情引流号，拉黑由你确认。">`,
     body: HERO + FEED + PILLARS + TRUST,
     script: SCRIPT,
   });

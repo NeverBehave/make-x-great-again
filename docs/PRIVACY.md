@@ -42,6 +42,7 @@
 - 上述都是 X 自己已经渲染给你看的公开数据；我们不从 X 后台抓任何东西
 - 这些字段会被传给 OpenAI 兼容 LLM 进行 spam / 色情广告 bot 分类
 - 关联：如果你**登录了 GitHub**，请求会带 GitHub access token；后端只用它读你的 GitHub 数字 ID（`/user` 端点的 `id` 字段），不读邮箱、姓名、仓库列表
+- **服务端持久化**：上传的字段 **大部分用完即弃**。只保留 AI 判定结果（label / 置信度 / reasons）+ 公开头像 / display name + **触发判定的那条 X 公开文本前 240 字**（字段 `evidence_text`）。后者是公榜审计需要：让任何人 clone 仓库后能验证"这个号到底说了什么被拉黑"。**X 推文本身是公开内容**，存放公开内容不构成 PII 收集。
 
 ### 3.3 举报 / 一键拉黑 `POST /v1/confirm` / `POST /v1/report`
 - 上传的内容：你举报或拉黑的目标 X 账号 + 你的 GitHub 数字 ID（用作 reporter 指纹）

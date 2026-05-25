@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS accounts (
                                             -- | removed | auto_legit | whitelisted
   source        TEXT NOT NULL DEFAULT 'auto_scan', -- auto_scan|report|import|admin_whitelist
   signals_hash  TEXT,
+  evidence_text TEXT,                       -- ≤240 chars of the public X content
+                                            -- that triggered the verdict (the
+                                            -- triggering reply / first recent
+                                            -- tweet / bio). Public audit fuel.
   first_seen    INTEGER NOT NULL,
   last_scored   INTEGER NOT NULL,
   published_at  INTEGER,

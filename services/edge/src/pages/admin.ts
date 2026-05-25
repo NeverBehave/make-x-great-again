@@ -194,6 +194,9 @@ input::placeholder{color:var(--fg-4)}
   align-items:center;gap:6px;flex-wrap:wrap}
 .qrow .who .sub a{color:var(--fg-2)}.qrow .who .sub a:hover{color:var(--accent)}
 .qrow .who .sub .sep{color:var(--fg-4);opacity:.5}
+.qrow .who .ev{margin-top:5px;font-size:11.5px;color:var(--fg-2);font-style:italic;
+  line-height:1.45;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;max-width:560px}
 /* Confidence cell — single line: big % colored by verdict severity.
    We removed the fat bar (Wave 12c feedback: it left a blank-looking
    rectangle below the % in light mode). Conf% IS the entire signal. */
@@ -516,6 +519,11 @@ const SCRIPT = String.raw`
       var repHtml=reps>=3
         ? '<span class="chip-ok">'+reps+' 人 ✓</span>'
         : '<span>'+reps+' 人</span>';
+      // Evidence snippet — the X content that triggered the verdict.
+      // Surfaces "what did this account actually say" so maintainers don't
+      // have to click into x.com on every queue item.
+      var evid=(a.evidence_text||'').replace(/\s+/g,' ').trim();
+      var evidHtml=evid?'<div class="ev" title="'+E(evid)+'">『'+E(evid.slice(0,90))+(evid.length>90?'…':'')+'』</div>':'';
       return '<div class="qrow '+E(lbl)+(sel.has(k)?' sel':'')+'" data-k="'+E(k)+'">'
         +'<input type="checkbox"'+(sel.has(k)?' checked':'')+' aria-label="选中 @'+E(a.handle)+'">'
         +'<div class="av"><img src="'+E(av)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{textContent:\''+fb+'\'}))"></div>'
@@ -526,6 +534,7 @@ const SCRIPT = String.raw`
             +(a.x_user_id&&a.x_user_id!==a.handle?'<span class="sep">·</span><span>'+E(a.x_user_id)+'</span>':'')
             +'<span class="sep">·</span><span>'+ago(a.last_scored)+'</span>'
           +'</div>'
+          +evidHtml
         +'</div>'
         +'<div class="conf">'
           +'<div class="pct">'+conf+'%<span class="lbl">把握</span></div>'
