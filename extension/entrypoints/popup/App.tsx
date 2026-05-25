@@ -147,7 +147,7 @@ export function App() {
           status?.ok
             ? "border-border bg-card text-fg"
             : status?.ok === false
-              ? "border-danger/30 bg-danger-soft text-[#fca5a5]"
+              ? "border-danger/30 bg-danger-soft text-danger"
               : "border-border bg-card text-fg-3"
         }`}
       >
@@ -171,7 +171,7 @@ export function App() {
         onClick={() =>
           chrome.tabs.create({ url: chrome.runtime.getURL("options.html") })
         }
-        className="mt-3 w-full cursor-pointer rounded-md border border-fg bg-fg px-3 py-2.5 text-[13px] font-semibold text-bg transition hover:bg-white hover:border-white active:translate-y-px"
+        className="mt-3 w-full cursor-pointer rounded-md border border-fg bg-fg px-3 py-2.5 text-[13px] font-semibold text-bg transition hover:opacity-90 active:translate-y-px"
       >
         打开管理面板
       </button>

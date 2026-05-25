@@ -104,7 +104,7 @@ const SHELL = `
   <h1>公榜 · 最近 100 个</h1>
   <p class="lede" style="font-size:12.5px;color:var(--fg-3);margin-bottom:14px;text-transform:uppercase;letter-spacing:.12em">${BRAND.acronym} · 自动拦垃圾</p>
   <p class="lede">下面的 X 账号都满足：AI 高置信判定 <strong>且</strong> 至少 3 个独立 GitHub 用户标过。除 X 公开的数字 ID 外，一字段不存。</p>
-  <p class="lede">认为是误判？开 <a href="${BRAND.appealNewIssue}" style="color:var(--accent)">一个 issue</a>，48 小时内复核移除。</p>
+  <p class="lede">认为是误判？开 <a href="${BRAND.appealNewIssue}" style="color:var(--accent)">一个 issue</a>，维护者会人工复核；无承诺 SLA，通常一两天内回应。</p>
   <div class="pulse"><span class="dot" aria-hidden="true"></span><span id="pulseLabel">连接中…</span></div>
 </section>
 

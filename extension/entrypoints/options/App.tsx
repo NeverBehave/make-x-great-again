@@ -229,12 +229,12 @@ function Btn({
 }) {
   const tone =
     tier === "primary"
-      ? "bg-fg text-bg border-fg hover:bg-white hover:border-white font-semibold"
+      ? "bg-fg text-bg border-fg hover:opacity-90 font-semibold"
       : tier === "danger"
-        ? "border-danger/35 bg-transparent text-[#fca5a5] hover:bg-danger-soft hover:border-danger/50"
+        ? "border-danger/35 bg-transparent text-danger hover:bg-danger-soft hover:border-danger/55"
         : tier === "ghost"
           ? "border-transparent bg-transparent text-fg-2 hover:bg-card-hi hover:text-fg"
-          : "border-border-2 bg-transparent text-fg hover:bg-card-hi hover:border-[rgb(255_255_255/0.22)]";
+          : "border-border-2 bg-transparent text-fg hover:bg-card-hi hover:border-fg-3";
   const px = size === "sm" ? "px-2.5 py-1 text-[12px] rounded-sm" : "px-3 py-1.5 text-[13px] rounded-md";
   return (
     <button
@@ -518,13 +518,15 @@ function Toggle({
         role="switch"
         aria-checked={on}
         onClick={() => onChange(!on)}
-        className={`mt-0.5 h-5 w-9 flex-none rounded-full transition ${
-          on ? "bg-fg" : "bg-[rgb(255_255_255/0.12)]"
+        className={`mt-0.5 h-5 w-9 flex-none rounded-full border transition ${
+          on
+            ? "bg-fg border-fg"
+            : "bg-card-hi border-border-2"
         }`}
       >
         <span
-          className={`block h-4 w-4 rounded-full transition ${
-            on ? "translate-x-4 bg-bg" : "translate-x-0.5 bg-white"
+          className={`block h-4 w-4 rounded-full shadow-sm transition ${
+            on ? "translate-x-4 bg-bg" : "translate-x-0.5 bg-fg-3"
           }`}
         />
       </button>

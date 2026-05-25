@@ -118,12 +118,20 @@ const waitFor = async <T>(fn: () => T, tries = 24, gap = 80): Promise<T | null> 
  * transaction id we can't forge), so it genuinely blocks on the account and
  * syncs to every client. Returns true ONLY when the confirm was clicked and
  * the dialog closed (real success — never a false positive).
+ *
+ * `trigger` may be:
+ *  - an `<article>` element (feed / reply tree): we look for `[data-testid="caret"]`
+ *  - the profile header (when the user is ON the target's profile page): we
+ *    fall back to `[data-testid="userActions"]` which opens the same menu.
  */
-async function nativeBlock(art: HTMLElement): Promise<boolean> {
+async function nativeBlock(trigger: HTMLElement): Promise<boolean> {
   try {
-    const caret = art.querySelector<HTMLElement>('[data-testid="caret"]');
-    if (!caret) return false;
-    caret.click();
+    // Tweet caret first; profile "..." button second.
+    const opener =
+      trigger.querySelector<HTMLElement>('[data-testid="caret"]') ??
+      document.querySelector<HTMLElement>('[data-testid="userActions"]');
+    if (!opener) return false;
+    opener.click();
     const item = await waitFor(() => {
       const direct = document.querySelector<HTMLElement>(
         '[data-testid="block"], [role="menuitem"][data-testid="block"]',
@@ -254,6 +262,17 @@ export default defineContentScript({
         art = findArticleFor(sig.userId, sig.handle) ?? art;
       }
       if (art && (await nativeBlock(art))) return true;
+
+      // Profile-page fallback: when we're ON the target's profile page and
+      // no in-DOM tweet exists for them yet, drive the profile header's
+      // "..." (userActions) menu instead. The handle in `location.pathname`
+      // must match; otherwise we'd risk blocking whoever's page we're on.
+      const onProfile = location.pathname.match(/^\/([^/]+)(?:\/|$)/)?.[1]?.toLowerCase();
+      if (onProfile && sig.handle.toLowerCase() === onProfile) {
+        const userActions = document.querySelector<HTMLElement>('[data-testid="userActions"]');
+        if (userActions && (await nativeBlock(userActions))) return true;
+      }
+
       return apiBlock(sig.userId, sig.handle);
     }
 
@@ -307,8 +326,17 @@ export default defineContentScript({
         const ok = await tryRealBlock(it.sig).catch(() => false);
         if (ok) {
           await finalizeBlocked(it.key, it.sig);
+          // Mark the finding as done so the next card render strikes it out
+          // (gives the user feedback that progress is happening — otherwise
+          // the "处理中…" button reads as stuck on profile pages where each
+          // block takes ~2s).
+          const f = findings.find(
+            (x) => (x.userId || x.handle) === (it.sig.userId || it.sig.handle),
+          );
+          if (f) f.blocked = true;
           queue.shift();
           await persistQ();
+          if (!dismissed) bubbleApi?.update(findings);
           await sleep(1800); // pace: stay under X's block rate limit
         } else {
           it.tries++;
@@ -328,6 +356,9 @@ export default defineContentScript({
       }
       draining = false;
       bubbleApi?.setScanning(0);
+      // Final card refresh — re-enables the "处理中…" button or shows the
+      // empty state once the queue is fully drained.
+      if (!dismissed) bubbleApi?.update(findings);
     }
 
     function enqueueBlocks(items: { key: string; sig: Signals }[]) {

@@ -13,6 +13,9 @@ export const STYLE = `
   --shadow: 0 8px 28px rgba(0,0,0,.45); --text: #E6EDF3; --muted: #8B949E;
   --brand: #0EA5E9; --danger: #EF4444; --warn: #F59E0B; --neutral: #8B949E;
   --safe: #16A34A;
+  /* subtle overlays that need to invert with theme */
+  --hover: rgba(255,255,255,.06);
+  --shimmer: rgba(255,255,255,.18);
 }
 @media (prefers-color-scheme: light) {
   :root, .xss {
@@ -20,6 +23,8 @@ export const STYLE = `
     --shadow: 0 8px 28px rgba(15,23,42,.18); --text: #0F172A; --muted: #475569;
     --brand: #0369A1; --danger: #DC2626; --warn: #B45309; --neutral: #475569;
     --safe: #15803D;
+    --hover: rgba(15,23,42,.06);
+    --shimmer: rgba(15,23,42,.10);
   }
 }
 .xss-bubble {
@@ -80,7 +85,7 @@ svg { display: block; }
   border: 1px solid var(--border); background: transparent; color: var(--text);
   border-radius: 8px; padding: 4px 9px; font-size: 11px; cursor: pointer;
 }
-.acts button:hover { background: rgba(255,255,255,.06); }
+.acts button:hover { background: var(--hover); }
 
 /* ---- animated badge states (transform/opacity only) ---- */
 .xss-badge.fresh { animation: xrise .22s ease-out; }
@@ -103,7 +108,7 @@ svg { display: block; }
 }
 .xss-badge.analyzing::after {
   content: ""; position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent);
+  background: linear-gradient(90deg, transparent, var(--shimmer), transparent);
   transform: translateX(-100%); animation: xshim 1.1s ease-in-out infinite;
 }
 .xss-spin { animation: xspin .8s linear infinite; transform-origin: 50% 50%; }
@@ -165,6 +170,9 @@ export interface Finding {
   displayName?: string;
   snippet?: string;
   blockFailed?: boolean;
+  /** Set by drain() after a successful block — used by the card to strike
+   *  the row through and replace the per-row button with "已拉黑". */
+  blocked?: boolean;
   verdict: Verdict;
 }
 
@@ -234,6 +242,8 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
       (x) => x.verdict.label === "spam" || x.verdict.label === "porn_bot",
     ).length;
     const warn = findings.length - danger;
+    const pendingCount = findings.filter((x) => !x.blocked).length;
+    const doneCount = findings.length - pendingCount;
     card.innerHTML = `
       <div class="hd">${icon("shield-alert", "var(--brand)", 16)}
         <span>本页发现 ${findings.length} 个可疑账号</span>
@@ -263,15 +273,20 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
               <div style="min-width:0;flex:1">
                 <div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
                 <div style="font-size:11px;color:${col}">@${esc(f.handle)} · ${m.zh} ${(f.verdict.confidence * 100).toFixed(0)}%</div>
-                ${snip ? `<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${snip}</div>` : ""}
+                ${snip ? `<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap${f.blocked ? ";text-decoration:line-through;opacity:.55" : ""}">${snip}</div>` : ""}
                 ${f.blockFailed ? `<div style="font-size:11px;color:var(--warn)">自动屏蔽失败 · <a href="https://x.com/${esc(f.handle)}" target="_blank" rel="noopener" style="color:var(--warn)">手动屏蔽</a></div>` : ""}
+                ${f.blocked ? `<div style="font-size:11px;color:var(--safe)">✓ 已拉黑</div>` : ""}
               </div>
-              <button class="xss-act" data-one="${f.userId || "h:" + f.handle}">${f.blockFailed ? "重试" : "拉黑"}</button>
+              <button class="xss-act" data-one="${f.userId || "h:" + f.handle}"${f.blocked ? " disabled" : ""}>${f.blocked ? "已拉黑" : f.blockFailed ? "重试" : "拉黑"}</button>
             </div>`;
           })
           .join("")}
       </div>
-      <button class="btn" data-block>一键拉黑全部 (${findings.length})</button>
+      ${
+        pendingCount === 0
+          ? `<button class="btn" disabled style="background:var(--safe)">✓ 已全部处理 (${doneCount})</button>`
+          : `<button class="btn" data-block>一键拉黑剩余 ${pendingCount}${doneCount ? ` · 已完成 ${doneCount}` : ""}</button>`
+      }
       <div class="row"><span class="lnk" data-each>逐个查看处理</span>
         <span class="lnk" data-ign>忽略本页</span></div>`;
     card.querySelector("[data-x]")?.addEventListener("click", collapse);
