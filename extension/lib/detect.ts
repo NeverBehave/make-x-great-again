@@ -3,12 +3,14 @@
 // navigation, no extra requests to X.
 import type { Signals } from "./types";
 
-// Chinese porn-bot vocabulary (extended Wave 12e after live triage of the
-// rwayne thread — earlier list missed "骚 / 主页能打 / 刷了半天 / 我不行了"
-// which is the current dominant template). Any single match → strong "send
-// to LLM" signal, not a verdict itself.
+// Conservative Chinese porn-bot vocabulary. Kept SMALL on purpose — we
+// don't want to play whack-a-mole with bot copy variants. The LLM is what
+// classifies; this regex only decides "is it worth a token". Spam template
+// SHAPE (short CJK reply + @mention + emoji|innuendo) is captured by a
+// separate structural rule below, which catches new template variants
+// without needing dictionary growth.
 const PROMO_RE =
-  /(约见|约炮|附近|同城|牵线|线下|对接|资源|上车|看我主页|主页能打|主页可|看主页|入驻|女主播|安全可靠|大号|解锁|福利|楼凤|一夜|加微|私聊|私信|包养|外围|18\+|🔞|🍑|💋|💦|👇|👉|刷了半天|刷了|没她(?:好看|骚|涩)|比她(?:好看|骚|涩)|她(?:好|妈)?(?:骚|涩|色)|我(?:不行|顶不住)了|sao(?:货|的)|涩货|约不约|有偿|线下我)/;
+  /(约见|约炮|附近|同城|牵线|线下|对接|资源|上车|看我主页|入驻|女主播|安全可靠|大号|解锁|福利|楼凤|一夜|加微|私聊|私信|包养|外围|18\+|🔞|🍑|💋|💦|👇|👉)/;
 const LINK_RE =
   /(https?:\/\/|\b[\w-]+\.(top|xyz|vip|club|icu|cn|cc|live|link|shop)\b|t\.co\/)/i;
 const RANDOM_HANDLE_RE = /^[a-z]{2,}\d{4,}$|^[A-Za-z]+[A-Z][a-z]+\d{4,}$|^[a-z]{1,3}\d{4,}$/;
