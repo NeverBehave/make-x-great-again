@@ -548,6 +548,20 @@ function Settings() {
   useEffect(() => {
     refresh();
     getSettings().then(setSt);
+    // Deep-link from the popup onboarding banner: ?login=1 → start Device
+    // Flow immediately, then strip the param so reload doesn't re-trigger.
+    if (typeof location !== "undefined" && /[?&]login=1\b/.test(location.search)) {
+      const url = new URL(location.href);
+      url.searchParams.delete("login");
+      history.replaceState({}, "", url.toString());
+      // Wait a tick so the initial render with the login UI mounts before
+      // ghLogin() opens the GitHub verification tab.
+      setTimeout(() => {
+        getGhLogin().then((cur) => {
+          if (!cur) void ghLogin();
+        });
+      }, 60);
+    }
   }, []);
   const save = async <K extends keyof Settings>(k: K, v: Settings[K]) => {
     await setSetting(k, v);
