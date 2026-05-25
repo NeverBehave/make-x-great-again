@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   status        TEXT NOT NULL DEFAULT 'auto_pending_review',
                                             -- auto_pending_review | human_confirmed | rejected
                                             -- | removed | auto_legit | whitelisted
-  source        TEXT NOT NULL DEFAULT 'auto_scan', -- auto_scan|report|import|admin_whitelist
+  source        TEXT NOT NULL DEFAULT 'auto_scan', -- auto_scan|report|block|import|admin_whitelist
   signals_hash  TEXT,
   evidence_text TEXT,                       -- ≤240 chars of the public X content
                                             -- that triggered the verdict (the
@@ -23,10 +23,13 @@ CREATE TABLE IF NOT EXISTS accounts (
   first_seen    INTEGER NOT NULL,
   last_scored   INTEGER NOT NULL,
   published_at  INTEGER,
+  -- D1/SQLite allows multiple NULL values in composite keys, so the Worker
+  -- write path also does normalized handle-level dedupe for handle-only rows.
   PRIMARY KEY (x_user_id, handle)
 );
 CREATE INDEX IF NOT EXISTS idx_accounts_status ON accounts(status);
 CREATE INDEX IF NOT EXISTS idx_accounts_uid ON accounts(x_user_id);
+CREATE INDEX IF NOT EXISTS idx_accounts_handle_norm ON accounts(lower(handle));
 
 CREATE TABLE IF NOT EXISTS reports (
   id                  TEXT PRIMARY KEY,     -- uuid
@@ -40,9 +43,12 @@ CREATE TABLE IF NOT EXISTS reports (
   created_at          INTEGER NOT NULL
 );
 
--- one report per (target, reporter) — makes INSERT OR IGNORE dedupe
+-- Legacy exact-key guard. Because x_user_id can be NULL, the Worker also
+-- performs a normalized pre-check before inserting reports.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_unique
   ON reports(handle, x_user_id, reporter_fp);
+CREATE INDEX IF NOT EXISTS idx_reports_handle_reporter_norm
+  ON reports(lower(handle), reporter_fp);
 -- Partial index for the auto-promote eligibility query.
 CREATE INDEX IF NOT EXISTS idx_reports_eligible
   ON reports(handle, x_user_id)

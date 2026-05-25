@@ -131,6 +131,9 @@ export default defineBackground(() => {
             await call("/v1/confirm", await authedPost(msg.signals));
             void bumpStat("blocked");
             sendResponse({ ok: true });
+          } else if (msg.type === "report_spam") {
+            await call("/v1/report", await authedPost(msg.signals));
+            sendResponse({ ok: true });
           } else if (msg.type === "gh_start") {
             sendResponse({ ok: true, data: await ghStart() });
           } else if (msg.type === "gh_poll") {

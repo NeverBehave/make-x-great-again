@@ -402,7 +402,7 @@ export default defineContentScript({
           {
             onBlock: () => void blockAccount(key, sig),
             onHide: () => hideTweet(anchor),
-            onReport: () => void send({ type: "confirm_spam", signals: sig }),
+            onReport: () => void send({ type: "report_spam", signals: sig }),
             onAppeal: () => window.open(APPEAL_URL, "_blank", "noopener"),
             onCheck: () => void classify(anchor, key, sig),
           },

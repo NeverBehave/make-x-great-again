@@ -176,6 +176,199 @@ async function classify(env: Env, s: Signals): Promise<Verdict> {
   return Verdict.parse(JSON.parse(m[0]));
 }
 
+function normalizeHandle(handle: string): string {
+  return handle.trim().replace(/^@+/, "").toLowerCase();
+}
+
+function evidenceText(s: Signals): string | null {
+  return (s.triggeringComment ?? s.recentTweets[0] ?? s.bio ?? "").trim().slice(0, 240) || null;
+}
+
+interface AccountRow {
+  rowid: number;
+  verdict_label: string;
+  confidence: number;
+  reasons: string | null;
+  model: string | null;
+  signals_hash: string | null;
+  status: string;
+}
+
+async function findAccount(
+  env: Env,
+  handle: string,
+  uid: string | null,
+): Promise<AccountRow | null> {
+  return (
+    (await env.DB.prepare(
+      `SELECT rowid, verdict_label, confidence, reasons, model, signals_hash, status
+         FROM accounts
+        WHERE lower(handle)=?
+          AND (? IS NULL OR x_user_id IS NULL OR x_user_id=?)
+        ORDER BY CASE
+                   WHEN ? IS NOT NULL AND x_user_id=? THEN 0
+                   WHEN x_user_id IS NOT NULL THEN 1
+                   ELSE 2
+                 END,
+                 last_scored DESC
+        LIMIT 1`,
+    )
+      .bind(handle, uid, uid, uid, uid)
+      .first<AccountRow>()) ?? null
+  );
+}
+
+interface AccountWrite {
+  uid: string | null;
+  handle: string;
+  displayName: string;
+  avatarUrl?: string | null;
+  verdictLabel: string;
+  confidence: number;
+  reasons: string;
+  model?: string | null;
+  status: string;
+  source: string;
+  signalsHash?: string | null;
+  evidenceText?: string | null;
+  now: number;
+  publishedAt?: number | null;
+}
+
+async function writeAccount(env: Env, w: AccountWrite): Promise<AccountRow | null> {
+  const prev = await findAccount(env, w.handle, w.uid);
+  if (prev) {
+    await env.DB.prepare(
+      `UPDATE accounts SET
+         x_user_id=COALESCE(?, x_user_id),
+         handle=?,
+         display_name=?,
+         avatar_url=COALESCE(?, avatar_url),
+         verdict_label=?,
+         confidence=?,
+         reasons=?,
+         model=COALESCE(?, model),
+         source=CASE
+                  WHEN status IN ('human_confirmed','rejected','removed','whitelisted')
+                    THEN source
+                  ELSE ?
+                END,
+         signals_hash=COALESCE(?, signals_hash),
+         evidence_text=COALESCE(?, evidence_text),
+         last_scored=?,
+         status=CASE
+                  WHEN status IN ('human_confirmed','rejected','removed','whitelisted')
+                    THEN status
+                  ELSE ?
+                END,
+         published_at=CASE
+                        WHEN status IN ('human_confirmed','rejected','removed','whitelisted')
+                          THEN published_at
+                        ELSE ?
+                      END
+       WHERE rowid=?`,
+    )
+      .bind(
+        w.uid,
+        w.handle,
+        w.displayName,
+        w.avatarUrl ?? null,
+        w.verdictLabel,
+        w.confidence,
+        w.reasons,
+        w.model ?? null,
+        w.source,
+        w.signalsHash ?? null,
+        w.evidenceText ?? null,
+        w.now,
+        w.status,
+        w.publishedAt ?? null,
+        prev.rowid,
+      )
+      .run();
+    await cleanupHandleOnlyAccountDuplicates(env, w.handle, prev.rowid);
+    return findAccount(env, w.handle, w.uid);
+  }
+
+  await env.DB.prepare(
+    `INSERT INTO accounts
+       (x_user_id,handle,display_name,avatar_url,verdict_label,confidence,reasons,model,
+        status,source,signals_hash,evidence_text,first_seen,last_scored,published_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  )
+    .bind(
+      w.uid,
+      w.handle,
+      w.displayName,
+      w.avatarUrl ?? null,
+      w.verdictLabel,
+      w.confidence,
+      w.reasons,
+      w.model ?? null,
+      w.status,
+      w.source,
+      w.signalsHash ?? null,
+      w.evidenceText ?? null,
+      w.now,
+      w.now,
+      w.publishedAt ?? null,
+    )
+    .run();
+  return findAccount(env, w.handle, w.uid);
+}
+
+async function cleanupHandleOnlyAccountDuplicates(
+  env: Env,
+  handle: string,
+  keepRowid: number,
+): Promise<void> {
+  await env.DB.prepare(
+    `DELETE FROM accounts
+      WHERE rowid<>?
+        AND lower(handle)=?
+        AND x_user_id IS NULL
+        AND status IN ('auto_pending_review','auto_legit')`,
+  )
+    .bind(keepRowid, handle)
+    .run();
+}
+
+async function insertReportIfNew(
+  env: Env,
+  s: Signals,
+  handle: string,
+  uid: string | null,
+  reporter: Reporter,
+  now: number,
+): Promise<boolean> {
+  const res = await env.DB.prepare(
+    `INSERT INTO reports
+       (id,x_user_id,handle,reporter_fp,reporter_age_days,evidence,status,created_at)
+     SELECT ?,?,?,?,?,?,'pending',?
+      WHERE NOT EXISTS (
+        SELECT 1 FROM reports
+         WHERE lower(handle)=?
+           AND reporter_fp=?
+           AND (? IS NULL OR x_user_id IS NULL OR x_user_id=?)
+      )`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      uid,
+      handle,
+      reporter.id,
+      reporter.ageDays,
+      JSON.stringify(s).slice(0, 4000),
+      now,
+      handle,
+      reporter.id,
+      uid,
+      uid,
+    )
+    .run();
+  return (res.meta.changes ?? 0) > 0;
+}
+
 const app = new Hono<{ Bindings: Env }>();
 app.use("*", cors());
 
@@ -211,21 +404,11 @@ app.post("/v1/classify", async (c) => {
   // Cost endpoint — GitHub identity required (when enforcement is on).
   const who = await requireReporter(c);
   if (!who) return c.json({ error: "github_login_required" }, 401);
-  const s = Signals.parse(await c.req.json());
+  const parsed = Signals.parse(await c.req.json());
+  const s: Signals = { ...parsed, handle: normalizeHandle(parsed.handle) };
   const h = sigHash(s);
   const uid = s.userId ?? null;
-  const prev = await c.env.DB.prepare(
-    "SELECT verdict_label, confidence, reasons, model, signals_hash, status FROM accounts WHERE (x_user_id IS ? OR x_user_id=?) AND handle=?",
-  )
-    .bind(uid, uid, s.handle)
-    .first<{
-      verdict_label: string;
-      confidence: number;
-      reasons: string;
-      model: string;
-      signals_hash: string;
-      status: string;
-    }>();
+  const prev = await findAccount(c.env, s.handle, uid);
   // Hard short-circuit for admin-curated whitelist — skip the LLM AND ignore
   // signals_hash drift. Whitelist beats heuristics.
   if (prev && prev.status === "whitelisted") {
@@ -259,41 +442,22 @@ app.post("/v1/classify", async (c) => {
   const writeStatus =
     verdict.label === "legit" && verdict.confidence >= 0.85 ? "auto_legit" : "auto_pending_review";
   // Pick the most-relevant public X snippet that triggered this verdict so
-  // a third party (or the maintainer 6 months later) can audit "what did
-  // this account actually say". 240 chars covers typical spam templates
-  // with some thread context; ≥1 candidate is virtually always present.
-  const evidenceText =
-    (s.triggeringComment ?? s.recentTweets[0] ?? s.bio ?? "").trim().slice(0, 240) || null;
-  await c.env.DB.prepare(
-    `INSERT INTO accounts (x_user_id,handle,display_name,avatar_url,verdict_label,confidence,reasons,model,status,source,signals_hash,evidence_text,first_seen,last_scored)
-     VALUES (?,?,?,?,?,?,?,?, ?,'auto_scan', ?,?,?, ?)
-     ON CONFLICT(x_user_id,handle) DO UPDATE SET
-       verdict_label=excluded.verdict_label, confidence=excluded.confidence, reasons=excluded.reasons,
-       model=excluded.model, signals_hash=excluded.signals_hash, last_scored=excluded.last_scored,
-       evidence_text=COALESCE(excluded.evidence_text, accounts.evidence_text),
-       avatar_url=COALESCE(excluded.avatar_url, accounts.avatar_url),
-       status=CASE
-                WHEN accounts.status IN ('human_confirmed','rejected','removed','whitelisted')
-                  THEN accounts.status
-                ELSE excluded.status
-              END`,
-  )
-    .bind(
-      uid,
-      s.handle,
-      s.displayName,
-      s.avatarUrl ?? null,
-      verdict.label,
-      verdict.confidence,
-      JSON.stringify(verdict.reasons),
-      c.env.LLM_API_MODEL,
-      writeStatus,
-      h,
-      evidenceText,
-      now,
-      now,
-    )
-    .run();
+  // the public list can be audited without retaining unrelated context.
+  await writeAccount(c.env, {
+    uid,
+    handle: s.handle,
+    displayName: s.displayName,
+    avatarUrl: s.avatarUrl,
+    verdictLabel: verdict.label,
+    confidence: verdict.confidence,
+    reasons: JSON.stringify(verdict.reasons),
+    model: c.env.LLM_API_MODEL,
+    status: writeStatus,
+    source: "auto_scan",
+    signalsHash: h,
+    evidenceText: evidenceText(s),
+    now,
+  });
   return c.json({ cached: false, record: { verdict, status: writeStatus } });
 });
 
@@ -306,58 +470,42 @@ app.post("/v1/classify", async (c) => {
 async function submitReport(c: Ctx, source: string) {
   const who = await requireReporter(c);
   if (!who) return c.json({ error: "github_login_required" }, 401);
-  const s = Signals.parse(await c.req.json());
+  const parsed = Signals.parse(await c.req.json());
+  const s: Signals = { ...parsed, handle: normalizeHandle(parsed.handle) };
   const uid = s.userId ?? null;
   const now = Date.now();
 
   // Whitelist short-circuit — if maintainer has explicitly whitelisted the
   // target, ignore the report entirely (don't even store it). Avoids letting
   // a coordinated brigade pollute the audit trail against a trusted account.
-  const cur = await c.env.DB.prepare(
-    "SELECT status FROM accounts WHERE handle=? AND (x_user_id IS ? OR x_user_id=?)",
-  )
-    .bind(s.handle, uid, uid)
-    .first<{ status: string }>();
+  const cur = await findAccount(c.env, s.handle, uid);
   if (cur?.status === "whitelisted") {
     return c.json({ ok: true, status: "whitelisted", reporters: 0, auto: false });
   }
 
   // one report per (target, reporter); always store, even for "young" GH
   // accounts — they just don't count toward AUTO_REPORTERS.
-  await c.env.DB.prepare(
-    `INSERT OR IGNORE INTO reports
-       (id,x_user_id,handle,reporter_fp,reporter_age_days,evidence,status,created_at)
-     VALUES (?,?,?,?,?,?, 'pending', ?)`,
-  )
-    .bind(
-      crypto.randomUUID(),
-      uid,
-      s.handle,
-      who.id,
-      who.ageDays,
-      JSON.stringify(s).slice(0, 4000),
-      now,
-    )
-    .run();
+  const insertedReport = await insertReportIfNew(c.env, s, s.handle, uid, who, now);
+  const alreadyReported = !insertedReport;
 
   // Reporter count for auto-publish: only GH accounts older than
   // REPORTER_MIN_AGE_DAYS count. NULL age = legacy rows; treat them as
   // eligible so existing maintainer history is preserved.
   const cnt = await c.env.DB.prepare(
     `SELECT count(DISTINCT reporter_fp) n FROM reports
-       WHERE handle=? AND (x_user_id IS ? OR x_user_id=?)
+       WHERE lower(handle)=?
+         AND (? IS NULL OR x_user_id IS NULL OR x_user_id=?)
          AND (reporter_age_days IS NULL OR reporter_age_days >= ?)`,
   )
     .bind(s.handle, uid, uid, REPORTER_MIN_AGE_DAYS)
     .first<{ n: number }>();
   const reporters = cnt?.n ?? (who.ageDays >= REPORTER_MIN_AGE_DAYS ? 1 : 0);
+  if (alreadyReported && cur) {
+    return c.json({ ok: true, status: cur.status, reporters, auto: false, duplicate: true });
+  }
 
   // reuse a recent AI verdict if present, else classify now
-  const prev = await c.env.DB.prepare(
-    "SELECT verdict_label, confidence FROM accounts WHERE handle=? AND (x_user_id IS ? OR x_user_id=?)",
-  )
-    .bind(s.handle, uid, uid)
-    .first<{ verdict_label: string; confidence: number }>();
+  const prev = await findAccount(c.env, s.handle, uid);
   let vLabel: string;
   let vConf: number;
   if (prev) {
@@ -380,51 +528,39 @@ async function submitReport(c: Ctx, source: string) {
   const auto = false; // manual-confirmation-only for now
   const status = "auto_pending_review";
 
-  await c.env.DB.prepare(
-    `INSERT INTO accounts (x_user_id,handle,display_name,avatar_url,verdict_label,confidence,reasons,status,source,first_seen,last_scored,published_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-     ON CONFLICT(x_user_id,handle) DO UPDATE SET
-       status=CASE
-                WHEN accounts.status IN ('whitelisted','removed','rejected') THEN accounts.status
-                ELSE excluded.status
-              END,
-       source=excluded.source,
-       published_at=CASE
-                      WHEN accounts.status IN ('whitelisted','removed','rejected') THEN accounts.published_at
-                      ELSE excluded.published_at
-                    END,
-       avatar_url=COALESCE(excluded.avatar_url, accounts.avatar_url)`,
-  )
-    .bind(
-      uid,
-      s.handle,
-      s.displayName,
-      s.avatarUrl ?? null,
-      vLabel,
-      vConf,
-      '["reported"]',
-      status,
-      source,
-      now,
-      now,
-      auto ? now : null,
+  const written = await writeAccount(c.env, {
+    uid,
+    handle: s.handle,
+    displayName: s.displayName,
+    avatarUrl: s.avatarUrl,
+    verdictLabel: vLabel,
+    confidence: vConf,
+    reasons: '["reported"]',
+    model: prev ? null : c.env.LLM_API_MODEL,
+    status,
+    source,
+    evidenceText: evidenceText(s),
+    now,
+    publishedAt: auto ? now : null,
+  });
+  const finalStatus = written?.status ?? status;
+  if (!alreadyReported) {
+    await c.env.DB.prepare(
+      "INSERT INTO review_log (x_user_id,handle,action,actor,note,at) VALUES (?,?,?,?,?,?)",
     )
-    .run();
-  await c.env.DB.prepare(
-    "INSERT INTO review_log (x_user_id,handle,action,actor,note,at) VALUES (?,?,?,?,?,?)",
-  )
-    .bind(
-      uid,
-      s.handle,
-      "report_queued",
-      who.id,
-      `${source} r=${reporters} age=${who.ageDays}d${
-        wouldAutoIfEnabled ? " · would auto-publish if enabled" : ""
-      }`,
-      now,
-    )
-    .run();
-  return c.json({ ok: true, status, reporters, auto });
+      .bind(
+        uid,
+        s.handle,
+        finalStatus === status ? "report_queued" : "report_seen",
+        who.id,
+        `${source} r=${reporters} age=${who.ageDays}d${
+          wouldAutoIfEnabled ? " · would auto-publish if enabled" : ""
+        }`,
+        now,
+      )
+      .run();
+  }
+  return c.json({ ok: true, status: finalStatus, reporters, auto, duplicate: alreadyReported });
 }
 app.post("/v1/confirm", (c) => submitReport(c, "block"));
 app.post("/v1/report", (c) => submitReport(c, "report"));
@@ -437,22 +573,38 @@ function admin(c: Ctx): boolean {
 app.get("/v1/admin/queue", async (c) => {
   if (!admin(c)) return c.json({ error: "forbidden" }, 403);
   const rows = await c.env.DB.prepare(
-    `SELECT a.x_user_id, a.handle, a.display_name, a.avatar_url, a.verdict_label, a.confidence,
+    `WITH ranked AS (
+       SELECT a.*,
+              row_number() OVER (
+                PARTITION BY lower(a.handle)
+                ORDER BY CASE WHEN a.x_user_id IS NOT NULL THEN 0 ELSE 1 END,
+                         a.last_scored DESC
+              ) AS rn
+         FROM accounts a
+        WHERE a.status='auto_pending_review'
+     )
+     SELECT a.x_user_id, a.handle, a.display_name, a.avatar_url, a.verdict_label, a.confidence,
             a.reasons, a.evidence_text, a.last_scored,
             (SELECT count(DISTINCT reporter_fp) FROM reports r
-              WHERE r.handle=a.handle) reporters
-       FROM accounts a WHERE a.status='auto_pending_review'
-       ORDER BY a.last_scored DESC LIMIT 200`,
+              WHERE lower(r.handle)=lower(a.handle)
+                AND (a.x_user_id IS NULL OR r.x_user_id IS NULL OR r.x_user_id=a.x_user_id)
+            ) reporters
+       FROM ranked a
+      WHERE a.rn=1
+      ORDER BY a.last_scored DESC LIMIT 200`,
   ).all();
   return c.json({ queue: rows.results ?? [] });
 });
 app.post("/v1/admin/decide", async (c) => {
   if (!admin(c)) return c.json({ error: "forbidden" }, 403);
-  const { handle, xUserId, action } = (await c.req.json()) as {
+  const body = (await c.req.json()) as {
     handle: string;
     xUserId?: string;
     action: "approve" | "reject" | "remove" | "whitelist";
   };
+  const handle = normalizeHandle(body.handle);
+  const xUserId = body.xUserId;
+  const action = body.action;
   const status =
     action === "approve"
       ? "human_confirmed"
@@ -462,11 +614,25 @@ app.post("/v1/admin/decide", async (c) => {
           ? "whitelisted"
           : "rejected";
   const now = Date.now();
-  await c.env.DB.prepare(
-    "UPDATE accounts SET status=?, published_at=? WHERE handle=? AND (x_user_id IS ? OR x_user_id=?)",
-  )
-    .bind(status, action === "approve" ? now : null, handle, xUserId ?? null, xUserId ?? null)
-    .run();
+  if (xUserId) {
+    await c.env.DB.prepare(
+      "UPDATE accounts SET status=?, published_at=? WHERE lower(handle)=? AND x_user_id=?",
+    )
+      .bind(status, action === "approve" ? now : null, handle, xUserId)
+      .run();
+    await c.env.DB.prepare(
+      `UPDATE accounts SET status=?, published_at=NULL
+        WHERE lower(handle)=? AND x_user_id IS NULL AND status='auto_pending_review'`,
+    )
+      .bind(action === "approve" ? "removed" : status, handle)
+      .run();
+  } else {
+    await c.env.DB.prepare(
+      "UPDATE accounts SET status=?, published_at=? WHERE lower(handle)=? AND x_user_id IS NULL",
+    )
+      .bind(status, action === "approve" ? now : null, handle)
+      .run();
+  }
   await c.env.DB.prepare(
     "INSERT INTO review_log (x_user_id,handle,action,actor,note,at) VALUES (?,?,?,?,?,?)",
   )

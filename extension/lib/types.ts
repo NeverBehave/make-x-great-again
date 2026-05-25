@@ -39,6 +39,7 @@ export type BgRequest =
   | { type: "whitelist_refresh" }
   | { type: "lookup"; userId: string }
   | { type: "classify"; signals: Omit<Signals, "isProfile"> }
+  | { type: "report_spam"; signals: Omit<Signals, "isProfile"> }
   | { type: "confirm_spam"; signals: Omit<Signals, "isProfile"> }
   | { type: "gh_start" }
   | { type: "gh_poll"; deviceCode: string }
