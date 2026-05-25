@@ -47,6 +47,15 @@ must satisfy.
 - The public data repo is versioned and forkable; every publication carries
   a version tag, generation time, count, and source commit.
 - Removals are logged. Methodology and scope are public.
+- **Audit snapshot**: the curated whitelist + blacklist are auto-mirrored
+  from D1 to [`data/whitelist/v1.json`](./data/whitelist/v1.json) and
+  [`data/blacklist/v1.json`](./data/blacklist/v1.json) every 6 hours by the
+  Worker's scheduled handler (diff-aware — only commits when content
+  actually changed). The git history of that directory **is** the audit
+  log: anyone can clone and reconstruct "what was on the list at any past
+  timestamp", including the `evidence_text` (the public X content that
+  triggered each verdict) and `reasons` array (LLM-stated rationale). See
+  [`data/README.md`](./data/README.md) for the schema and update mechanism.
 
 ## Accountability
 

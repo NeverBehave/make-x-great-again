@@ -794,19 +794,27 @@ async function mirrorToGitHub(env: Env): Promise<void> {
     return h.toString(36);
   }
 
+  /** Hash-stable view of the payload with `generatedAt` stripped. Without
+   *  this, the diff-aware check fires every run (timestamp always changes)
+   *  and we PUT on every cron tick — exactly what we wanted to avoid. */
+  function stableJson(payload: Record<string, unknown>): string {
+    const { generatedAt: _ts, ...rest } = payload;
+    return JSON.stringify(rest, null, 2);
+  }
+
   /**
    * PUT a file to GitHub. Skips the write entirely if the existing file's
-   * content already matches (so git history isn't polluted with empty syncs).
-   * Returns the commit-message-ready delta string or `null` if no-op.
+   * content already matches (compared with `generatedAt` excluded, so a
+   * fresh timestamp alone doesn't force a commit).
    */
   async function publish(
     path: string,
-    payload: object,
+    payload: Record<string, unknown>,
     commitMessage: string,
   ): Promise<"skipped" | "committed" | "failed"> {
     const url = `https://api.github.com/repos/${repo}/contents/${path}`;
     const nextBody = JSON.stringify(payload, null, 2) + "\n";
-    const nextHash = contentHash(nextBody);
+    const nextStableHash = contentHash(stableJson(payload));
 
     // GET current file (if any) — need both sha (for upsert) and content
     // (for diff-aware skip).
@@ -827,9 +835,10 @@ async function mirrorToGitHub(env: Env): Promise<void> {
           const decoded = decodeURIComponent(
             escape(atob(j.content.replace(/\n/g, ""))),
           );
-          if (contentHash(decoded) === nextHash) unchanged = true;
+          const prevPayload = JSON.parse(decoded) as Record<string, unknown>;
+          if (contentHash(stableJson(prevPayload)) === nextStableHash) unchanged = true;
         } catch {
-          /* ignore decode errors — treat as changed */
+          /* ignore parse/decode errors — treat as changed */
         }
       }
     }

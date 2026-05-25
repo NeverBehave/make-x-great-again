@@ -128,11 +128,24 @@ extension/            MV3 浏览器扩展：WXT + React 19 + Tailwind v4
 services/edge/        Cloudflare Worker（Hono）+ D1（xss-db）
   src/index.ts        /v1/* API + scheduled cron + Env 类型
   src/pages/          SSR landing / list / admin（同套 base-ui design token）
+data/                 公开数据快照（Worker 每 6h 自动同步，git history = 审计日志）
+  whitelist/v1.json   维护者人工确认安全的账号
+  blacklist/v1.json   维护者人工确认公开的垃圾号（含 evidence_text + reasons）
+  README.md           schema 文档 + 更新机制说明
 docs/                 ARCHITECTURE / PRODUCT / MODERATION / FLOW / UX / STATUS / RUNNING / MVP
 GOVERNANCE.md         治理铁律 + 申诉路径（在仓库根）
 SECURITY.md           漏洞披露通道
 CONTRIBUTING.md       贡献指南
 ```
+
+## 公开数据集（审计入口）
+
+`data/whitelist/v1.json` 和 `data/blacklist/v1.json` 是这个项目最重要的透明度承诺 —— 它们是 D1 数据库的**只读快照**，每 6 小时由服务端自动同步到这里。**仓库的 git history 就是完整审计日志**：任何人 clone 一下就能复现"维护者在哪天加了/移除了哪个账号"。
+
+每条 blacklist 记录都附 `evidence_text`（触发判定的那条公开 X 文本）、`reasons`（AI 给出的理由数组）、`reporters`（独立举报人数），让审计不止是"我说他是 spam"。
+
+→ 实时浏览：[github.com/foru17/make-x-great-again/tree/main/data](https://github.com/foru17/make-x-great-again/tree/main/data)
+→ 完整 schema 与使用说明：[data/README.md](./data/README.md)
 
 ## 当前进度
 
