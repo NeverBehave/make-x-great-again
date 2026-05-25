@@ -1,10 +1,9 @@
 # Governance
 
-x-spam-sentinel publishes a list that effectively **accuses real accounts**
-of being spam/abuse bots. That power is dangerous if misused. These rules are
-non-negotiable and bind the code, the service, and the published data. The
-final, detailed policy is owned by track T1 (LUO-16); this is the contract it
-must satisfy.
+Make X Great Again (MXGA) publishes a list that effectively **accuses real
+accounts** of being spam/abuse bots. That power is dangerous if misused.
+These rules are non-negotiable and bind the code, the service, and the
+published data.
 
 ## Scope
 
@@ -47,6 +46,15 @@ must satisfy.
 - The public data repo is versioned and forkable; every publication carries
   a version tag, generation time, count, and source commit.
 - Removals are logged. Methodology and scope are public.
+- **Audit snapshot**: the curated whitelist + blacklist are auto-mirrored
+  from D1 to [`data/whitelist/v1.json`](./data/whitelist/v1.json) and
+  [`data/blacklist/v1.json`](./data/blacklist/v1.json) every 6 hours by the
+  Worker's scheduled handler (diff-aware — only commits when content
+  actually changed). The git history of that directory **is** the audit
+  log: anyone can clone and reconstruct "what was on the list at any past
+  timestamp", including the `evidence_text` (the public X content that
+  triggered each verdict) and `reasons` array (LLM-stated rationale). See
+  [`data/README.md`](./data/README.md) for the schema and update mechanism.
 
 ## Accountability
 

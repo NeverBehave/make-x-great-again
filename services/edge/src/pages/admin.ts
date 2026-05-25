@@ -103,6 +103,15 @@ button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
 .btn.primary:hover{opacity:.9}
 .btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 36%,transparent)}
 .btn.danger:hover{background:var(--danger-soft)}
+.btn.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
+.btn.ok:hover{background:color-mix(in srgb,var(--ok) 10%,transparent)}
+/* blacklist = primary action on a spam queue: solid red.
+   Semantic: "approve" verdict → entry goes on public board (i.e. blacklisted). */
+.btn.blacklist{background:var(--danger);color:#fff;border-color:var(--danger);font-weight:600}
+.btn.blacklist:hover{background:color-mix(in srgb,var(--danger) 88%,#000)}
+/* muted = secondary destructive (remove from dataset, not a public action) */
+.btn.muted{color:var(--fg-3);border-color:var(--border-strong)}
+.btn.muted:hover{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 30%,transparent);background:var(--danger-soft)}
 .btn.sm{padding:5px 10px;font-size:12px;border-radius:var(--r-sm)}
 
 /* Inputs */
@@ -185,19 +194,22 @@ input::placeholder{color:var(--fg-4)}
   align-items:center;gap:6px;flex-wrap:wrap}
 .qrow .who .sub a{color:var(--fg-2)}.qrow .who .sub a:hover{color:var(--accent)}
 .qrow .who .sub .sep{color:var(--fg-4);opacity:.5}
-/* Confidence cell — number on top, fat bar below */
-.qrow .conf{display:flex;flex-direction:column;gap:5px;align-items:flex-start;min-width:90px}
-.qrow .conf .pct{font-size:14px;color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums;
-  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1}
-.qrow .conf .pct .lbl{font-size:9.5px;color:var(--fg-3);margin-left:4px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;font-family:inherit}
-.qrow .conf .bar{width:96px;height:4px;background:var(--card-hi);border-radius:2px;overflow:hidden;position:relative}
-.qrow .conf .bar i{display:block;height:100%;background:var(--ec,var(--fg-3));border-radius:2px;transition:width .3s ease}
+.qrow .who .ev{margin-top:5px;font-size:11.5px;color:var(--fg-2);font-style:italic;
+  line-height:1.45;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;max-width:560px}
+/* Confidence cell — single line: big % colored by verdict severity.
+   We removed an earlier fat bar (it left a blank-looking rectangle below
+   the % in light mode). Conf% IS the entire signal. */
+.qrow .conf{display:flex;align-items:baseline;gap:6px;min-width:80px;justify-content:flex-start}
+.qrow .conf .pct{font-size:18px;color:var(--ec,var(--fg));font-weight:700;font-variant-numeric:tabular-nums;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1;letter-spacing:-.01em}
+.qrow .conf .pct .lbl{font-size:9.5px;color:var(--fg-3);margin-left:4px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;font-family:inherit}
 /* Reporters cell — chip when ≥3, muted text otherwise */
 .qrow .rep{font-size:12px;color:var(--fg-3);font-variant-numeric:tabular-nums;text-align:right}
 .qrow .rep .chip-ok{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;
   border-radius:999px;color:var(--ok);border:1px solid color-mix(in srgb,var(--ok) 40%,transparent);
   background:color-mix(in srgb,var(--ok) 8%,transparent);font-weight:600;font-size:11.5px;letter-spacing:.02em}
-.qrow .acts{display:flex;gap:6px;flex-shrink:0}
+.qrow .acts{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
 
 /* Locked state */
 .locked{min-height:60vh;display:flex;align-items:center;justify-content:center}
@@ -223,8 +235,11 @@ input::placeholder{color:var(--fg-4)}
 .lrow.head:hover{background:var(--card)}
 .lrow .t{color:var(--fg-3);font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
 .lrow .act{font-weight:600;font-size:12px}
-.lrow .act.approve{color:var(--ok)}
-.lrow .act.reject,.lrow .act.remove{color:var(--danger)}
+/* approve == "blacklist": entry goes on the public board → danger red.
+   whitelist_add == admin marks safe → ok green. */
+.lrow .act.approve,.lrow .act.auto_confirm{color:var(--danger)}
+.lrow .act.whitelist_add,.lrow .act.whitelist{color:var(--ok)}
+.lrow .act.reject,.lrow .act.remove,.lrow .act.whitelist_remove{color:var(--fg-3)}
 .lrow .actor{color:var(--fg-3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
 .lrow .h a{color:var(--fg)}.lrow .h a:hover{color:var(--accent)}
 .lrow .n{color:var(--fg-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -232,6 +247,35 @@ input::placeholder{color:var(--fg-4)}
 .empty{padding:60px 20px;text-align:center;color:var(--fg-3);border:1px dashed var(--border);
   border-radius:var(--r-lg)}
 .status{color:var(--fg-3);font-size:12px}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Modal (mxModal) — replaces window.confirm / prompt so destructive
+   actions (拉黑 / 移除白名单 / 退出) share the admin design language.
+   Backdrop blur, themed card, focus-trap, Esc-cancel, Enter-confirm.
+   ────────────────────────────────────────────────────────────────────── */
+.mx-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);
+  display:flex;align-items:center;justify-content:center;z-index:9999;
+  animation:mxfade .14s ease-out;padding:16px}
+.mx-card{width:min(440px,100%);background:var(--bg);color:var(--fg);
+  border:1px solid var(--border-strong);border-radius:var(--r-lg);
+  box-shadow:0 24px 64px rgba(0,0,0,.45),0 2px 8px rgba(0,0,0,.2);
+  animation:mxpop .18s cubic-bezier(.16,1,.3,1);overflow:hidden}
+.mx-card h3{padding:20px 22px 6px;font-size:15px;font-weight:600;letter-spacing:-.005em;color:var(--fg)}
+.mx-card .body{padding:4px 22px 18px;font-size:13px;color:var(--fg-2);line-height:1.65}
+.mx-card .body p{margin-bottom:6px}.mx-card .body p:last-child{margin-bottom:0}
+.mx-card .body b{color:var(--fg);font-weight:600}
+.mx-card .fields{padding:4px 22px 16px;display:flex;flex-direction:column;gap:12px}
+.mx-card .fld label{display:block;font-size:11px;color:var(--fg-3);margin-bottom:5px;
+  letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+.mx-card .fld label .req{color:var(--danger);margin-left:2px}
+.mx-card .fld input{width:100%;padding:8px 12px;font-size:13px}
+.mx-card .fld .hint{margin-top:5px;font-size:11px;color:var(--fg-4);line-height:1.5}
+.mx-card .foot{display:flex;justify-content:flex-end;gap:8px;padding:14px 22px 18px;
+  border-top:1px solid var(--border);background:var(--card)}
+.mx-card .foot .btn{min-width:72px}
+@keyframes mxfade{from{opacity:0}to{opacity:1}}
+@keyframes mxpop{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.mx-bg,.mx-card{animation-duration:.001ms!important}}
 
 @media (max-width:880px){
   .wrap{padding:18px 18px 48px}
@@ -259,13 +303,91 @@ const SCRIPT = String.raw`
   var TOK=localStorage.getItem('xss_admin')||'';
   var VIEW='queue';
   var queue=[];
+  var whitelist=[];
+  var wlCursor=null;
+  var blacklist=[];
+  var blCursor=null;
   var filter='all';
   var sort='severity';
-  var sel=new Set();
+  var sel=new Set();         // queue tab selection
+  var wlSel=new Set();        // whitelist tab selection
+  var blSel=new Set();        // blacklist tab selection
   var logCursor=null;
   var GH='${GH_REPO}';
 
   function E(s){return (s==null?'':String(s)).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+
+  // Themed modal — replaces native confirm()/prompt() so destructive
+  // actions read in the same visual language as the rest of the panel.
+  var mxModal=(function(){
+    function variantClass(v){return v==='danger'?'blacklist':v==='ok'?'ok':v==='muted'?'muted':'primary'}
+    function dismiss(bg){if(!bg.parentNode)return;bg.remove();document.removeEventListener('keydown',bg.__k,true)}
+    function open(html,onKey){
+      var bg=document.createElement('div');bg.className='mx-bg';bg.tabIndex=-1;bg.innerHTML=html;
+      bg.__k=onKey;document.addEventListener('keydown',onKey,true);
+      document.body.appendChild(bg);
+      // First focus after the animation settles
+      setTimeout(function(){var f=bg.querySelector('input,[data-mx-default],button.primary,button.blacklist,button.ok');if(f)f.focus()},40);
+      return bg;
+    }
+    function confirmFn(opts){
+      return new Promise(function(resolve){
+        var v=variantClass(opts.okVariant);
+        // body accepts inline HTML (internal-only callers; admin-page DOM)
+        var bodyHtml=String(opts.body||'').split('\n').map(function(p){return '<p>'+p+'</p>'}).join('');
+        var html='<div class="mx-card" role="dialog" aria-modal="true" aria-labelledby="mxt">'
+          +'<h3 id="mxt">'+E(opts.title||'确认')+'</h3>'
+          +'<div class="body">'+bodyHtml+'</div>'
+          +'<div class="foot">'
+            +'<button type="button" class="btn sm" data-r="0">'+E(opts.cancelLabel||'取消')+'</button>'
+            +'<button type="button" class="btn sm '+v+'" data-r="1" data-mx-default>'+E(opts.okLabel||'确认')+'</button>'
+          +'</div></div>';
+        function fin(r){dismiss(bg);resolve(!!r)}
+        var bg=open(html,function(e){if(e.key==='Escape'){e.preventDefault();fin(0)}else if(e.key==='Enter'){e.preventDefault();fin(1)}});
+        bg.addEventListener('click',function(e){if(e.target===bg)fin(0)});
+        bg.querySelector('[data-r="0"]').addEventListener('click',function(){fin(0)});
+        bg.querySelector('[data-r="1"]').addEventListener('click',function(){fin(1)});
+      });
+    }
+    function formFn(opts){
+      return new Promise(function(resolve){
+        var v=variantClass(opts.okVariant);
+        var fields=(opts.fields||[]);
+        var fHtml=fields.map(function(f){
+          return '<div class="fld"><label for="mxf_'+f.name+'">'+E(f.label||f.name)+(f.required?'<span class="req">*</span>':'')+'</label>'
+            +'<input id="mxf_'+f.name+'" name="'+f.name+'" type="'+E(f.type||'text')+'"'
+            +' placeholder="'+E(f.placeholder||'')+'" autocomplete="off"'+(f.required?' required':'')+'>'
+            +(f.hint?'<div class="hint">'+E(f.hint)+'</div>':'')
+          +'</div>';
+        }).join('');
+        var html='<form class="mx-card" role="dialog" aria-modal="true" aria-labelledby="mxt">'
+          +'<h3 id="mxt">'+E(opts.title||'')+'</h3>'
+          +(opts.body?'<div class="body"><p>'+E(opts.body)+'</p></div>':'')
+          +'<div class="fields">'+fHtml+'</div>'
+          +'<div class="foot">'
+            +'<button type="button" class="btn sm" data-r="0">'+E(opts.cancelLabel||'取消')+'</button>'
+            +'<button type="submit" class="btn sm '+v+'">'+E(opts.okLabel||'确认')+'</button>'
+          +'</div></form>';
+        function fin(ok){
+          dismiss(bg);
+          if(!ok){resolve(null);return}
+          var obj={};fields.forEach(function(f){obj[f.name]=bg.querySelector('[name="'+f.name+'"]').value.trim()});
+          resolve(obj);
+        }
+        var bg=open(html,function(e){if(e.key==='Escape'){e.preventDefault();fin(0)}});
+        var formEl=bg.querySelector('form');
+        formEl.addEventListener('submit',function(e){
+          e.preventDefault();
+          var miss=fields.find(function(f){return f.required && !bg.querySelector('[name="'+f.name+'"]').value.trim()});
+          if(miss){var el=bg.querySelector('[name="'+miss.name+'"]');el.focus();el.style.borderColor='var(--danger)';return}
+          fin(1);
+        });
+        bg.addEventListener('click',function(e){if(e.target===bg)fin(0)});
+        bg.querySelector('[data-r="0"]').addEventListener('click',function(){fin(0)});
+      });
+    }
+    return {confirm:confirmFn,form:formFn};
+  })();
   function $(id){return document.getElementById(id)}
   function setStatus(s){var el=$('status');if(el)el.textContent=s||''}
   function ago(ms){if(!ms)return'';var d=Date.now()-ms,s=Math.round(d/1000);if(s<60)return s+'s';var m=Math.round(s/60);if(m<60)return m+'m';var h=Math.round(m/60);if(h<24)return h+'h';return Math.round(h/24)+'d'}
@@ -283,11 +405,13 @@ const SCRIPT = String.raw`
     $('app').innerHTML=
       '<div class="bar">'
       +'<div><h1>'+ ${JSON.stringify(LOGO_SVG)} +'<span>'+ ${JSON.stringify(BRAND.acronym)} +' · 审核台 · 守门员</span></h1>'
-      +'<div class="sub">守门员才能进 · 通过 = 进公榜 · 驳回 / 移除 = 不公开 · 规则见 <a href="'+GH+'/blob/main/docs/GOVERNANCE.md" target="_blank">GOVERNANCE</a></div></div>'
+      +'<div class="sub">守门员才能进 · <b style="color:var(--danger)">拉黑</b>=进公榜 · <b style="color:var(--ok)">白名单</b>=永不扫 · 驳回/移除=不公开 · 规则见 <a href="'+GH+'/blob/main/docs/GOVERNANCE.md" target="_blank">GOVERNANCE</a></div></div>'
       +'<div class="right"><span class="ok">已认证</span><button class="btn sm" onclick="window.__xss.logout()">退出</button>'+themeBtnHtml()+'</div>'
       +'</div>'
       +'<div class="tabs">'
       +'<button class="on" data-v="queue" onclick="window.__xss.tab(\'queue\')">待审队列 <span class="count" id="cQ">—</span></button>'
+      +'<button data-v="blacklist" onclick="window.__xss.tab(\'blacklist\')">黑名单 <span class="count" id="cB">—</span></button>'
+      +'<button data-v="whitelist" onclick="window.__xss.tab(\'whitelist\')">白名单 <span class="count" id="cW">—</span></button>'
       +'<button data-v="log" onclick="window.__xss.tab(\'log\')">审计日志</button>'
       +'</div>'
       +'<div id="view"></div>';
@@ -347,11 +471,11 @@ const SCRIPT = String.raw`
       '<div class="toolbar">'
         +'<div class="chips">'
           +chip('all','全部')
-          +chip('spam','spam')
-          +chip('porn_bot','porn_bot')
-          +chip('likely_spam','likely_spam')
-          +chip('uncertain','uncertain')
-          +chip('legit','legit')
+          +chip('spam','垃圾营销')
+          +chip('porn_bot','色情广告号')
+          +chip('likely_spam','疑似垃圾')
+          +chip('uncertain','不确定')
+          +chip('legit','正常账号')
         +'</div>'
         +'<div class="r"><label class="status">排序</label>'
           +'<select id="sort">'
@@ -365,9 +489,9 @@ const SCRIPT = String.raw`
       +'<div class="batch" id="batch">'
         +'<div class="meta">已选 <b id="selN">0</b> 条 · 仅当前过滤范围</div>'
         +'<div class="actions">'
-          +'<button class="btn sm primary" onclick="window.__xss.batch(\'approve\')">批量通过</button>'
+          +'<button class="btn sm blacklist" onclick="window.__xss.batch(\'approve\')">批量拉黑</button>'
           +'<button class="btn sm" onclick="window.__xss.batch(\'reject\')">批量驳回</button>'
-          +'<button class="btn sm danger" onclick="window.__xss.batch(\'remove\')">批量移除</button>'
+          +'<button class="btn sm muted" onclick="window.__xss.batch(\'remove\')">批量移除</button>'
           +'<button class="btn sm" onclick="window.__xss.clearSel()">清空选择</button>'
         +'</div>'
       +'</div>'
@@ -388,12 +512,18 @@ const SCRIPT = String.raw`
       var fb=E((a.handle||'?').slice(0,1).toUpperCase());
       var reps=a.reporters||0;
       var lbl=a.verdict_label||'uncertain';
-      // Verdict inline label as a small uppercase marker right of name
-      var vlbl='<span class="vlbl">'+E(lbl)+'</span>';
+      // Verdict inline label — Chinese, small marker right of name.
+      var lblZh={spam:'垃圾营销',porn_bot:'色情广告',likely_spam:'疑似垃圾',uncertain:'不确定',legit:'正常'}[lbl]||lbl;
+      var vlbl='<span class="vlbl">'+E(lblZh)+'</span>';
       // Reporters: chip when ≥3, muted otherwise
       var repHtml=reps>=3
         ? '<span class="chip-ok">'+reps+' 人 ✓</span>'
         : '<span>'+reps+' 人</span>';
+      // Evidence snippet — the X content that triggered the verdict.
+      // Surfaces "what did this account actually say" so maintainers don't
+      // have to click into x.com on every queue item.
+      var evid=(a.evidence_text||'').replace(/\s+/g,' ').trim();
+      var evidHtml=evid?'<div class="ev" title="'+E(evid)+'">『'+E(evid.slice(0,90))+(evid.length>90?'…':'')+'』</div>':'';
       return '<div class="qrow '+E(lbl)+(sel.has(k)?' sel':'')+'" data-k="'+E(k)+'">'
         +'<input type="checkbox"'+(sel.has(k)?' checked':'')+' aria-label="选中 @'+E(a.handle)+'">'
         +'<div class="av"><img src="'+E(av)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{textContent:\''+fb+'\'}))"></div>'
@@ -404,16 +534,17 @@ const SCRIPT = String.raw`
             +(a.x_user_id&&a.x_user_id!==a.handle?'<span class="sep">·</span><span>'+E(a.x_user_id)+'</span>':'')
             +'<span class="sep">·</span><span>'+ago(a.last_scored)+'</span>'
           +'</div>'
+          +evidHtml
         +'</div>'
         +'<div class="conf">'
-          +'<div class="pct">'+conf+'%<span class="lbl">conf</span></div>'
-          +'<div class="bar"><i style="width:'+conf+'%"></i></div>'
+          +'<div class="pct">'+conf+'%<span class="lbl">把握</span></div>'
         +'</div>'
         +'<div class="rep">'+repHtml+'</div>'
         +'<div class="acts">'
-          +'<button class="btn sm primary" data-act="approve">通过</button>'
-          +'<button class="btn sm" data-act="reject">驳回</button>'
-          +'<button class="btn sm danger" data-act="remove">移除</button>'
+          +'<button class="btn sm blacklist" data-act="approve" title="加入黑名单：进公榜，所有用户都会看到">拉黑</button>'
+          +'<button class="btn sm ok" data-act="whitelist" title="加入白名单：永不再扫，举报也忽略">白名单</button>'
+          +'<button class="btn sm" data-act="reject" title="不公开，但保留判定记录">驳回</button>'
+          +'<button class="btn sm muted" data-act="remove" title="从数据集移除（误判账号）">移除</button>'
         +'</div>'
       +'</div>';
     }).join('');
@@ -422,7 +553,10 @@ const SCRIPT = String.raw`
       var cb=r.querySelector('input[type=checkbox]');
       cb.addEventListener('change',function(){if(cb.checked){sel.add(k);r.classList.add('sel')}else{sel.delete(k);r.classList.remove('sel')}refreshBatch()});
       Array.prototype.forEach.call(r.querySelectorAll('.acts button'),function(b){
-        b.addEventListener('click',function(){decideOne(r,k,b.dataset.act)})
+        b.addEventListener('click',function(){
+          if(b.dataset.act==='whitelist')whitelistFromQueue(r,k);
+          else decideOne(r,k,b.dataset.act);
+        })
       })
     });
     refreshBatch();
@@ -444,19 +578,27 @@ const SCRIPT = String.raw`
   }
   function batch(action){
     if(!sel.size)return;
-    var label={approve:'通过',reject:'驳回',remove:'移除'}[action]||action;
-    if(!confirm('确认对已选 '+sel.size+' 条执行「'+label+'」？此操作会写 review_log。'))return;
-    var ks=Array.from(sel);
-    setStatus('批量'+label+'…');
-    var done=0;
-    function next(){
-      if(done>=ks.length){sel.clear();renderQueue();setStatus('完成 · '+done+' 条');setTimeout(function(){setStatus('')},2500);return}
-      var k=ks[done++],parts=k.split('|');
-      api('/v1/admin/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({handle:parts[1],xUserId:parts[0]||undefined,action:action})})
-        .then(function(){queue=queue.filter(function(a){return key(a)!==k});var c=$('cQ');if(c)c.textContent=queue.length;setStatus('批量'+label+' '+done+'/'+ks.length);next()})
-        .catch(function(){next()})
-    }
-    next();
+    var label={approve:'拉黑',reject:'驳回',remove:'移除'}[action]||action;
+    var variant=action==='approve'?'danger':action==='remove'?'muted':'primary';
+    mxModal.confirm({
+      title:'批量'+label,
+      body:'确认对已选 <b>'+sel.size+'</b> 条执行「'+label+'」？\n此操作会写 review_log，不可批量撤回。',
+      okLabel:label+' '+sel.size+' 条',
+      okVariant:variant
+    }).then(function(ok){
+      if(!ok)return;
+      var ks=Array.from(sel);
+      setStatus('批量'+label+'…');
+      var done=0;
+      function next(){
+        if(done>=ks.length){sel.clear();renderQueue();setStatus('完成 · '+done+' 条');setTimeout(function(){setStatus('')},2500);return}
+        var k=ks[done++],parts=k.split('|');
+        api('/v1/admin/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({handle:parts[1],xUserId:parts[0]||undefined,action:action})})
+          .then(function(){queue=queue.filter(function(a){return key(a)!==k});var c=$('cQ');if(c)c.textContent=queue.length;setStatus('批量'+label+' '+done+'/'+ks.length);next()})
+          .catch(function(){next()})
+      }
+      next();
+    });
   }
   function clearSel(){sel.clear();renderRows()}
 
@@ -492,10 +634,282 @@ const SCRIPT = String.raw`
     });
   }
 
+  function loadWhitelist(more){
+    if(!more){whitelist=[];wlCursor=null}
+    setStatus('加载中…');
+    api('/v1/admin/whitelist?limit=100'+(wlCursor?'&before='+wlCursor:'')).then(function(r){
+      if(r.status===403){TOK='';localStorage.removeItem('xss_admin');renderLocked();return null}
+      return r.json();
+    }).then(function(j){
+      if(!j)return;
+      whitelist=whitelist.concat(j.list||[]);
+      wlCursor=j.nextBefore;
+      setStatus('');
+      var c=$('cW');if(c)c.textContent=whitelist.length+(wlCursor?'+':'');
+      renderWhitelist();
+    });
+  }
+  function renderWhitelist(){
+    var v=$('view');
+    v.innerHTML=
+      '<div class="toolbar">'
+        +'<div class="status">共 <b style="color:var(--fg)">'+whitelist.length+'</b> 个白名单账号 · 它们不会再被 AI 扫描，也不接受举报</div>'
+        +'<div class="r">'
+          +'<button class="btn sm primary" onclick="window.__xss.wlAdd()">+ 加入白名单</button>'
+        +'</div>'
+      +'</div>'
+      +'<div class="batch" id="wlbatch">'
+        +'<div class="meta">已选 <b id="wlselN">0</b> 条</div>'
+        +'<div class="actions">'
+          +'<button class="btn sm danger" onclick="window.__xss.wlBatch(\'remove\')">批量移出白名单</button>'
+          +'<button class="btn sm" onclick="window.__xss.wlClearSel()">清空选择</button>'
+        +'</div>'
+      +'</div>'
+      +'<div class="rows" id="wlrows"></div>'
+      +(wlCursor?'<div style="text-align:center;padding:18px"><button class="btn sm" id="wlmore">加载更多</button></div>':'');
+    var box=$('wlrows');
+    if(!whitelist.length){box.innerHTML='<div class="empty">还没有白名单账号。<br><br>点击右上角 <b>+ 加入白名单</b>，或在「待审队列」对某行点 <b>白名单</b> 按钮把它直接挪过来。</div>';wlRefreshBatch();return}
+    box.innerHTML=whitelist.map(function(a){
+      var k=(a.x_user_id||'')+'|'+a.handle;
+      var av=a.avatar_url||('https://unavatar.io/twitter/'+encodeURIComponent(a.handle));
+      var fb=E((a.handle||'?').slice(0,1).toUpperCase());
+      var note='';
+      try{var rs=JSON.parse(a.reasons||'[]');note=Array.isArray(rs)?rs.filter(function(x){return x&&x!=='whitelisted by admin'}).join(' · '):''}catch(e){}
+      return '<div class="qrow legit'+(wlSel.has(k)?' sel':'')+'" data-k="'+E(k)+'" data-h="'+E(a.handle)+'" data-u="'+E(a.x_user_id||'')+'">'
+        +'<input type="checkbox"'+(wlSel.has(k)?' checked':'')+' aria-label="选中 @'+E(a.handle)+'">'
+        +'<div class="av"><img src="'+E(av)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{textContent:\''+fb+'\'}))"></div>'
+        +'<div class="who">'
+          +'<div class="name">'+E(a.display_name||('@'+a.handle))+'<span class="vlbl">白名单</span></div>'
+          +'<div class="sub">'
+            +'<a href="https://x.com/'+E(a.handle)+'" target="_blank" rel="noopener">@'+E(a.handle)+' ↗</a>'
+            +(note?'<span class="sep">·</span><span>'+E(note)+'</span>':'')
+            +'<span class="sep">·</span><span>'+ago(a.last_scored)+'</span>'
+          +'</div>'
+        +'</div>'
+        +'<span></span><span></span>'
+        +'<div class="acts">'
+          +'<button class="btn sm danger" data-wl-rm="1">移出白名单</button>'
+        +'</div>'
+      +'</div>';
+    }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('.qrow'),function(r){
+      var k=r.dataset.k;
+      var cb=r.querySelector('input[type=checkbox]');
+      cb.addEventListener('change',function(){if(cb.checked){wlSel.add(k);r.classList.add('sel')}else{wlSel.delete(k);r.classList.remove('sel')}wlRefreshBatch()});
+      var btn=r.querySelector('[data-wl-rm]');
+      if(btn)btn.addEventListener('click',function(){wlRemove(r.dataset.h,r.dataset.u||null,r)});
+    });
+    var lm=$('wlmore');if(lm)lm.addEventListener('click',function(){loadWhitelist(true)});
+    wlRefreshBatch();
+  }
+  function wlRefreshBatch(){var b=$('wlbatch'),s=$('wlselN');if(!b)return;if(wlSel.size){b.classList.add('on');s.textContent=wlSel.size}else b.classList.remove('on')}
+  function wlClearSel(){wlSel.clear();renderWhitelist()}
+  function wlBatch(action){
+    if(!wlSel.size)return;
+    mxModal.confirm({
+      title:'批量移出白名单',
+      body:'确认把 <b>'+wlSel.size+'</b> 个账号移出白名单？\n它们将变回 rejected 状态（不进公榜，但可被重新扫描 / 举报）。',
+      okLabel:'移出 '+wlSel.size+' 条',
+      okVariant:'danger'
+    }).then(function(ok){
+      if(!ok)return;
+      var ks=Array.from(wlSel);
+      setStatus('批量移出…');
+      var done=0;
+      function next(){
+        if(done>=ks.length){wlSel.clear();loadWhitelist(false);setStatus('完成 · '+done+' 条');setTimeout(function(){setStatus('')},2500);return}
+        var k=ks[done++],parts=k.split('|'),handle=parts[1],xUserId=parts[0]||null;
+        var q='?handle='+encodeURIComponent(handle)+(xUserId?'&xUserId='+encodeURIComponent(xUserId):'');
+        api('/v1/admin/whitelist'+q,{method:'DELETE'}).then(function(){setStatus('批量移出 '+done+'/'+ks.length);next()}).catch(function(){next()})
+      }
+      next();
+    });
+  }
+
+  function loadBlacklist(more){
+    if(!more){blacklist=[];blCursor=null;blSel.clear()}
+    setStatus('加载中…');
+    api('/v1/admin/blacklist?limit=100'+(blCursor?'&before='+blCursor:'')).then(function(r){
+      if(r.status===403){TOK='';localStorage.removeItem('xss_admin');renderLocked();return null}
+      return r.json();
+    }).then(function(j){
+      if(!j)return;
+      blacklist=blacklist.concat(j.list||[]);
+      blCursor=j.nextBefore;
+      setStatus('');
+      var c=$('cB');if(c)c.textContent=blacklist.length+(blCursor?'+':'');
+      renderBlacklist();
+    });
+  }
+  function renderBlacklist(){
+    var v=$('view');
+    v.innerHTML=
+      '<div class="toolbar">'
+        +'<div class="status">共 <b style="color:var(--fg)">'+blacklist.length+'</b> 个已公榜账号 · 在 <a href="/list" target="_blank">/list</a> 公开可见 · 误判直接 → 白名单 / 驳回</div>'
+      +'</div>'
+      +'<div class="batch" id="blbatch">'
+        +'<div class="meta">已选 <b id="blselN">0</b> 条</div>'
+        +'<div class="actions">'
+          +'<button class="btn sm ok" onclick="window.__xss.blBatch(\'whitelist\')">批量白名单</button>'
+          +'<button class="btn sm" onclick="window.__xss.blBatch(\'reject\')">批量驳回（不公开）</button>'
+          +'<button class="btn sm muted" onclick="window.__xss.blBatch(\'remove\')">批量移除</button>'
+          +'<button class="btn sm" onclick="window.__xss.blClearSel()">清空选择</button>'
+        +'</div>'
+      +'</div>'
+      +'<div class="rows" id="blrows"></div>'
+      +(blCursor?'<div style="text-align:center;padding:18px"><button class="btn sm" id="blmore">加载更多</button></div>':'');
+    var box=$('blrows');
+    if(!blacklist.length){box.innerHTML='<div class="empty">公榜还没有账号。<br><br>在「待审队列」点 <b style="color:var(--danger)">拉黑</b> 把判定结果送进公榜。</div>';blRefreshBatch();return}
+    box.innerHTML=blacklist.map(function(a){
+      var k=(a.x_user_id||'')+'|'+a.handle;
+      var av=a.avatar_url||('https://unavatar.io/twitter/'+encodeURIComponent(a.handle));
+      var fb=E((a.handle||'?').slice(0,1).toUpperCase());
+      var conf=Math.round((a.confidence||0)*100);
+      var lbl=a.verdict_label||'spam';
+      var lblZh={spam:'垃圾营销',porn_bot:'色情广告',likely_spam:'疑似垃圾',uncertain:'不确定',legit:'正常'}[lbl]||lbl;
+      var reps=a.reporters||0;
+      return '<div class="qrow '+E(lbl)+(blSel.has(k)?' sel':'')+'" data-k="'+E(k)+'" data-h="'+E(a.handle)+'" data-u="'+E(a.x_user_id||'')+'">'
+        +'<input type="checkbox"'+(blSel.has(k)?' checked':'')+' aria-label="选中 @'+E(a.handle)+'">'
+        +'<div class="av"><img src="'+E(av)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{textContent:\''+fb+'\'}))"></div>'
+        +'<div class="who">'
+          +'<div class="name">'+E(a.display_name||('@'+a.handle))+'<span class="vlbl">'+E(lblZh)+'</span></div>'
+          +'<div class="sub">'
+            +'<a href="https://x.com/'+E(a.handle)+'" target="_blank" rel="noopener">@'+E(a.handle)+' ↗</a>'
+            +(a.x_user_id?'<span class="sep">·</span><span>'+E(a.x_user_id)+'</span>':'')
+            +'<span class="sep">·</span><span>已公榜 '+ago(a.published_at)+'</span>'
+          +'</div>'
+        +'</div>'
+        +'<div class="conf"><div class="pct">'+conf+'%<span class="lbl">把握</span></div></div>'
+        +'<div class="rep">'+(reps>=3?'<span class="chip-ok">'+reps+' 人 ✓</span>':'<span>'+reps+' 人</span>')+'</div>'
+        +'<div class="acts">'
+          +'<button class="btn sm ok" data-bl-act="whitelist">移到白名单</button>'
+          +'<button class="btn sm" data-bl-act="reject" title="撤下公榜，但保留判定记录">驳回</button>'
+          +'<button class="btn sm muted" data-bl-act="remove">移除</button>'
+        +'</div>'
+      +'</div>';
+    }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('.qrow'),function(r){
+      var k=r.dataset.k;
+      var cb=r.querySelector('input[type=checkbox]');
+      cb.addEventListener('change',function(){if(cb.checked){blSel.add(k);r.classList.add('sel')}else{blSel.delete(k);r.classList.remove('sel')}blRefreshBatch()});
+      Array.prototype.forEach.call(r.querySelectorAll('.acts button'),function(b){
+        b.addEventListener('click',function(){blDecideOne(r,k,b.dataset.blAct)})
+      })
+    });
+    var lm=$('blmore');if(lm)lm.addEventListener('click',function(){loadBlacklist(true)});
+    blRefreshBatch();
+  }
+  function blRefreshBatch(){var b=$('blbatch'),s=$('blselN');if(!b)return;if(blSel.size){b.classList.add('on');s.textContent=blSel.size}else b.classList.remove('on')}
+  function blClearSel(){blSel.clear();renderBlacklist()}
+  function blDecideOne(rowEl,k,action){
+    var parts=k.split('|'),xUserId=parts[0]||undefined,handle=parts[1];
+    var label={whitelist:'移到白名单',reject:'驳回',remove:'移除'}[action]||action;
+    var variant=action==='whitelist'?'ok':action==='remove'?'muted':'primary';
+    mxModal.confirm({
+      title:label,
+      body:'把 <b>@'+E(handle)+'</b> 从公榜「'+label+'」？\n该账号将立刻从 /list 消失。',
+      okLabel:label,
+      okVariant:variant
+    }).then(function(ok){
+      if(!ok)return;
+      rowEl.classList.add('removing');
+      api('/v1/admin/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({handle:handle,xUserId:xUserId,action:action})})
+        .then(function(){blacklist=blacklist.filter(function(a){return ((a.x_user_id||'')+'|'+a.handle)!==k});blSel.delete(k);var c=$('cB');if(c)c.textContent=blacklist.length+(blCursor?'+':'');renderBlacklist()});
+    });
+  }
+  function blBatch(action){
+    if(!blSel.size)return;
+    var label={whitelist:'移到白名单',reject:'驳回',remove:'移除'}[action]||action;
+    var variant=action==='whitelist'?'ok':action==='remove'?'muted':'primary';
+    mxModal.confirm({
+      title:'批量'+label,
+      body:'确认对已选 <b>'+blSel.size+'</b> 个公榜账号「'+label+'」？\n它们将立刻从 /list 消失。',
+      okLabel:label+' '+blSel.size+' 条',
+      okVariant:variant
+    }).then(function(ok){
+      if(!ok)return;
+      var ks=Array.from(blSel);
+      setStatus('批量'+label+'…');
+      var done=0;
+      function next(){
+        if(done>=ks.length){blSel.clear();loadBlacklist(false);setStatus('完成 · '+done+' 条');setTimeout(function(){setStatus('')},2500);return}
+        var k=ks[done++],parts=k.split('|');
+        api('/v1/admin/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({handle:parts[1],xUserId:parts[0]||undefined,action:action})})
+          .then(function(){setStatus('批量'+label+' '+done+'/'+ks.length);next()}).catch(function(){next()})
+      }
+      next();
+    });
+  }
+  function wlAdd(){
+    mxModal.form({
+      title:'加入白名单',
+      body:'白名单账号不会再被 AI 扫描，被举报也会被吞掉。',
+      fields:[
+        {name:'handle',label:'X handle（不带 @）',required:true,placeholder:'someuser'},
+        {name:'xUserId',label:'X 数字 user id',placeholder:'1234567890',hint:'可选，但强烈建议填写（handle 会被改）'},
+        {name:'note',label:'备注',placeholder:'核心维护者 / 误判申诉',hint:'仅维护者可见'},
+      ],
+      okLabel:'加白名单',
+      okVariant:'ok'
+    }).then(function(vals){
+      if(!vals)return;
+      var h=(vals.handle||'').replace(/^@+/,'').trim();
+      if(!h)return;
+      setStatus('加入白名单…');
+      api('/v1/admin/whitelist',{
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({handle:h,xUserId:vals.xUserId||undefined,note:vals.note||''})
+      }).then(function(r){return r.json()}).then(function(j){
+        if(j&&j.ok){setStatus('已加入');setTimeout(function(){setStatus('')},2000);loadWhitelist(false)}
+        else{setStatus('失败：'+(j&&j.error||'unknown'));setTimeout(function(){setStatus('')},3000)}
+      });
+    });
+  }
+  function wlRemove(handle,xUserId,rowEl){
+    mxModal.confirm({
+      title:'移出白名单',
+      body:'确认把 <b>@'+E(handle)+'</b> 移出白名单？\n该账号将变回普通可扫描状态（status=rejected，不会自动进公榜）。',
+      okLabel:'移出白名单',
+      okVariant:'danger'
+    }).then(function(ok){
+      if(!ok)return;
+      rowEl&&rowEl.classList.add('removing');
+      var q='?handle='+encodeURIComponent(handle)+(xUserId?'&xUserId='+encodeURIComponent(xUserId):'');
+      api('/v1/admin/whitelist'+q,{method:'DELETE'}).then(function(){loadWhitelist(false)});
+    });
+  }
+  /** Called from queue rows — promotes a queue item to whitelist via /admin/decide. */
+  function whitelistFromQueue(rowEl,k){
+    var parts=k.split('|'),xUserId=parts[0]||undefined,handle=parts[1];
+    mxModal.confirm({
+      title:'加入白名单',
+      body:'把 <b>@'+E(handle)+'</b> 加入白名单？\n该账号将永不再被 AI 扫描，被举报也会被吞掉。',
+      okLabel:'加白名单',
+      okVariant:'ok'
+    }).then(function(ok){
+      if(!ok)return;
+      rowEl.classList.add('removing');
+      api('/v1/admin/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({handle:handle,xUserId:xUserId,action:'whitelist'})})
+        .then(function(){
+          queue=queue.filter(function(a){return key(a)!==k});sel.delete(k);
+          var c=$('cQ');if(c)c.textContent=queue.length;
+          renderRows();
+          api('/v1/admin/whitelist?limit=1').then(function(r){return r.json()}).then(function(j){
+            if(!j||!j.list)return;
+            var c2=$('cW');if(c2&&c2.textContent==='—')c2.textContent='1+';
+          });
+        });
+    });
+  }
+
   function tab(v){
     if(VIEW===v)return;VIEW=v;
     Array.prototype.forEach.call(document.querySelectorAll('.tabs button'),function(b){b.classList.toggle('on',b.dataset.v===v)});
-    if(v==='queue')loadQueue();else loadLog(false);
+    if(v==='queue')loadQueue();
+    else if(v==='whitelist')loadWhitelist(false);
+    else if(v==='blacklist')loadBlacklist(false);
+    else loadLog(false);
   }
   function save(){
     var t=$('t');if(!t)return;
@@ -503,11 +917,23 @@ const SCRIPT = String.raw`
     TOK=v;localStorage.setItem('xss_admin',v);renderShell();
   }
   function logout(){
-    if(!confirm('确认退出？将清除本浏览器保存的 ADMIN_TOKEN。'))return;
-    TOK='';localStorage.removeItem('xss_admin');renderLocked();
+    mxModal.confirm({
+      title:'退出审核台',
+      body:'清除本浏览器保存的 <code>ADMIN_TOKEN</code>，回到锁屏。',
+      okLabel:'退出',
+      okVariant:'muted'
+    }).then(function(ok){
+      if(!ok)return;
+      TOK='';localStorage.removeItem('xss_admin');renderLocked();
+    });
   }
 
-  window.__xss={tab:tab,save:save,logout:logout,batch:batch,clearSel:clearSel};
+  window.__xss={
+    tab:tab,save:save,logout:logout,
+    batch:batch,clearSel:clearSel,
+    wlAdd:wlAdd,wlBatch:wlBatch,wlClearSel:wlClearSel,
+    blBatch:blBatch,blClearSel:blClearSel,
+  };
   renderShell();
 })();
 `;

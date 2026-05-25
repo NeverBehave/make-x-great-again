@@ -6,5 +6,5 @@
     "enabled": true,
     "rules": { "recommended": true }
   },
-  "files": { "ignore": ["node_modules", "dist", ".curation-db", "fixtures", "extension"] }
+  "files": { "ignore": ["node_modules", "dist", ".curation-db", "fixtures", "extension", "data"] }
 }

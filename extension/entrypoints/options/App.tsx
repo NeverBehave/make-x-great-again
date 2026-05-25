@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { clearAllLocal, getGhLogin } from "../../lib/auth";
 import { BRAND } from "../../lib/brand";
 import { categorizeReason, categorizeReasons } from "../../lib/reason-category";
@@ -45,6 +45,100 @@ const Tag = ({ label, conf }: { label: Label; conf?: number }) => {
     </span>
   );
 };
+
+/**
+ * Themed confirm modal — replaces native window.confirm so destructive
+ * actions read in the same visual language as the rest of the options panel.
+ * Backdrop-blur card; Esc cancels, Enter confirms; focus trap on the
+ * primary button after mount; respects prefers-reduced-motion via CSS.
+ */
+function ConfirmDialog({
+  open,
+  title,
+  body,
+  okLabel = "确认",
+  cancelLabel = "取消",
+  variant = "primary",
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  body: React.ReactNode;
+  okLabel?: string;
+  cancelLabel?: string;
+  variant?: "primary" | "danger" | "ok";
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const okRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => okRef.current?.focus(), 40);
+    function key(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCancel();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        onConfirm();
+      }
+    }
+    document.addEventListener("keydown", key, true);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("keydown", key, true);
+    };
+  }, [open, onCancel, onConfirm]);
+
+  if (!open) return null;
+  const okClass =
+    variant === "danger"
+      ? "bg-danger text-white border-danger hover:opacity-90 font-semibold"
+      : variant === "ok"
+        ? "border-ok/40 text-ok hover:bg-ok-soft"
+        : "bg-fg text-bg border-fg hover:opacity-90 font-semibold";
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mxgaConfirmTitle"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <div className="w-full max-w-[420px] overflow-hidden rounded-lg border border-border-2 bg-bg shadow-[0_24px_64px_rgba(0,0,0,0.45)]">
+        <h3
+          id="mxgaConfirmTitle"
+          className="px-5 pb-1.5 pt-5 text-[15px] font-semibold tracking-tight"
+        >
+          {title}
+        </h3>
+        <div className="px-5 pb-4 text-[13px] leading-relaxed text-fg-2">{body}</div>
+        <div className="flex justify-end gap-2 border-t border-border bg-card px-5 py-3.5">
+          <button
+            type="button"
+            className="rounded-md border border-border-2 px-3 py-1.5 text-[12px] text-fg-2 transition hover:bg-card-hi"
+            onClick={onCancel}
+          >
+            {cancelLabel}
+          </button>
+          <button
+            ref={okRef}
+            type="button"
+            className={`rounded-md border px-3 py-1.5 text-[12px] transition min-w-[72px] ${okClass}`}
+            onClick={onConfirm}
+          >
+            {okLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const Avatar = ({ url, name }: { url?: string; name?: string }) => {
   const mono = (name || "?").replace(/^@/, "").charAt(0).toUpperCase();
@@ -135,12 +229,12 @@ function Btn({
 }) {
   const tone =
     tier === "primary"
-      ? "bg-fg text-bg border-fg hover:bg-white hover:border-white font-semibold"
+      ? "bg-fg text-bg border-fg hover:opacity-90 font-semibold"
       : tier === "danger"
-        ? "border-danger/35 bg-transparent text-[#fca5a5] hover:bg-danger-soft hover:border-danger/50"
+        ? "border-danger/35 bg-transparent text-danger hover:bg-danger-soft hover:border-danger/55"
         : tier === "ghost"
           ? "border-transparent bg-transparent text-fg-2 hover:bg-card-hi hover:text-fg"
-          : "border-border-2 bg-transparent text-fg hover:bg-card-hi hover:border-[rgb(255_255_255/0.22)]";
+          : "border-border-2 bg-transparent text-fg hover:bg-card-hi hover:border-fg-3";
   const px = size === "sm" ? "px-2.5 py-1 text-[12px] rounded-sm" : "px-3 py-1.5 text-[13px] rounded-md";
   return (
     <button
@@ -424,13 +518,15 @@ function Toggle({
         role="switch"
         aria-checked={on}
         onClick={() => onChange(!on)}
-        className={`mt-0.5 h-5 w-9 flex-none rounded-full transition ${
-          on ? "bg-fg" : "bg-[rgb(255_255_255/0.12)]"
+        className={`mt-0.5 h-5 w-9 flex-none rounded-full border transition ${
+          on
+            ? "bg-fg border-fg"
+            : "bg-card-hi border-border-2"
         }`}
       >
         <span
-          className={`block h-4 w-4 rounded-full transition ${
-            on ? "translate-x-4 bg-bg" : "translate-x-0.5 bg-white"
+          className={`block h-4 w-4 rounded-full shadow-sm transition ${
+            on ? "translate-x-4 bg-bg" : "translate-x-0.5 bg-fg-3"
           }`}
         />
       </button>
@@ -446,11 +542,26 @@ function Settings() {
   const [login, setLogin] = useState("");
   const [flow, setFlow] = useState("");
   const [cleared, setCleared] = useState(false);
+  const [clearOpen, setClearOpen] = useState(false);
   const [st, setSt] = useState<Settings | null>(null);
   const refresh = () => getGhLogin().then(setLogin);
   useEffect(() => {
     refresh();
     getSettings().then(setSt);
+    // Deep-link from the popup onboarding banner: ?login=1 → start Device
+    // Flow immediately, then strip the param so reload doesn't re-trigger.
+    if (typeof location !== "undefined" && /[?&]login=1\b/.test(location.search)) {
+      const url = new URL(location.href);
+      url.searchParams.delete("login");
+      history.replaceState({}, "", url.toString());
+      // Wait a tick so the initial render with the login UI mounts before
+      // ghLogin() opens the GitHub verification tab.
+      setTimeout(() => {
+        getGhLogin().then((cur) => {
+          if (!cur) void ghLogin();
+        });
+      }, 60);
+    }
   }, []);
   const save = async <K extends keyof Settings>(k: K, v: Settings[K]) => {
     await setSetting(k, v);
@@ -570,20 +681,37 @@ function Settings() {
             检测缓存、拉黑记录、统计、登录态均仅存于本机；除公开 X 数字 ID 外不存 PII。
           </p>
           <div className="flex items-center gap-3">
-            <Btn
-              tier="danger"
-              onClick={async () => {
-                if (!confirm("清除全部本地数据（缓存/拉黑记录/统计/登录）？不可恢复。")) return;
-                await clearAllLocal();
-                setCleared(true);
-                refresh();
-              }}
-            >
+            <Btn tier="danger" onClick={() => setClearOpen(true)}>
               清除本地数据
             </Btn>
             {cleared && <span className="text-[12px] text-ok">已清除</span>}
           </div>
         </section>
+
+        <ConfirmDialog
+          open={clearOpen}
+          title="清除本地数据"
+          body={
+            <>
+              这会清空本机上的：
+              <ul className="my-2 list-inside list-disc text-fg-3">
+                <li>AI 检测缓存（下次扫描会再调 LLM）</li>
+                <li>你的拉黑历史 + 本地处理统计</li>
+                <li>GitHub 登录态（仅本机，不撤 GH token）</li>
+              </ul>
+              <b className="text-fg">不可恢复。</b>
+            </>
+          }
+          okLabel="确认清除"
+          variant="danger"
+          onCancel={() => setClearOpen(false)}
+          onConfirm={async () => {
+            setClearOpen(false);
+            await clearAllLocal();
+            setCleared(true);
+            refresh();
+          }}
+        />
       </div>
     </Page>
   );

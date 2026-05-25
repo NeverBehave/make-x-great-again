@@ -13,6 +13,9 @@ export const STYLE = `
   --shadow: 0 8px 28px rgba(0,0,0,.45); --text: #E6EDF3; --muted: #8B949E;
   --brand: #0EA5E9; --danger: #EF4444; --warn: #F59E0B; --neutral: #8B949E;
   --safe: #16A34A;
+  /* subtle overlays that need to invert with theme */
+  --hover: rgba(255,255,255,.06);
+  --shimmer: rgba(255,255,255,.18);
 }
 @media (prefers-color-scheme: light) {
   :root, .xss {
@@ -20,6 +23,8 @@ export const STYLE = `
     --shadow: 0 8px 28px rgba(15,23,42,.18); --text: #0F172A; --muted: #475569;
     --brand: #0369A1; --danger: #DC2626; --warn: #B45309; --neutral: #475569;
     --safe: #15803D;
+    --hover: rgba(15,23,42,.06);
+    --shimmer: rgba(15,23,42,.10);
   }
 }
 .xss-bubble {
@@ -56,6 +61,42 @@ export const STYLE = `
 }
 .btn:hover { filter: brightness(1.08); }
 .btn:disabled { opacity: .55; cursor: default; }
+
+/* Per-row block button — same color language as bulk btn, smaller scale. */
+.xss-act {
+  flex: none; border: 0; border-radius: 8px; padding: 5px 10px;
+  font-size: 11.5px; font-weight: 600; cursor: pointer; color: #fff;
+  background: var(--danger); transition: filter .14s ease, background .14s;
+  white-space: nowrap;
+}
+.xss-act:hover { filter: brightness(1.08); }
+.xss-act:disabled { cursor: default; }
+.xss-act.done {
+  background: var(--safe); color: #fff; opacity: .9;
+}
+.xss-act.retry {
+  background: transparent; color: var(--warn);
+  border: 1px solid var(--warn);
+}
+
+/* Per-row select checkbox — themed, replaces native browser styling. */
+.xss-row-cb {
+  width: 15px; height: 15px; flex: none; cursor: pointer;
+  appearance: none; -webkit-appearance: none;
+  border: 1.5px solid var(--border); border-radius: 4px;
+  background: transparent; transition: border-color .12s, background .12s;
+  position: relative; margin-top: 6px;
+}
+.xss-row-cb:hover { border-color: var(--danger); }
+.xss-row-cb:checked {
+  background: var(--danger); border-color: var(--danger);
+}
+.xss-row-cb:checked::after {
+  content: ""; position: absolute; left: 3px; top: 0;
+  width: 5px; height: 9px; border: solid #fff;
+  border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
+}
+.xss-row-cb:disabled { opacity: .35; cursor: default; }
 .row { display: flex; gap: 14px; margin-top: 10px; font-size: 12px; }
 .lnk { color: var(--muted); cursor: pointer; }
 .lnk:hover { color: var(--text); }
@@ -80,7 +121,7 @@ svg { display: block; }
   border: 1px solid var(--border); background: transparent; color: var(--text);
   border-radius: 8px; padding: 4px 9px; font-size: 11px; cursor: pointer;
 }
-.acts button:hover { background: rgba(255,255,255,.06); }
+.acts button:hover { background: var(--hover); }
 
 /* ---- animated badge states (transform/opacity only) ---- */
 .xss-badge.fresh { animation: xrise .22s ease-out; }
@@ -98,12 +139,28 @@ svg { display: block; }
   font-weight: 700; color: var(--warn); border: 1px solid var(--warn);
   letter-spacing: .3px;
 }
+/* Source-tier mini-tag — appended to spammy badges so the user can tell
+   公榜命中 / 本地缓存 / AI 现场判定 apart. Same shape as .ntag, varied color. */
+.xss-badge .stag {
+  margin-left: 4px; padding: 0 5px; border-radius: 999px; font-size: 9px;
+  font-weight: 700; letter-spacing: .3px; line-height: 1.55;
+}
+.xss-badge .stag.list  { color: #fff; background: var(--danger); }
+.xss-badge .stag.cache { color: var(--muted); border: 1px solid var(--border); }
+.xss-badge .stag.fresh { color: var(--warn); border: 1px solid var(--warn); }
+/* Whitelist badge — green checkmark, no popover content beyond the badge itself */
+.xss-badge.whitelist {
+  color: var(--safe); border-color: var(--safe);
+}
+.xss-badge.whitelist .wdot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--safe); flex: none;
+}
 .xss-badge.analyzing {
   color: var(--muted); position: relative; overflow: hidden;
 }
 .xss-badge.analyzing::after {
   content: ""; position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent);
+  background: linear-gradient(90deg, transparent, var(--shimmer), transparent);
   transform: translateX(-100%); animation: xshim 1.1s ease-in-out infinite;
 }
 .xss-spin { animation: xspin .8s linear infinite; transform-origin: 50% 50%; }
@@ -165,6 +222,13 @@ export interface Finding {
   displayName?: string;
   snippet?: string;
   blockFailed?: boolean;
+  /** Set by drain() after a successful block — used by the card to strike
+   *  the row through and replace the per-row button with "已拉黑". */
+  blocked?: boolean;
+  /** Selection state for the bulk-block action. Undefined → treated as
+   *  selected (the default for a fresh finding). User uncheck → false →
+   *  bulk skips it; user can still per-row block manually. */
+  selected?: boolean;
   verdict: Verdict;
 }
 
@@ -193,6 +257,10 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
   let open = false;
   let findings: Finding[] = [];
   let scanning = 0; // accounts currently being checked (visible progress)
+  // Total accounts we've gotten a verdict (or skip-decision) on this page.
+  // Lets the pill say "已扫 N · 检查中 M · 命中 K" so the user feels the
+  // scan in motion, not just a static "守护中" until something pops.
+  let scanned = 0;
 
   const sev = (f: Finding[]) =>
     f.some((x) => x.verdict.label === "spam" || x.verdict.label === "porn_bot")
@@ -200,19 +268,21 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
       : "--warn";
 
   function renderPill() {
-    if (!findings.length && scanning > 0) {
-      // Visible processing feedback (esp. reply sections).
-      pill.innerHTML = `${icon("shield", "var(--brand)", 16)}<span class="n" style="font-weight:600;color:var(--muted)">检查中 ${scanning}…</span>`;
+    // Spammy findings present → alarm tone takes priority, shows count.
+    if (findings.length) {
+      const c = `var(${sev(findings)})`;
+      const trail = scanning > 0 ? ` · 还在查 ${scanning}` : "";
+      pill.innerHTML = `${icon("shield-alert", c, 16)}<span class="n">${findings.length}${trail}</span>`;
       return;
     }
-    if (!findings.length) {
-      // Calm "guarding" state — confirms the extension is working even
-      // when nothing suspicious is on the page (no alarm color).
-      pill.innerHTML = `${icon("shield-check", "var(--brand)", 16)}<span class="n" style="font-weight:600;color:var(--muted)">守护中</span>`;
+    // Active scanning, nothing flagged yet → "已扫 X · 查 Y"
+    if (scanning > 0 || scanned > 0) {
+      const trail = scanning > 0 ? ` · 查 ${scanning}` : "";
+      pill.innerHTML = `${icon("shield", "var(--brand)", 16)}<span class="n" style="font-weight:600;color:var(--muted)">已扫 ${scanned}${trail}</span>`;
       return;
     }
-    const c = `var(${sev(findings)})`;
-    pill.innerHTML = `${icon("shield-alert", c, 16)}<span class="n">${findings.length}</span>`;
+    // Calm "guarding" — page is idle, no signal in either direction.
+    pill.innerHTML = `${icon("shield-check", "var(--brand)", 16)}<span class="n" style="font-weight:600;color:var(--muted)">守护中</span>`;
   }
 
   function renderCard() {
@@ -234,6 +304,11 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
       (x) => x.verdict.label === "spam" || x.verdict.label === "porn_bot",
     ).length;
     const warn = findings.length - danger;
+    const pendingCount = findings.filter((x) => !x.blocked).length;
+    const doneCount = findings.length - pendingCount;
+    // Bulk action operates on the subset the user has left checked.
+    // Default state of a fresh finding is selected (selected !== false).
+    const selectedPending = findings.filter((x) => !x.blocked && x.selected !== false).length;
     card.innerHTML = `
       <div class="hd">${icon("shield-alert", "var(--brand)", 16)}
         <span>本页发现 ${findings.length} 个可疑账号</span>
@@ -258,20 +333,38 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
             const snip = f.snippet
               ? esc(f.snippet.replace(/\s+/g, " ").trim()).slice(0, 60)
               : "";
+            const id = f.userId || `h:${f.handle}`;
+            const checked = f.blocked ? false : f.selected !== false;
+            const actClass = f.blocked
+              ? "xss-act done"
+              : f.blockFailed
+                ? "xss-act retry"
+                : "xss-act";
+            const actText = f.blocked ? "已拉黑" : f.blockFailed ? "重试" : "拉黑";
             return `<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 4px">
+              <input type="checkbox" class="xss-row-cb" data-sel="${id}"
+                aria-label="选中 @${esc(f.handle)}"
+                ${checked ? "checked" : ""} ${f.blocked ? "disabled" : ""}>
               ${av}
               <div style="min-width:0;flex:1">
-                <div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
+                <div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${f.blocked ? ";text-decoration:line-through;opacity:.55" : ""}">${name}</div>
                 <div style="font-size:11px;color:${col}">@${esc(f.handle)} · ${m.zh} ${(f.verdict.confidence * 100).toFixed(0)}%</div>
-                ${snip ? `<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${snip}</div>` : ""}
+                ${snip ? `<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap${f.blocked ? ";text-decoration:line-through;opacity:.55" : ""}">${snip}</div>` : ""}
                 ${f.blockFailed ? `<div style="font-size:11px;color:var(--warn)">自动屏蔽失败 · <a href="https://x.com/${esc(f.handle)}" target="_blank" rel="noopener" style="color:var(--warn)">手动屏蔽</a></div>` : ""}
+                ${f.blocked ? `<div style="font-size:11px;color:var(--safe)">✓ 已拉黑</div>` : ""}
               </div>
-              <button class="xss-act" data-one="${f.userId || "h:" + f.handle}">${f.blockFailed ? "重试" : "拉黑"}</button>
+              <button class="${actClass}" data-one="${id}"${f.blocked ? " disabled" : ""}>${actText}</button>
             </div>`;
           })
           .join("")}
       </div>
-      <button class="btn" data-block>一键拉黑全部 (${findings.length})</button>
+      ${
+        pendingCount === 0
+          ? `<button class="btn" disabled style="background:var(--safe)">✓ 已全部处理 (${doneCount})</button>`
+          : selectedPending === 0
+            ? `<button class="btn" disabled style="opacity:.55">未选中任何账号 (剩余 ${pendingCount})</button>`
+            : `<button class="btn" data-block>一键拉黑选中 ${selectedPending}${doneCount ? ` · 已完成 ${doneCount}` : ""}${selectedPending < pendingCount ? ` · 跳过 ${pendingCount - selectedPending}` : ""}</button>`
+      }
       <div class="row"><span class="lnk" data-each>逐个查看处理</span>
         <span class="lnk" data-ign>忽略本页</span></div>`;
     card.querySelector("[data-x]")?.addEventListener("click", collapse);
@@ -287,7 +380,21 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
         if (f) {
           h.onBlockOne(f);
           btn.textContent = "已拉黑";
+          btn.classList.remove("retry");
+          btn.classList.add("done");
           (btn as HTMLButtonElement).disabled = true;
+        }
+      });
+    });
+    // Per-row select toggle — uncheck excludes from the bulk action so the
+    // user can opt-out specific accounts before "一键拉黑".
+    card.querySelectorAll<HTMLInputElement>("[data-sel]").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const id = cb.dataset.sel;
+        const f = findings.find((x) => (x.userId || `h:${x.handle}`) === id);
+        if (f) {
+          f.selected = cb.checked;
+          renderCard(); // re-render so bulk button count updates immediately
         }
       });
     });
@@ -295,7 +402,9 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
     b?.addEventListener("click", () => {
       b.disabled = true;
       b.textContent = "处理中…";
-      h.onBlockAll(findings);
+      // Bulk only blocks the SELECTED, unblocked findings. The drain() in
+      // content.ts will get a curated array, not "all findings".
+      h.onBlockAll(findings.filter((x) => !x.blocked && x.selected !== false));
     });
   }
 
@@ -348,6 +457,13 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
       scanning = Math.max(0, n);
       if (!open) renderPill();
     },
+    /** Bump the "X accounts evaluated this page" counter. Drives the pill's
+     *  scan-progress label so the user sees motion on big reply threads even
+     *  when most accounts come back clean. */
+    bumpScanned() {
+      scanned++;
+      if (!open) renderPill();
+    },
   };
 }
 
@@ -360,9 +476,13 @@ export interface BadgeActions {
 }
 
 /** Inline pill on the author row; hover/focus → popover with reasons. */
-/** source: 'fresh' = just classified (rise-in); 'list'/'cache' = already on
- *  record → instant calm "known" marker, no processing implied. */
-export type BadgeSource = "fresh" | "list" | "cache";
+/** Where a verdict came from. Drives badge color + tag so the user can tell
+ *  「公榜确认 / 本地缓存 / AI 现场判定 / 维护者白名单」apart at a glance.
+ *  - `list`      → human-confirmed public blacklist hit  → red 公榜 tag
+ *  - `whitelist` → maintainer-curated safe list hit       → green 白名单 badge
+ *  - `cache`     → local L2 cache hit (no network call)   → muted 缓存 tag
+ *  - `fresh`     → just classified by the AI this session → amber AI tag */
+export type BadgeSource = "fresh" | "list" | "cache" | "whitelist";
 
 /** Animated transient states for newly-found accounts. */
 export function createStatusBadge(kind: "analyzing" | "pending"): HTMLElement {
@@ -385,6 +505,15 @@ export function createBadge(
 ): HTMLElement {
   const el = document.createElement("span");
   el.tabIndex = 0;
+  // Maintainer whitelist hit — short-circuit to a green "已加入白名单" badge.
+  // Doesn't pop a verdict card; the user just needs to know "this account is
+  // explicitly vetted, don't worry about it".
+  if (source === "whitelist") {
+    el.className = "xss-badge whitelist";
+    el.title = "MXGA 维护者已确认安全（白名单）";
+    el.innerHTML = `<span class="wdot"></span>${icon("shield-check", "var(--safe)", 13)}<span>白名单</span>`;
+    return el;
+  }
   if (!v) {
     el.className = "xss-badge ghost";
     el.innerHTML = `${icon("shield", "currentColor", 13)}<span>检查</span>`;
@@ -396,18 +525,24 @@ export function createBadge(
   const known = source === "list" || source === "cache";
   el.className = `xss-badge ${known ? "known" : "fresh"}`;
   el.style.borderColor = color;
+  // Tier-specific tooltip + tag — tells the user exactly which gate matched.
   const tip =
     source === "list"
-      ? "命中公共名单"
+      ? "公榜确认：≥1 个维护者已经把此账号公开拉黑"
       : source === "cache"
-        ? "本地缓存命中"
-        : "首次发现（本机首次判定，已记录待人工确认）";
+        ? "本地缓存命中：本机之前已经判过这个号"
+        : "AI 现场判定：本次会话首次扫描，已记录待人工确认";
   el.title = tip;
-  // known → solid brand dot; fresh → hollow "first discovery" ring + 首发 tag
   const mark = known
     ? `<span class="kdot" title="${tip}"></span>`
     : `<span class="ndot" title="${tip}"></span>`;
-  const tag = known ? "" : `<span class="ntag" title="${tip}">首发</span>`;
+  // Source-tier mini-tag. Spammy badges only — legit verdicts don't need the
+  // origin call-out (a "legit · 公榜" badge would be confusing).
+  const spammy = v.label === "spam" || v.label === "porn_bot" || v.label === "likely_spam";
+  const tagText = source === "list" ? "公榜" : source === "cache" ? "缓存" : "AI";
+  const tag = spammy
+    ? `<span class="stag ${source}" title="${tip}">${tagText}</span>`
+    : "";
   el.innerHTML =
     `${mark}${icon(meta.ic, color, 13)}<span style="color:${color}">${meta.zh} ${(v.confidence * 100).toFixed(0)}%</span>${tag}`;
 

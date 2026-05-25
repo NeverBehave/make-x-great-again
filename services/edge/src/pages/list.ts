@@ -61,6 +61,19 @@ const CSS = `
 .row .sub{font-size:11.5px;color:var(--fg-3);margin-top:4px;display:flex;
   align-items:center;gap:8px;flex-wrap:wrap}
 .row .sub .sep{color:var(--fg-4);opacity:.5}
+/* Reporter count chip — visible trust signal. ≥3 = bold green (auto-publish
+   threshold met) so casual readers can spot the strongest evidence at a glance. */
+.row .sub .rep-chip{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;
+  border-radius:var(--r-sm);font-size:10.5px;font-weight:600;letter-spacing:.02em;
+  color:var(--fg-2);border:1px solid var(--border-2);background:var(--card)}
+.row .sub .rep-chip.strong{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 38%,transparent);
+  background:color-mix(in srgb,var(--ok) 10%,transparent)}
+/* Evidence text — the public X content that triggered the verdict.
+   Italic + indent + 2-line clamp; gives audit value without dominating the row. */
+.row .ev{margin-top:6px;font-size:12px;color:var(--fg-2);font-style:italic;line-height:1.5;
+  overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;max-width:680px;
+  padding:4px 10px;border-left:2px solid var(--border-2);background:var(--card)}
 .row .right{display:flex;align-items:center;gap:12px;flex-shrink:0}
 .row .conf{display:flex;flex-direction:column;align-items:flex-end;gap:3px;min-width:54px}
 .row .conf .pct{font-size:11.5px;color:var(--fg-2);font-variant-numeric:tabular-nums;
@@ -101,11 +114,12 @@ const ICON_EXT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 
 const SHELL = `
 <section class="head">
-  <h1>公榜 · 最近 100 个</h1>
-  <p class="lede" style="font-size:12.5px;color:var(--fg-3);margin-bottom:14px;text-transform:uppercase;letter-spacing:.12em">${BRAND.acronym} · 自动拦垃圾</p>
-  <p class="lede">下面的 X 账号都满足：AI 高置信判定 <strong>且</strong> 至少 3 个独立 GitHub 用户标过。除 X 公开的数字 ID 外，一字段不存。</p>
-  <p class="lede">认为是误判？开 <a href="${BRAND.appealNewIssue}" style="color:var(--accent)">一个 issue</a>，48 小时内复核移除。</p>
-  <div class="pulse"><span class="dot" aria-hidden="true"></span><span id="pulseLabel">连接中…</span></div>
+  <h1>公开名单</h1>
+  <p class="lede" style="font-size:12.5px;color:var(--fg-3);margin-bottom:14px;text-transform:uppercase;letter-spacing:.12em">${BRAND.acronym} · 已确认的垃圾号</p>
+  <p class="lede">AI 初筛，维护者复核。</p>
+  <p class="lede">误伤？开 <a href="${BRAND.appealNewIssue}" style="color:var(--accent)">issue</a>，复核后撤下。</p>
+  <p class="lede">完整数据快照每 6h 同步到 <a href="${BRAND.repo}/tree/main/data" style="color:var(--accent)" target="_blank" rel="noopener">仓库 data/</a> 目录，git history 即审计日志。</p>
+  <div class="pulse"><span class="dot" aria-hidden="true"></span><span id="pulseLabel">连接中...</span></div>
 </section>
 
 <div class="aggr">
@@ -115,11 +129,11 @@ const SHELL = `
   <div class="c"><div class="n" id="agLatest">—</div><div class="l">最近一条</div></div>
 </div>
 
-<div class="list" id="list" role="list"><div class="empty">加载中…</div></div>
+<div class="list" id="list" role="list"><div class="empty">加载中...</div></div>
 
-<div class="more"><button class="btn sm" id="moreBtn" hidden>加载更早 100 条</button></div>
+<div class="more"><button class="btn sm" id="moreBtn" hidden>加载更早</button></div>
 
-<p class="note">数据接口：<code>GET /v1/list?limit=100&amp;before=&lt;ms&gt;</code> · 边缘缓存 <code>s-maxage=30</code> · 客户端每 30 秒轮询增量。</p>
+<p class="note">每 30 秒更新。数据接口：<code>GET /v1/list</code></p>
 `;
 
 const SCRIPT = `
@@ -142,6 +156,21 @@ const SCRIPT = `
     var isFresh=r.published_at&&(Date.now()-r.published_at)<FRESH_MS;
     var name=r.display_name?'<span class="name">'+esc(r.display_name)+'</span>':'';
     var freshBadge=isFresh?'<span class="fresh">新</span>':'';
+    var reps=r.reporters|0;
+    // "N 人拉黑过" — 1 人也显示（说明至少一个维护者或 GH 用户上报过）
+    // 3+ 人时用 chip 高亮（达到 auto-publish 阈值的对应数字）
+    var repHtml=reps>=3
+      ? '<span class="rep-chip strong">'+reps+' 人拉黑过</span>'
+      : (reps>=1
+          ? '<span class="rep-chip">'+reps+' 人拉黑过</span>'
+          : '');
+    // AI reasons → hover tooltip on the verdict tag
+    var reasonsArr=[];
+    try{reasonsArr=r.reasons?(typeof r.reasons==='string'?JSON.parse(r.reasons):r.reasons):[]}catch(e){reasonsArr=[]}
+    var reasonsText=Array.isArray(reasonsArr)&&reasonsArr.length?'AI 理由：'+reasonsArr.join('；'):'';
+    // Evidence snippet — 第一手公开证据，让公榜不止是 handle + label
+    var evid=(r.evidence_text||'').replace(/\\s+/g,' ').trim();
+    var evidHtml=evid?'<div class="ev" title="'+esc(evid)+'">『'+esc(evid.slice(0,140))+(evid.length>140?'…':'')+'』</div>':'';
     return '<div class="row '+esc(lbl)+(fresh?' new':'')+'" role="listitem" data-pt="'+r.published_at+'">'
       +avatarHtml(r)
       +'<div class="meta">'
@@ -151,13 +180,14 @@ const SCRIPT = `
           +freshBadge
         +'</div>'
         +'<div class="sub">'
-          +'<span class="tag '+esc(lbl)+'">'+esc(lbl)+'</span>'
+          +'<span class="tag '+esc(lbl)+'" title="'+esc(reasonsText)+'">'+esc(lbl)+'</span>'
           +'<span class="sep">·</span><span>'+ago(r.published_at)+'</span>'
-          +'<span class="sep">·</span><span>'+(r.reporters|0)+' 独立举报</span>'
+          +(repHtml?'<span class="sep">·</span>'+repHtml:'')
         +'</div>'
+        +evidHtml
       +'</div>'
       +'<div class="right">'
-        +'<div class="conf" title="AI confidence">'
+        +'<div class="conf" title="模型置信度">'
           +'<span class="pct">'+conf+'%</span>'
           +'<div class="bar"><i style="width:'+conf+'%"></i></div>'
         +'</div>'
@@ -166,7 +196,7 @@ const SCRIPT = `
       +'</div>';
   }
   function render(){
-    if(!rows.length){listEl.innerHTML='<div class="empty">还没有已确认条目。它会随着用户使用慢慢长出来。</div>';return}
+    if(!rows.length){listEl.innerHTML='<div class="empty">暂无公开条目。</div>';return}
     listEl.innerHTML=rows.map(function(r){return rowHtml(r,!1)}).join('');
   }
   function refreshAggr(meta){
@@ -187,7 +217,7 @@ const SCRIPT = `
   }
   function loadMore(){
     if(exhausted||!oldestAt)return;
-    moreBtn.disabled=!0;moreBtn.textContent='加载中…';
+    moreBtn.disabled=!0;moreBtn.textContent='加载中...';
     fetch('/v1/list?limit=100&before='+oldestAt).then(function(r){return r.json()}).then(function(j){
       var seen=Object.create(null);rows.forEach(function(r){seen[key(r)]=1});
       (j.list||[]).forEach(function(r){if(!seen[key(r)])rows.push(r)});
@@ -200,17 +230,17 @@ const SCRIPT = `
     fetch('/v1/list?limit=100&since='+latestAt).then(function(r){return r.json()}).then(function(j){
       lastPollAt=Date.now();
       var fresh=j.list||[];
-      if(!fresh.length){setPulse('无新增 · '+ago(lastPollAt));return}
+      if(!fresh.length){setPulse('暂无新增 · '+ago(lastPollAt));return}
       var seen=Object.create(null);rows.forEach(function(r){seen[key(r)]=1});
-      var added=fresh.filter(function(r){return !seen[key(r)]});if(!added.length){setPulse('无新增 · '+ago(lastPollAt));return}
+      var added=fresh.filter(function(r){return !seen[key(r)]});if(!added.length){setPulse('暂无新增 · '+ago(lastPollAt));return}
       rows=added.concat(rows);latestAt=j.latestAt||latestAt;
       var frag=document.createDocumentFragment();
       added.forEach(function(r){
         var div=document.createElement('div');div.innerHTML=rowHtml(r,!reduced);frag.appendChild(div.firstElementChild);
       });
       listEl.insertBefore(frag,listEl.firstChild);
-      setPulse('<strong>+'+added.length+' 新条目</strong> · '+ago(lastPollAt));
-    }).catch(function(){setPulse('网络错误 · '+ago(lastPollAt))})
+      setPulse('<strong>+'+added.length+' 条新增</strong> · '+ago(lastPollAt));
+    }).catch(function(){setPulse('网络不稳 · '+ago(lastPollAt))})
   }
   function refreshMeta(){fetch('/v1/list/meta').then(function(r){return r.json()}).then(refreshAggr).catch(function(){})}
   moreBtn.addEventListener('click',loadMore);
@@ -223,7 +253,7 @@ const SCRIPT = `
 
 export function listHtml(): string {
   return layout({
-    title: `公开 spam 榜单 · ${BRAND.acronym}`,
+    title: `公开名单 · ${BRAND.acronym}`,
     current: "list",
     css: CSS,
     head: `<meta name="robots" content="noindex,follow">`,

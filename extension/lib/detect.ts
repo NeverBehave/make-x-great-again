@@ -3,11 +3,28 @@
 // navigation, no extra requests to X.
 import type { Signals } from "./types";
 
+// Conservative Chinese porn-bot vocabulary. Kept SMALL on purpose — we
+// don't want to play whack-a-mole with bot copy variants. The LLM is what
+// classifies; this regex only decides "is it worth a token". Spam template
+// SHAPE (short CJK reply + @mention + emoji|innuendo) is captured by a
+// separate structural rule below, which catches new template variants
+// without needing dictionary growth.
 const PROMO_RE =
   /(约见|约炮|附近|同城|牵线|线下|对接|资源|上车|看我主页|入驻|女主播|安全可靠|大号|解锁|福利|楼凤|一夜|加微|私聊|私信|包养|外围|18\+|🔞|🍑|💋|💦|👇|👉)/;
 const LINK_RE =
   /(https?:\/\/|\b[\w-]+\.(top|xyz|vip|club|icu|cn|cc|live|link|shop)\b|t\.co\/)/i;
 const RANDOM_HANDLE_RE = /^[a-z]{2,}\d{4,}$|^[A-Za-z]+[A-Z][a-z]+\d{4,}$|^[a-z]{1,3}\d{4,}$/;
+
+// "Redirect bait" structural template. Pattern: a short Chinese reply that
+// mostly exists to @-mention a dispatcher account plus emoji garnish. We
+// don't need linguistics to spot it — the SHAPE is the giveaway:
+//   < 80 chars, contains @\w+ mention, contains emoji, contains CJK.
+// Strong signal that this is a porn/spam amplifier even when the words
+// don't match PROMO_RE. False positives are fine: just means an extra LLM
+// call to ratify, never a wrong verdict.
+const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}]/u;
+const HAS_CJK_RE = /[一-鿿]/;
+const HAS_MENTION_RE = /@[A-Za-z0-9_]{2,15}/;
 
 const NON_PROFILE = new Set([
   "home", "explore", "notifications", "messages", "i", "search", "settings",
@@ -245,10 +262,35 @@ export function heuristic(s: Signals): Heuristic {
   let score = 0;
   const why: string[] = [];
   const blob = `${s.displayName} ${s.bio} ${s.recentTweets.join(" ")}`;
+
+  // Redirect-bait structural pattern, scored first so its outcome can gate
+  // the age-discount below. A short CJK reply whose payload is really just
+  // an @-mention to a dispatcher account (e.g. "x2,比她好看的没她骚q比她骚的
+  // 没她好看 @Xinxinxiaogou04 🍄🌳" or ")推特 @dadi2412 第一骚+yo"). Either
+  // an emoji garnish OR a single-character innuendo (骚/涩/约/sao) qualifies.
+  // Scoped to recentTweets (the current reply only) so legit profile bios
+  // with @-mentions aren't penalized.
+  const t = s.recentTweets[0] ?? "";
+  const INNUENDO_RE = /[骚涩约]|sao/i;
+  const shapeMatch =
+    !!t &&
+    t.length < 80 &&
+    HAS_CJK_RE.test(t) &&
+    HAS_MENTION_RE.test(t) &&
+    (EMOJI_RE.test(t) || INNUENDO_RE.test(t));
+  if (shapeMatch) {
+    score += 0.4;
+    why.push("导流模板：短中文回复 + @mention + (emoji|性暗示)");
+  }
+
   if (s.hasDefaultAvatar) {
     score += 0.35;
     why.push("默认头像");
   }
+  // Account age is a SOFT prior, not a veto. When the structural redirect-
+  // bait shape has already fired (above), the bait IS the spam — registration
+  // date is irrelevant; hijacked / aged-up bot accounts are common. So we
+  // only apply the old-account discount in the absence of shapeMatch.
   if (typeof s.accountAgeDays === "number") {
     if (s.accountAgeDays < 30) {
       score += 0.4;
@@ -256,7 +298,7 @@ export function heuristic(s: Signals): Heuristic {
     } else if (s.accountAgeDays < 90) {
       score += 0.25;
       why.push("较新账号(<90天)");
-    } else if (s.accountAgeDays > 730) {
+    } else if (s.accountAgeDays > 730 && !shapeMatch) {
       score -= 0.25;
       why.push("老账号(>2年)");
     }

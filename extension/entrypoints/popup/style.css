@@ -20,6 +20,7 @@
   --color-danger-soft: rgb(239 68 68 / 0.08);
   --color-warn: #f59e0b;
   --color-ok: #10b981;
+  --color-ok-soft: rgb(16 185 129 / 0.1);
   --color-violet: #a855f7;
   --radius-sm: 4px;
   --radius: 6px;
@@ -47,6 +48,7 @@
     --color-danger-soft: rgb(220 38 38 / 0.08);
     --color-warn: #d97706;
     --color-ok: #15803d;
+    --color-ok-soft: rgb(21 128 61 / 0.08);
     --color-violet: #7e22ce;
   }
 }
@@ -69,6 +71,7 @@
   --color-danger-soft: rgb(220 38 38 / 0.08);
   --color-warn: #d97706;
   --color-ok: #15803d;
+  --color-ok-soft: rgb(21 128 61 / 0.08);
   --color-violet: #7e22ce;
 }
 

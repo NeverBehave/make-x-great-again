@@ -9,3 +9,4 @@ dist/
 # keep the example committed despite .env.* rule
 !.env.example
 .screens/
+.dev-screenshots/

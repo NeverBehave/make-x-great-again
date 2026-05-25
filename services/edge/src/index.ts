@@ -17,20 +17,38 @@ interface Env {
   LLM_API_BASE: string;
   LLM_API_MODEL: string;
   LLM_API_KEY: string;
-  // "1" => enforce GitHub auth on classify/report/confirm. Default off so
-  // deploying T6 doesn't break the still-anonymous shipped extension; flip
-  // on once the extension's GitHub login ships.
+  // "1" => enforce GitHub auth on classify/report/confirm. Keep this in sync
+  // with the currently shipped extension's login flow.
   REQUIRE_AUTH?: string;
   ADMIN_TOKEN?: string; // bearer for the admin moderation endpoints
+  // Fine-grained GitHub PAT scoped to Contents:Write on the upstream repo,
+  // used by the scheduled handler to mirror the curated whitelist /
+  // blacklist to data/*.json. Unset = mirror is disabled and the cron is a
+  // no-op (the public /v1/whitelist endpoint still works).
+  WHITELIST_SYNC_TOKEN?: string;
+  WHITELIST_SYNC_REPO?: string; // "owner/repo", defaults to foru17/make-x-great-again
 }
 
 type Ctx = Context<{ Bindings: Env }>;
 
 const AUTO_CONF = 0.9; // AI confidence floor for auto-publish
 const AUTO_REPORTERS = 3; // distinct GitHub reporters required for auto-publish
+// GH accounts younger than this don't count toward the auto-publish
+// reporter threshold. Their reports are still stored (audit /
+// future re-evaluation), but a fresh throwaway account can't help flip
+// status to human_confirmed. 90d is a common drive-by abuse cutoff.
+const REPORTER_MIN_AGE_DAYS = 90;
 
-/** Verify a GitHub token → stable reporter id. null = not a valid identity. */
-async function ghIdentity(req: Request): Promise<string | null> {
+interface Reporter {
+  /** Stable id, namespaced. `gh:<numeric>` for GitHub, `anon` when enforcement off. */
+  id: string;
+  /** GH account age in days at the moment of this request. 0 for anon. */
+  ageDays: number;
+}
+
+/** Verify a GitHub token → reporter id + account age.
+ *  null = invalid identity (token rejected by GitHub). */
+async function ghIdentity(req: Request): Promise<Reporter | null> {
   const auth = req.headers.get("authorization") ?? "";
   const tok = auth.replace(/^Bearer\s+/i, "").trim();
   if (!tok) return null;
@@ -43,8 +61,12 @@ async function ghIdentity(req: Request): Promise<string | null> {
       },
     });
     if (!r.ok) return null;
-    const u = (await r.json()) as { id?: number };
-    return u.id ? `gh:${u.id}` : null;
+    const u = (await r.json()) as { id?: number; created_at?: string };
+    if (!u.id) return null;
+    const ageDays = u.created_at
+      ? Math.max(0, Math.floor((Date.now() - new Date(u.created_at).getTime()) / 86_400_000))
+      : 0;
+    return { id: `gh:${u.id}`, ageDays };
   } catch {
     return null;
   }
@@ -52,10 +74,10 @@ async function ghIdentity(req: Request): Promise<string | null> {
 
 /** Enforce identity only when REQUIRE_AUTH is on. Returns reporter id (or
  *  "anon" when enforcement is off and no token). null => reject. */
-async function requireReporter(c: Ctx): Promise<string | null> {
-  const id = await ghIdentity(c.req.raw);
-  if (id) return id;
-  return c.env.REQUIRE_AUTH === "1" ? null : "anon";
+async function requireReporter(c: Ctx): Promise<Reporter | null> {
+  const ident = await ghIdentity(c.req.raw);
+  if (ident) return ident;
+  return c.env.REQUIRE_AUTH === "1" ? null : { id: "anon", ageDays: 0 };
 }
 
 const Signals = z.object({
@@ -83,15 +105,16 @@ type Verdict = z.infer<typeof Verdict>;
 
 const SYSTEM = `You classify X (Twitter) accounts ONLY for spam / porn-advertising-bot abuse.
 - Judge ONLY commercial spam and pornographic-advertising bot behavior; NEVER viewpoints/politics/identity.
-- Weight account age heavily: brand-new (<30d) + default avatar + near-zero followers + promo/escort/link wording => almost certainly a bot (may be high-confidence even without an explicit lewd post).
-- An OLD established account (age>730d, real followers) leans legit unless blatant.
+- Weight account age as a SOFT prior, NOT a veto. New accounts (<30d) with promo / escort wording → very likely bot. Old accounts (>730d) lean legit ONLY when the actual content is benign. Hijacked, bought, and aged-up accounts are common — judge the content first, registration date second.
+- CONTENT-OVER-AGE OVERRIDE: if the triggering comment matches the linkless-redirect-bait pattern below, account age is IRRELEVANT. A 10-year-old hijacked account posting redirect bait is still spam. Do not let "OLD established account" outvote a blatant template.
 - If threadTopic is given and the reply is off-topic AND promotional/sexual/link-spam, that mismatch is a strong spam signal.
 - LINKLESS REDIRECT BAIT (very common, do NOT rate this "uncertain"): a short
   reply that is sexual innuendo or solicitation ("她好涩", "我不行了", "约",
-  "看主页", "主页能打", "sao货", "线下") PLUS an @mention redirecting to
-  another account, often padded with garbled filler chars (a[ pz l' ~t !+ qw),
+  "看主页", "主页能打", "sao货", "线下", "比她好看", "没她骚", "第一骚",
+  "刷了半天", "涩货") PLUS an @mention redirecting to another account,
+  often padded with garbled filler chars (a[ pz l' ~t !+ qw fg* u[v ]!] =t),
   and unrelated to the thread topic, is a porn/spam amplifier bot even with NO
-  link and NO platform name → label porn_bot or spam, confidence >= 0.8.
+  link and NO platform name → label porn_bot or spam, confidence >= 0.85.
   Repetition of the same template or same @target across replies corroborates.
 - When genuinely unsure prefer "uncertain" over a false accusation — but the
   linkless-redirect-bait pattern above is NOT "unsure", it is spam.
@@ -203,6 +226,17 @@ app.post("/v1/classify", async (c) => {
       signals_hash: string;
       status: string;
     }>();
+  // Hard short-circuit for admin-curated whitelist — skip the LLM AND ignore
+  // signals_hash drift. Whitelist beats heuristics.
+  if (prev && prev.status === "whitelisted") {
+    return c.json({
+      cached: true,
+      record: {
+        verdict: { label: "legit", confidence: 1, reasons: ["whitelisted"] },
+        status: "whitelisted",
+      },
+    });
+  }
   if (prev && prev.signals_hash === h) {
     return c.json({
       cached: true,
@@ -218,21 +252,29 @@ app.post("/v1/classify", async (c) => {
   }
   const verdict = await classify(c.env, s);
   const now = Date.now();
-  // LUO-32 Wave 11 L2: high-confidence legit verdicts are cached but kept
-  // out of the maintainer queue. /admin/queue still only selects
-  // status='auto_pending_review', so auto_legit rows are invisible there
-  // but the next /v1/classify hit still gets a free cache return.
+  // High-confidence legit verdicts are cached but kept out of the maintainer
+  // queue. /admin/queue still only selects status='auto_pending_review', so
+  // auto_legit rows are invisible there but the next /v1/classify hit still
+  // gets a free cache return.
   const writeStatus =
     verdict.label === "legit" && verdict.confidence >= 0.85 ? "auto_legit" : "auto_pending_review";
+  // Pick the most-relevant public X snippet that triggered this verdict so
+  // a third party (or the maintainer 6 months later) can audit "what did
+  // this account actually say". 240 chars covers typical spam templates
+  // with some thread context; ≥1 candidate is virtually always present.
+  const evidenceText =
+    (s.triggeringComment ?? s.recentTweets[0] ?? s.bio ?? "").trim().slice(0, 240) || null;
   await c.env.DB.prepare(
-    `INSERT INTO accounts (x_user_id,handle,display_name,avatar_url,verdict_label,confidence,reasons,model,status,source,signals_hash,first_seen,last_scored)
-     VALUES (?,?,?,?,?,?,?,?, ?,'auto_scan', ?, ?, ?)
+    `INSERT INTO accounts (x_user_id,handle,display_name,avatar_url,verdict_label,confidence,reasons,model,status,source,signals_hash,evidence_text,first_seen,last_scored)
+     VALUES (?,?,?,?,?,?,?,?, ?,'auto_scan', ?,?,?, ?)
      ON CONFLICT(x_user_id,handle) DO UPDATE SET
        verdict_label=excluded.verdict_label, confidence=excluded.confidence, reasons=excluded.reasons,
        model=excluded.model, signals_hash=excluded.signals_hash, last_scored=excluded.last_scored,
+       evidence_text=COALESCE(excluded.evidence_text, accounts.evidence_text),
        avatar_url=COALESCE(excluded.avatar_url, accounts.avatar_url),
        status=CASE
-                WHEN accounts.status IN ('human_confirmed','rejected','removed') THEN accounts.status
+                WHEN accounts.status IN ('human_confirmed','rejected','removed','whitelisted')
+                  THEN accounts.status
                 ELSE excluded.status
               END`,
   )
@@ -247,6 +289,7 @@ app.post("/v1/classify", async (c) => {
       c.env.LLM_API_MODEL,
       writeStatus,
       h,
+      evidenceText,
       now,
       now,
     )
@@ -267,20 +310,47 @@ async function submitReport(c: Ctx, source: string) {
   const uid = s.userId ?? null;
   const now = Date.now();
 
-  // one report per (target, reporter)
-  await c.env.DB.prepare(
-    `INSERT OR IGNORE INTO reports (id,x_user_id,handle,reporter_fp,evidence,status,created_at)
-     VALUES (?,?,?,?,?, 'pending', ?)`,
-  )
-    .bind(crypto.randomUUID(), uid, s.handle, who, JSON.stringify(s).slice(0, 4000), now)
-    .run();
-
-  const cnt = await c.env.DB.prepare(
-    "SELECT count(DISTINCT reporter_fp) n FROM reports WHERE handle=? AND (x_user_id IS ? OR x_user_id=?)",
+  // Whitelist short-circuit — if maintainer has explicitly whitelisted the
+  // target, ignore the report entirely (don't even store it). Avoids letting
+  // a coordinated brigade pollute the audit trail against a trusted account.
+  const cur = await c.env.DB.prepare(
+    "SELECT status FROM accounts WHERE handle=? AND (x_user_id IS ? OR x_user_id=?)",
   )
     .bind(s.handle, uid, uid)
+    .first<{ status: string }>();
+  if (cur?.status === "whitelisted") {
+    return c.json({ ok: true, status: "whitelisted", reporters: 0, auto: false });
+  }
+
+  // one report per (target, reporter); always store, even for "young" GH
+  // accounts — they just don't count toward AUTO_REPORTERS.
+  await c.env.DB.prepare(
+    `INSERT OR IGNORE INTO reports
+       (id,x_user_id,handle,reporter_fp,reporter_age_days,evidence,status,created_at)
+     VALUES (?,?,?,?,?,?, 'pending', ?)`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      uid,
+      s.handle,
+      who.id,
+      who.ageDays,
+      JSON.stringify(s).slice(0, 4000),
+      now,
+    )
+    .run();
+
+  // Reporter count for auto-publish: only GH accounts older than
+  // REPORTER_MIN_AGE_DAYS count. NULL age = legacy rows; treat them as
+  // eligible so existing maintainer history is preserved.
+  const cnt = await c.env.DB.prepare(
+    `SELECT count(DISTINCT reporter_fp) n FROM reports
+       WHERE handle=? AND (x_user_id IS ? OR x_user_id=?)
+         AND (reporter_age_days IS NULL OR reporter_age_days >= ?)`,
+  )
+    .bind(s.handle, uid, uid, REPORTER_MIN_AGE_DAYS)
     .first<{ n: number }>();
-  const reporters = cnt?.n ?? 1;
+  const reporters = cnt?.n ?? (who.ageDays >= REPORTER_MIN_AGE_DAYS ? 1 : 0);
 
   // reuse a recent AI verdict if present, else classify now
   const prev = await c.env.DB.prepare(
@@ -299,14 +369,30 @@ async function submitReport(c: Ctx, source: string) {
     vConf = cl.confidence;
   }
 
+  // 2026-05-25 — auto-publish path disabled while the project is still alpha.
+  // The original gate (`aiSpam && reporters >= AUTO_REPORTERS`) was a valid
+  // design, but at this scale a coordinated brigade of 3 GH accounts could
+  // push a target onto the public board before a maintainer notices. Every
+  // report now queues for manual confirmation; AUTO_CONF / AUTO_REPORTERS are
+  // kept as constants so the path can be re-enabled in one line later.
   const aiSpam = (vLabel === "spam" || vLabel === "porn_bot") && vConf >= AUTO_CONF;
-  const auto = aiSpam && reporters >= AUTO_REPORTERS;
-  const status = auto ? "human_confirmed" : "auto_pending_review";
+  const wouldAutoIfEnabled = aiSpam && reporters >= AUTO_REPORTERS;
+  const auto = false; // manual-confirmation-only for now
+  const status = "auto_pending_review";
 
   await c.env.DB.prepare(
     `INSERT INTO accounts (x_user_id,handle,display_name,avatar_url,verdict_label,confidence,reasons,status,source,first_seen,last_scored,published_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-     ON CONFLICT(x_user_id,handle) DO UPDATE SET status=?, source=excluded.source, published_at=?,
+     ON CONFLICT(x_user_id,handle) DO UPDATE SET
+       status=CASE
+                WHEN accounts.status IN ('whitelisted','removed','rejected') THEN accounts.status
+                ELSE excluded.status
+              END,
+       source=excluded.source,
+       published_at=CASE
+                      WHEN accounts.status IN ('whitelisted','removed','rejected') THEN accounts.published_at
+                      ELSE excluded.published_at
+                    END,
        avatar_url=COALESCE(excluded.avatar_url, accounts.avatar_url)`,
   )
     .bind(
@@ -322,8 +408,6 @@ async function submitReport(c: Ctx, source: string) {
       now,
       now,
       auto ? now : null,
-      status,
-      auto ? now : null,
     )
     .run();
   await c.env.DB.prepare(
@@ -332,9 +416,11 @@ async function submitReport(c: Ctx, source: string) {
     .bind(
       uid,
       s.handle,
-      auto ? "auto_confirm" : "report_queued",
-      who,
-      `${source} r=${reporters}`,
+      "report_queued",
+      who.id,
+      `${source} r=${reporters} age=${who.ageDays}d${
+        wouldAutoIfEnabled ? " · would auto-publish if enabled" : ""
+      }`,
       now,
     )
     .run();
@@ -352,7 +438,7 @@ app.get("/v1/admin/queue", async (c) => {
   if (!admin(c)) return c.json({ error: "forbidden" }, 403);
   const rows = await c.env.DB.prepare(
     `SELECT a.x_user_id, a.handle, a.display_name, a.avatar_url, a.verdict_label, a.confidence,
-            a.last_scored,
+            a.reasons, a.evidence_text, a.last_scored,
             (SELECT count(DISTINCT reporter_fp) FROM reports r
               WHERE r.handle=a.handle) reporters
        FROM accounts a WHERE a.status='auto_pending_review'
@@ -365,10 +451,16 @@ app.post("/v1/admin/decide", async (c) => {
   const { handle, xUserId, action } = (await c.req.json()) as {
     handle: string;
     xUserId?: string;
-    action: "approve" | "reject" | "remove";
+    action: "approve" | "reject" | "remove" | "whitelist";
   };
   const status =
-    action === "approve" ? "human_confirmed" : action === "remove" ? "removed" : "rejected";
+    action === "approve"
+      ? "human_confirmed"
+      : action === "remove"
+        ? "removed"
+        : action === "whitelist"
+          ? "whitelisted"
+          : "rejected";
   const now = Date.now();
   await c.env.DB.prepare(
     "UPDATE accounts SET status=?, published_at=? WHERE handle=? AND (x_user_id IS ? OR x_user_id=?)",
@@ -402,6 +494,160 @@ app.get("/v1/admin/log", async (c) => {
     log: list,
     nextCursor: list.length === limit ? (list[list.length - 1] as { id: number }).id : null,
   });
+});
+
+// ---- Whitelist ----
+// status='whitelisted' acts as a permanent override:
+//   - /v1/classify short-circuits without calling the LLM
+//   - /v1/confirm and /v1/report no-op (whitelisted target absorbs noise)
+//   - removable via DELETE /v1/admin/whitelist (drops back to 'rejected'
+//     so it stays out of the published list but the audit is preserved)
+const WhitelistAdd = z.object({
+  handle: z.string().min(1).max(64),
+  xUserId: z.string().regex(/^\d+$/).optional(),
+  displayName: z.string().max(120).default(""),
+  avatarUrl: z.string().url().optional(),
+  note: z.string().max(200).default(""),
+});
+
+app.post("/v1/admin/whitelist", async (c) => {
+  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  const body = WhitelistAdd.parse(await c.req.json());
+  const uid = body.xUserId ?? null;
+  const now = Date.now();
+  const reasons = JSON.stringify(["whitelisted by admin", body.note].filter(Boolean));
+  // Upsert as whitelisted. If a row already exists (auto_pending_review,
+  // auto_legit, rejected, removed, even human_confirmed) the admin's
+  // explicit action wins.
+  await c.env.DB.prepare(
+    `INSERT INTO accounts
+       (x_user_id,handle,display_name,avatar_url,verdict_label,confidence,reasons,
+        status,source,signals_hash,first_seen,last_scored,published_at)
+     VALUES (?,?,?,?,'legit',1.0,?, 'whitelisted','admin_whitelist', NULL, ?, ?, NULL)
+     ON CONFLICT(x_user_id,handle) DO UPDATE SET
+       status='whitelisted',
+       source='admin_whitelist',
+       verdict_label='legit',
+       confidence=1.0,
+       reasons=excluded.reasons,
+       published_at=NULL,
+       last_scored=excluded.last_scored,
+       display_name=COALESCE(excluded.display_name, accounts.display_name),
+       avatar_url=COALESCE(excluded.avatar_url, accounts.avatar_url)`,
+  )
+    .bind(uid, body.handle, body.displayName, body.avatarUrl ?? null, reasons, now, now)
+    .run();
+  await c.env.DB.prepare(
+    "INSERT INTO review_log (x_user_id,handle,action,actor,note,at) VALUES (?,?,?,?,?,?)",
+  )
+    .bind(uid, body.handle, "whitelist_add", "admin", body.note || "panel", now)
+    .run();
+  return c.json({ ok: true, handle: body.handle, status: "whitelisted" });
+});
+
+app.delete("/v1/admin/whitelist", async (c) => {
+  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  const handle = c.req.query("handle") ?? "";
+  const xUserId = c.req.query("xUserId") || null;
+  if (!handle) return c.json({ error: "handle_required" }, 400);
+  const now = Date.now();
+  // Drop back to 'rejected' rather than deleting the row — keeps the audit
+  // trail intact and prevents the account from immediately re-entering the
+  // public list if it gets re-reported.
+  const r = await c.env.DB.prepare(
+    `UPDATE accounts SET status='rejected', source='admin_whitelist', last_scored=?
+       WHERE handle=? AND (x_user_id IS ? OR x_user_id=?) AND status='whitelisted'`,
+  )
+    .bind(now, handle, xUserId, xUserId)
+    .run();
+  await c.env.DB.prepare(
+    "INSERT INTO review_log (x_user_id,handle,action,actor,note,at) VALUES (?,?,?,?,?,?)",
+  )
+    .bind(xUserId, handle, "whitelist_remove", "admin", "panel", now)
+    .run();
+  return c.json({ ok: true, changed: r.meta.changes ?? 0 });
+});
+
+app.get("/v1/admin/whitelist", async (c) => {
+  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  const before = Number(c.req.query("before")) || null;
+  const limit = Math.min(200, Math.max(1, Number(c.req.query("limit")) || 100));
+  const rows = await c.env.DB.prepare(
+    `SELECT x_user_id, handle, display_name, avatar_url, reasons, last_scored
+       FROM accounts
+      WHERE status='whitelisted'
+        AND (?1 IS NULL OR last_scored < ?1)
+      ORDER BY last_scored DESC LIMIT ?2`,
+  )
+    .bind(before, limit)
+    .all<{
+      x_user_id: string | null;
+      handle: string;
+      display_name: string | null;
+      avatar_url: string | null;
+      reasons: string;
+      last_scored: number;
+    }>();
+  const list = rows.results ?? [];
+  return c.json({
+    list,
+    nextBefore: list.length === limit ? list[list.length - 1].last_scored : null,
+  });
+});
+
+// Maintainer view of the public blacklist (status='human_confirmed'). Like
+// /v1/list but admin-scoped (returns more columns + uncacheable) so the
+// /admin panel can iterate it for "moved here by mistake" cleanup.
+app.get("/v1/admin/blacklist", async (c) => {
+  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  const before = Number(c.req.query("before")) || null;
+  const limit = Math.min(200, Math.max(1, Number(c.req.query("limit")) || 100));
+  const rows = await c.env.DB.prepare(
+    `SELECT a.x_user_id, a.handle, a.display_name, a.avatar_url,
+            a.verdict_label, a.confidence, a.reasons, a.evidence_text, a.published_at,
+            (SELECT count(DISTINCT r.reporter_fp) FROM reports r
+              WHERE r.handle=a.handle
+                AND ifnull(r.x_user_id,'')=ifnull(a.x_user_id,'')) reporters
+       FROM accounts a
+      WHERE a.status='human_confirmed'
+        AND (?1 IS NULL OR a.published_at < ?1)
+      ORDER BY a.published_at DESC LIMIT ?2`,
+  )
+    .bind(before, limit)
+    .all<{
+      x_user_id: string | null;
+      handle: string;
+      display_name: string | null;
+      avatar_url: string | null;
+      verdict_label: string;
+      confidence: number;
+      reasons: string;
+      published_at: number;
+      reporters: number;
+    }>();
+  const list = rows.results ?? [];
+  return c.json({
+    list,
+    nextBefore: list.length === limit ? list[list.length - 1].published_at : null,
+  });
+});
+
+// Public read-only mirror for the (future) extension L0a cache. No PII,
+// no avatars — just (handle, xUserId, sinceMs). Cached at the edge.
+app.get("/v1/whitelist", async (c) => {
+  const since = Number(c.req.query("since")) || 0;
+  const limit = Math.min(2000, Math.max(1, Number(c.req.query("limit")) || 500));
+  const rows = await c.env.DB.prepare(
+    `SELECT x_user_id, handle, last_scored
+       FROM accounts WHERE status='whitelisted' AND last_scored > ?
+       ORDER BY last_scored ASC LIMIT ?`,
+  )
+    .bind(since, limit)
+    .all<{ x_user_id: string | null; handle: string; last_scored: number }>();
+  const list = rows.results ?? [];
+  const latestAt = list.length ? list[list.length - 1].last_scored : since;
+  c.header("Cache-Control", "public, max-age=300, s-maxage=600");
+  return c.json({ list, latestAt, count: list.length });
 });
 
 app.get("/v1/list/meta", async (c) => {
@@ -447,7 +693,7 @@ app.get("/v1/list", async (c) => {
         GROUP BY handle, x_user_id
      )
      SELECT a.x_user_id, a.handle, a.display_name, a.avatar_url,
-            a.verdict_label, a.confidence, a.published_at,
+            a.verdict_label, a.confidence, a.reasons, a.evidence_text, a.published_at,
             coalesce(rep.n, 0) AS reporters
        FROM accounts a
        LEFT JOIN rep ON rep.handle = a.handle
@@ -467,6 +713,8 @@ app.get("/v1/list", async (c) => {
       avatar_url: string | null;
       verdict_label: string;
       confidence: number;
+      reasons: string | null;
+      evidence_text: string | null;
       published_at: number;
       reporters: number;
     }>();
@@ -521,4 +769,188 @@ app.get("/admin", (c) => {
   return c.html(adminHtml());
 });
 
-export default app;
+// Scheduled mirror of the curated whitelist/blacklist into the upstream
+// GitHub repo as data/whitelist/v1.json and data/blacklist/v1.json.
+// The repo itself becomes the audit log: anyone can clone and verify
+// "which accounts were on the list at any past timestamp" via git history.
+//
+// Disabled (no-op) when WHITELIST_SYNC_TOKEN is unset — the rest of the
+// system works fine without it; this is purely a transparency + audit
+// enhancement. Cron trigger in wrangler.toml.
+async function mirrorToGitHub(env: Env): Promise<void> {
+  const token = env.WHITELIST_SYNC_TOKEN;
+  if (!token) return; // PAT not provided yet — mirror disabled.
+  const repo = env.WHITELIST_SYNC_REPO ?? "foru17/make-x-great-again";
+
+  /** UTF-8 safe base64 (btoa() only handles latin-1). */
+  function b64utf8(s: string): string {
+    return btoa(unescape(encodeURIComponent(s)));
+  }
+  /** Tiny stable hash for "content already up-to-date?" checks. */
+  function contentHash(s: string): string {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+  }
+
+  /** Hash-stable view of the payload with `generatedAt` stripped. Without
+   *  this, the diff-aware check fires every run (timestamp always changes)
+   *  and we PUT on every cron tick — exactly what we wanted to avoid. */
+  function stableJson(payload: Record<string, unknown>): string {
+    const { generatedAt: _ts, ...rest } = payload;
+    return JSON.stringify(rest, null, 2);
+  }
+
+  /**
+   * PUT a file to GitHub. Skips the write entirely if the existing file's
+   * content already matches (compared with `generatedAt` excluded, so a
+   * fresh timestamp alone doesn't force a commit).
+   */
+  async function publish(
+    path: string,
+    payload: Record<string, unknown>,
+    commitMessage: string,
+  ): Promise<"skipped" | "committed" | "failed"> {
+    const url = `https://api.github.com/repos/${repo}/contents/${path}`;
+    const nextBody = `${JSON.stringify(payload, null, 2)}\n`;
+    const nextStableHash = contentHash(stableJson(payload));
+
+    // GET current file (if any) — need both sha (for upsert) and content
+    // (for diff-aware skip).
+    let sha: string | undefined;
+    let unchanged = false;
+    const head = await fetch(url, {
+      headers: {
+        authorization: `Bearer ${token}`,
+        "user-agent": "mxga-worker",
+        accept: "application/vnd.github+json",
+      },
+    });
+    if (head.ok) {
+      const j = (await head.json()) as { sha?: string; content?: string };
+      sha = j.sha;
+      if (j.content) {
+        try {
+          const decoded = decodeURIComponent(escape(atob(j.content.replace(/\n/g, ""))));
+          const prevPayload = JSON.parse(decoded) as Record<string, unknown>;
+          if (contentHash(stableJson(prevPayload)) === nextStableHash) unchanged = true;
+        } catch {
+          /* ignore parse/decode errors — treat as changed */
+        }
+      }
+    }
+    if (unchanged) return "skipped";
+
+    const put = await fetch(url, {
+      method: "PUT",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "user-agent": "mxga-worker",
+        accept: "application/vnd.github+json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        message: commitMessage,
+        content: b64utf8(nextBody),
+        ...(sha ? { sha } : {}),
+      }),
+    });
+    if (!put.ok) {
+      console.warn(`mirror ${path} failed`, put.status, (await put.text()).slice(0, 200));
+      return "failed";
+    }
+    return "committed";
+  }
+
+  const wl = await env.DB.prepare(
+    `SELECT x_user_id, handle, last_scored FROM accounts
+      WHERE status='whitelisted' ORDER BY last_scored DESC LIMIT 5000`,
+  ).all<{ x_user_id: string | null; handle: string; last_scored: number }>();
+
+  // Blacklist export carries the FULL audit fields — reasons + evidence_text +
+  // reporter count — so a third party reading data/blacklist/v1.json can
+  // verify "why was this account flagged" without trusting our server.
+  const bl = await env.DB.prepare(
+    `WITH rep AS (
+       SELECT handle, x_user_id, count(DISTINCT reporter_fp) AS n
+         FROM reports WHERE reporter_fp IS NOT NULL
+        GROUP BY handle, x_user_id
+     )
+     SELECT a.x_user_id, a.handle, a.verdict_label, a.confidence,
+            a.reasons, a.evidence_text, a.published_at,
+            coalesce(rep.n, 0) AS reporters
+       FROM accounts a
+       LEFT JOIN rep ON rep.handle = a.handle
+                    AND ifnull(rep.x_user_id,'') = ifnull(a.x_user_id,'')
+      WHERE a.status='human_confirmed' AND a.published_at IS NOT NULL
+      ORDER BY a.published_at DESC LIMIT 10000`,
+  ).all<{
+    x_user_id: string | null;
+    handle: string;
+    verdict_label: string;
+    confidence: number;
+    reasons: string | null;
+    evidence_text: string | null;
+    published_at: number;
+    reporters: number;
+  }>();
+
+  const now = Date.now();
+  const today = new Date(now).toISOString().slice(0, 10); // YYYY-MM-DD
+  const wlCount = wl.results?.length ?? 0;
+  const blCount = bl.results?.length ?? 0;
+
+  await publish(
+    "data/whitelist/v1.json",
+    {
+      schema: 1,
+      generatedAt: now,
+      count: wlCount,
+      list: (wl.results ?? []).map((r) => ({
+        handle: r.handle,
+        x_user_id: r.x_user_id,
+        last_scored: r.last_scored,
+      })),
+    },
+    `data(whitelist): sync · ${wlCount} total · ${today}`,
+  );
+
+  await publish(
+    "data/blacklist/v1.json",
+    {
+      schema: 1,
+      generatedAt: now,
+      count: blCount,
+      list: (bl.results ?? []).map((r) => ({
+        handle: r.handle,
+        x_user_id: r.x_user_id,
+        verdict_label: r.verdict_label,
+        confidence: r.confidence,
+        reasons: r.reasons ? JSON.parse(r.reasons) : [],
+        evidence_text: r.evidence_text,
+        reporters: r.reporters,
+        published_at: r.published_at,
+      })),
+    },
+    `data(blacklist): sync · ${blCount} total · ${today}`,
+  );
+}
+
+/** Admin-only manual trigger — handy after a batch of admin decisions when
+ *  you don't want to wait for the next 6h cron tick. Same code path as the
+ *  scheduled handler; cron just calls mirrorToGitHub directly. */
+app.post("/v1/admin/sync-mirror", async (c) => {
+  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!c.env.WHITELIST_SYNC_TOKEN) {
+    return c.json({ error: "mirror_disabled", reason: "WHITELIST_SYNC_TOKEN not set" }, 503);
+  }
+  await mirrorToGitHub(c.env);
+  return c.json({ ok: true });
+});
+
+export default {
+  fetch: app.fetch,
+  scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): void {
+    ctx.waitUntil(mirrorToGitHub(env).catch((e) => console.warn("mirror error", e)));
+  },
+};
