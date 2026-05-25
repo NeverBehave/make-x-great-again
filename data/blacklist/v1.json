@@ -1,8 +1,69 @@
 {
   "schema": 1,
-  "generatedAt": 1779712166742,
-  "count": 527,
+  "generatedAt": 1779712202234,
+  "count": 529,
   "list": [
+    {
+      "handle": "Warren1118344",
+      "x_user_id": "2058879600902463488",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name contains escort-style promo wording",
+        "“同城上门” is common local adult-service solicitation phrasing",
+        "empty/invisible triggering comment suggests low-effort bot activity",
+        "no benign content to offset promo signal"
+      ],
+      "evidence_text": "⁠\n\n\n͏\n ‍⁠",
+      "reporters": 1,
+      "published_at": 1779712196436
+    },
+    {
+      "handle": "OCushway59038",
+      "x_user_id": "2058868426362556417",
+      "verdict_label": "porn_bot",
+      "confidence": 0.93,
+      "reasons": [
+        "display name contains explicit sexual advertising",
+        "asks users to contact via profile/homepage",
+        "commercial porn/escort-style wording",
+        "empty bio and no benign content to offset spam signal"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779712194668
+    },
+    {
+      "handle": "aksahin_ahmet",
+      "x_user_id": "1186984870494588928",
+      "verdict_label": "porn_bot",
+      "confidence": 0.93,
+      "reasons": [
+        "linkless redirect-bait template",
+        "promotes another @account",
+        "uses '刷了半天' and '主页能打' pattern",
+        "off-topic promotional reply",
+        "single repeated recent tweet"
+      ],
+      "evidence_text": "c3刷了半天的Xs就她的主页能打了\n@Xinxinxiaogou04",
+      "reporters": 0,
+      "published_at": 1779712193723
+    },
+    {
+      "handle": "Tayyar72690262",
+      "x_user_id": "1800656575075393536",
+      "verdict_label": "porn_bot",
+      "confidence": 0.97,
+      "reasons": [
+        "sexual redirect-bait template",
+        "@mention to promote another account",
+        "off-topic porn solicitation style",
+        "matches known linkless spam pattern"
+      ],
+      "evidence_text": null,
+      "reporters": 2,
+      "published_at": 1779712192847
+    },
     {
       "handle": "BusterRea31863",
       "x_user_id": "2058834551196340224",
@@ -3743,21 +3804,6 @@
       "published_at": 1779707530266
     },
     {
-      "handle": "OCushway59038",
-      "x_user_id": "2058868426362556417",
-      "verdict_label": "porn_bot",
-      "confidence": 0.93,
-      "reasons": [
-        "display name contains explicit sexual advertising",
-        "asks users to contact via profile/homepage",
-        "commercial porn/escort-style wording",
-        "empty bio and no benign content to offset spam signal"
-      ],
-      "evidence_text": null,
-      "reporters": 0,
-      "published_at": 1779707496352
-    },
-    {
       "handle": "AgnesElsie72850",
       "x_user_id": "2058839201848897536",
       "verdict_label": "porn_bot",
@@ -4441,21 +4487,6 @@
       "evidence_text": null,
       "reporters": 1,
       "published_at": 1779707169755
-    },
-    {
-      "handle": "Tayyar72690262",
-      "x_user_id": "1800656575075393536",
-      "verdict_label": "porn_bot",
-      "confidence": 0.97,
-      "reasons": [
-        "sexual redirect-bait template",
-        "@mention to promote another account",
-        "off-topic porn solicitation style",
-        "matches known linkless spam pattern"
-      ],
-      "evidence_text": null,
-      "reporters": 1,
-      "published_at": 1779707162136
     },
     {
       "handle": "BurcuKcbzdgn",
