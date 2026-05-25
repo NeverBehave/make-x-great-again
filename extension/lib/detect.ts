@@ -3,11 +3,26 @@
 // navigation, no extra requests to X.
 import type { Signals } from "./types";
 
+// Chinese porn-bot vocabulary (extended Wave 12e after live triage of the
+// rwayne thread — earlier list missed "骚 / 主页能打 / 刷了半天 / 我不行了"
+// which is the current dominant template). Any single match → strong "send
+// to LLM" signal, not a verdict itself.
 const PROMO_RE =
-  /(约见|约炮|附近|同城|牵线|线下|对接|资源|上车|看我主页|入驻|女主播|安全可靠|大号|解锁|福利|楼凤|一夜|加微|私聊|私信|包养|外围|18\+|🔞|🍑|💋|💦|👇|👉)/;
+  /(约见|约炮|附近|同城|牵线|线下|对接|资源|上车|看我主页|主页能打|主页可|看主页|入驻|女主播|安全可靠|大号|解锁|福利|楼凤|一夜|加微|私聊|私信|包养|外围|18\+|🔞|🍑|💋|💦|👇|👉|刷了半天|刷了|没她(?:好看|骚|涩)|比她(?:好看|骚|涩)|她(?:好|妈)?(?:骚|涩|色)|我(?:不行|顶不住)了|sao(?:货|的)|涩货|约不约|有偿|线下我)/;
 const LINK_RE =
   /(https?:\/\/|\b[\w-]+\.(top|xyz|vip|club|icu|cn|cc|live|link|shop)\b|t\.co\/)/i;
 const RANDOM_HANDLE_RE = /^[a-z]{2,}\d{4,}$|^[A-Za-z]+[A-Z][a-z]+\d{4,}$|^[a-z]{1,3}\d{4,}$/;
+
+// "Redirect bait" structural template. Pattern: a short Chinese reply that
+// mostly exists to @-mention a dispatcher account plus emoji garnish. We
+// don't need linguistics to spot it — the SHAPE is the giveaway:
+//   < 80 chars, contains @\w+ mention, contains emoji, contains CJK.
+// Strong signal that this is a porn/spam amplifier even when the words
+// don't match PROMO_RE. False positives are fine: just means an extra LLM
+// call to ratify, never a wrong verdict.
+const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}]/u;
+const HAS_CJK_RE = /[一-鿿]/;
+const HAS_MENTION_RE = /@[A-Za-z0-9_]{2,15}/;
 
 const NON_PROFILE = new Set([
   "home", "explore", "notifications", "messages", "i", "search", "settings",
@@ -276,6 +291,26 @@ export function heuristic(s: Signals): Heuristic {
   if (RANDOM_HANDLE_RE.test(s.handle)) {
     score += 0.15;
     why.push("机器生成式 handle");
+  }
+  // Redirect-bait structural pattern: a short CJK reply whose payload is
+  // really just an @-mention to a dispatcher account. Catches the new
+  // dominant Chinese porn-bot template (e.g. "x2,比她好看的没她骚q比她骚的
+  // 没她好看 @Xinxinxiaogou04 🍄🌳" or ")推特 @dadi2412 第一骚+yo") that
+  // earlier word lists miss entirely. Either an emoji garnish OR a
+  // single-character innuendo (骚/涩/色/约/sao) qualifies. Scoped to
+  // recentTweets (the current reply only) so legit profile bios with
+  // @-mentions aren't penalized.
+  const t = s.recentTweets[0] ?? "";
+  const INNUENDO_RE = /[骚涩约]|sao/i;
+  if (
+    t &&
+    t.length < 80 &&
+    HAS_CJK_RE.test(t) &&
+    HAS_MENTION_RE.test(t) &&
+    (EMOJI_RE.test(t) || INNUENDO_RE.test(t))
+  ) {
+    score += 0.35;
+    why.push("导流模板：短中文回复 + @mention + (emoji|性暗示)");
   }
   return { score: Math.max(0, Math.min(1, score)), why };
 }
