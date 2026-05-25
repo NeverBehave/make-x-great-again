@@ -27,62 +27,68 @@ const CSS = `
   font-variant-numeric:tabular-nums;line-height:1.05;color:var(--fg)}
 .aggr .l{font-size:11.5px;color:var(--fg-3);margin-top:8px;letter-spacing:.01em}
 
-/* List rows — neutral surface, 2px left edge by verdict, hover lift */
-.list{display:flex;flex-direction:column;gap:1px;background:var(--border);
-  border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
-.row{position:relative;display:grid;grid-template-columns:36px 1fr auto;gap:12px;
-  align-items:center;padding:11px 16px 11px 18px;background:var(--bg);
-  transition:background .15s,transform .25s ease,opacity .25s ease}
-.row::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;
+/* Public board — each row behaves like a compact audit record:
+   account identity, evidence, then model confidence as a stable right rail. */
+.list{display:flex;flex-direction:column;gap:0;background:var(--border);
+  border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;
+  box-shadow:var(--shadow-card)}
+.row{position:relative;display:grid;grid-template-columns:42px minmax(0,1fr) 104px;
+  column-gap:14px;align-items:center;padding:14px 16px 14px 18px;background:var(--bg);
+  border-bottom:1px solid var(--border);transition:background .15s,transform .25s ease,opacity .25s ease}
+.row:last-child{border-bottom:0}
+.row::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
   background:var(--ec,transparent)}
 .row.spam,.row.likely_spam{--ec:var(--danger)}
 .row.porn_bot{--ec:var(--violet)}
 .row.uncertain{--ec:var(--fg-4)}
 .row.legit{--ec:var(--ok)}
-.row:hover{background:var(--card-hi)}
+.row:hover{background:var(--card)}
 .row.new{animation:slidein .3s ease-out both}
 @keyframes slidein{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
-.row .av{width:36px;height:36px;border-radius:50%;background:var(--card-hi);overflow:hidden;
+.row .av{width:42px;height:42px;border-radius:50%;background:var(--card-hi);overflow:hidden;
   display:flex;align-items:center;justify-content:center;color:var(--fg-4);
-  font-size:13px;font-weight:600;flex-shrink:0}
+  font-size:13px;font-weight:600;flex-shrink:0;border:1px solid var(--border)}
 .row .av img{width:100%;height:100%;object-fit:cover;display:block}
-.row .meta{min-width:0}
-.row .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.row .handle{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap;max-width:240px;letter-spacing:-.005em}
+.row .meta{min-width:0;display:grid;gap:6px}
+.row .top{display:flex;align-items:baseline;gap:8px;min-width:0}
+.row .handle{font-weight:650;font-size:14px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;letter-spacing:-.005em;min-width:0;max-width:min(32ch,44vw)}
 .row .handle a{color:var(--fg)}
 .row .handle a:hover{color:var(--accent)}
 .row .name{font-size:12.5px;color:var(--fg-3);overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap;font-weight:400}
-.row .fresh{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;
-  color:var(--accent);padding:1.5px 7px;border-radius:var(--r-sm);background:var(--accent-soft);
-  letter-spacing:.04em;text-transform:uppercase}
+  white-space:nowrap;font-weight:400;min-width:0;max-width:26ch}
+.row .fresh{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:650;
+  color:var(--accent);padding:1px 6px;border-radius:var(--r-sm);background:var(--accent-soft);
+  letter-spacing:.02em;white-space:nowrap}
 .row .fresh::before{content:"";width:4px;height:4px;border-radius:50%;background:var(--accent)}
-.row .sub{font-size:11.5px;color:var(--fg-3);margin-top:4px;display:flex;
-  align-items:center;gap:8px;flex-wrap:wrap}
+.row .sub{font-size:11.5px;color:var(--fg-3);display:flex;
+  align-items:center;gap:7px;flex-wrap:wrap}
 .row .sub .sep{color:var(--fg-4);opacity:.5}
+.row .sub .tag{padding:2px 8px;font-size:10.5px;letter-spacing:.01em;background:var(--bg)}
 /* Reporter count chip — visible trust signal. ≥3 = bold green (auto-publish
    threshold met) so casual readers can spot the strongest evidence at a glance. */
 .row .sub .rep-chip{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;
   border-radius:var(--r-sm);font-size:10.5px;font-weight:600;letter-spacing:.02em;
-  color:var(--fg-2);border:1px solid var(--border-2);background:var(--card)}
+  color:var(--fg-2);border:1px solid var(--border-strong);background:var(--card)}
 .row .sub .rep-chip.strong{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 38%,transparent);
   background:color-mix(in srgb,var(--ok) 10%,transparent)}
 /* Evidence text — the public X content that triggered the verdict.
-   Italic + indent + 2-line clamp; gives audit value without dominating the row. */
-.row .ev{margin-top:6px;font-size:12px;color:var(--fg-2);font-style:italic;line-height:1.5;
-  overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;
-  -webkit-box-orient:vertical;max-width:680px;
-  padding:4px 10px;border-left:2px solid var(--border-2);background:var(--card)}
-.row .right{display:flex;align-items:center;gap:12px;flex-shrink:0}
-.row .conf{display:flex;flex-direction:column;align-items:flex-end;gap:3px;min-width:54px}
-.row .conf .pct{font-size:11.5px;color:var(--fg-2);font-variant-numeric:tabular-nums;
-  font-weight:500;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.row .conf .bar{width:54px;height:2px;background:var(--card-hi);border-radius:1px;overflow:hidden}
-.row .conf .bar i{display:block;height:100%;background:var(--ec,var(--fg-3));border-radius:1px;
+   Kept as a single quiet line on desktop so long spam copy stops deforming rows. */
+.row .ev{font-size:12.5px;color:var(--fg-2);line-height:1.45;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:72ch;
+  padding-left:10px;border-left:2px solid color-mix(in srgb,var(--ec,var(--fg-4)) 36%,transparent)}
+.row .ev-label{font-size:10px;font-weight:650;color:var(--fg-4);letter-spacing:.06em;
+  text-transform:uppercase;margin-right:8px;font-style:normal}
+.row .ev-text{font-style:italic}
+.row .right{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-shrink:0}
+.row .conf{display:flex;flex-direction:column;align-items:flex-end;gap:5px;min-width:58px}
+.row .conf .pct{font-size:12.5px;color:var(--fg);font-variant-numeric:tabular-nums;
+  font-weight:650;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1}
+.row .conf .bar{width:58px;height:3px;background:var(--card-hi);border-radius:999px;overflow:hidden}
+.row .conf .bar i{display:block;height:100%;background:var(--ec,var(--fg-3));border-radius:999px;
   transition:width .3s ease}
-.row .ext{color:var(--fg-4);display:inline-flex;padding:6px;border-radius:var(--r-sm);
-  transition:background .15s,color .15s}
+.row .ext{color:var(--fg-4);display:inline-flex;align-items:center;justify-content:center;
+  width:32px;height:32px;border-radius:var(--r-sm);transition:background .15s,color .15s}
 .row .ext:hover{background:var(--card-hi);color:var(--fg)}
 .row .ext svg{width:14px;height:14px}
 
@@ -99,14 +105,23 @@ const CSS = `
   .head h1{font-size:30px}
   .aggr{grid-template-columns:1fr 1fr}
   .aggr .c.daily{display:none}
+  .aggr .c:last-child{grid-column:1/-1}
+  .row{grid-template-columns:38px minmax(0,1fr) 70px;column-gap:12px;padding:12px 12px 12px 15px}
+  .row .av{width:38px;height:38px}
+  .row .handle{max-width:42vw}
+  .row .name{max-width:22vw}
+  .row .ev{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;max-width:none}
+  .row .ext{display:none}
+  .row .conf .bar{width:48px}
 }
 @media (max-width:480px){
-  .row{grid-template-columns:32px 1fr auto;gap:10px;padding:10px 12px 10px 14px}
-  .row .av{width:32px;height:32px}
-  .row .handle{max-width:140px;font-size:13.5px}
+  .row{grid-template-columns:34px minmax(0,1fr);gap:10px;padding:11px 12px 11px 14px}
+  .row .av{width:34px;height:34px}
+  .row .right{grid-column:2;justify-content:flex-start}
+  .row .conf{align-items:flex-start;min-width:48px}
+  .row .conf .bar{width:50px}
+  .row .handle{max-width:56vw;font-size:13.5px}
   .row .name{display:none}
-  .row .conf{min-width:46px}
-  .row .conf .bar{width:42px}
 }
 `;
 
@@ -150,6 +165,15 @@ const SCRIPT = `
     var fallback=esc((r.handle||'?').slice(0,1).toUpperCase());
     return '<div class="av"><img src="'+esc(url)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement(\\'span\\'),{textContent:\\''+fallback+'\\'}))"/></div>';
   }
+  function labelText(label){
+    return {
+      spam:'垃圾营销',
+      likely_spam:'疑似垃圾',
+      porn_bot:'色情广告',
+      uncertain:'待复核',
+      legit:'正常'
+    }[label]||label;
+  }
   function rowHtml(r,fresh){
     var lbl=r.verdict_label||'uncertain';
     var conf=typeof r.confidence==='number'?Math.max(0,Math.min(100,Math.round(r.confidence*100))):0;
@@ -170,7 +194,7 @@ const SCRIPT = `
     var reasonsText=Array.isArray(reasonsArr)&&reasonsArr.length?'AI 理由：'+reasonsArr.join('；'):'';
     // Evidence snippet — 第一手公开证据，让公榜不止是 handle + label
     var evid=(r.evidence_text||'').replace(/\\s+/g,' ').trim();
-    var evidHtml=evid?'<div class="ev" title="'+esc(evid)+'">『'+esc(evid.slice(0,140))+(evid.length>140?'…':'')+'』</div>':'';
+    var evidHtml=evid?'<div class="ev" title="'+esc(evid)+'"><span class="ev-label">证据</span><span class="ev-text">『'+esc(evid.slice(0,180))+(evid.length>180?'…':'')+'』</span></div>':'';
     return '<div class="row '+esc(lbl)+(fresh?' new':'')+'" role="listitem" data-pt="'+r.published_at+'">'
       +avatarHtml(r)
       +'<div class="meta">'
@@ -180,14 +204,14 @@ const SCRIPT = `
           +freshBadge
         +'</div>'
         +'<div class="sub">'
-          +'<span class="tag '+esc(lbl)+'" title="'+esc(reasonsText)+'">'+esc(lbl)+'</span>'
+          +'<span class="tag '+esc(lbl)+'" title="'+esc(reasonsText)+'">'+esc(labelText(lbl))+'</span>'
           +'<span class="sep">·</span><span>'+ago(r.published_at)+'</span>'
           +(repHtml?'<span class="sep">·</span>'+repHtml:'')
         +'</div>'
         +evidHtml
       +'</div>'
       +'<div class="right">'
-        +'<div class="conf" title="模型置信度">'
+        +'<div class="conf" title="模型置信度 '+conf+'%">'
           +'<span class="pct">'+conf+'%</span>'
           +'<div class="bar"><i style="width:'+conf+'%"></i></div>'
         +'</div>'
@@ -212,7 +236,7 @@ const SCRIPT = `
       rows=j.list||[];latestAt=j.latestAt;oldestAt=j.nextBefore;exhausted=!oldestAt;
       moreBtn.hidden=exhausted;render();
       lastPollAt=Date.now();
-      setPulse('<strong>已同步</strong> · 共 '+fmt(rows.length)+' 条');
+      setPulse('<strong>已同步</strong> · 最新 '+fmt(rows.length)+' 条');
     })
   }
   function loadMore(){
