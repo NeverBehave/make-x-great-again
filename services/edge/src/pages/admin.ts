@@ -188,12 +188,17 @@ input::placeholder{color:var(--fg-4)}
 .qrow .who{min-width:0}
 .qrow .who .name{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap;color:var(--fg);letter-spacing:-.005em}
+.qrow .who .name a{color:inherit}.qrow .who .name a:hover{color:var(--accent)}
 .qrow .who .name .vlbl{margin-left:6px;font-size:10.5px;font-weight:500;color:var(--ec,var(--fg-3));
   text-transform:uppercase;letter-spacing:.06em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .qrow .who .sub{font-size:11.5px;color:var(--fg-3);margin-top:3px;display:flex;
   align-items:center;gap:6px;flex-wrap:wrap}
 .qrow .who .sub a{color:var(--fg-2)}.qrow .who .sub a:hover{color:var(--accent)}
 .qrow .who .sub .sep{color:var(--fg-4);opacity:.5}
+.qrow .who .sub .id-chip{display:inline-flex;align-items:center;max-width:24ch;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:10.5px;color:var(--fg-2);padding:1px 6px;border-radius:var(--r-sm);
+  background:var(--card);border:1px solid var(--border)}
 .qrow .who .ev{margin-top:5px;font-size:11.5px;color:var(--fg-2);font-style:italic;
   line-height:1.45;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;
   -webkit-line-clamp:2;-webkit-box-orient:vertical;max-width:560px}
@@ -369,6 +374,11 @@ const SCRIPT = String.raw`
   var GH='${GH_REPO}';
 
   function E(s){return (s==null?'':String(s)).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+  function xUrl(handle){return 'https://x.com/'+encodeURIComponent(handle||'')}
+  function displayName(a){var n=(a.display_name||'').trim();return n||('@'+(a.handle||''))}
+  function nameLink(a){return '<a href="'+E(xUrl(a.handle))+'" target="_blank" rel="noopener">'+E(displayName(a))+'</a>'}
+  function handleLink(handle){return '<a href="'+E(xUrl(handle))+'" target="_blank" rel="noopener">@'+E(handle)+' ↗</a>'}
+  function idChip(id){return id?'<span class="sep">·</span><span class="id-chip" title="X user id '+E(id)+'">ID '+E(id)+'</span>':''}
 
   // Themed modal — replaces native confirm()/prompt() so destructive
   // actions read in the same visual language as the rest of the panel.
@@ -581,10 +591,10 @@ const SCRIPT = String.raw`
         +'<input type="checkbox"'+(sel.has(k)?' checked':'')+' aria-label="选中 @'+E(a.handle)+'">'
         +'<div class="av"><img src="'+E(av)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{textContent:\''+fb+'\'}))"></div>'
         +'<div class="who">'
-          +'<div class="name">'+E(a.display_name||('@'+a.handle))+vlbl+'</div>'
+          +'<div class="name">'+nameLink(a)+vlbl+'</div>'
           +'<div class="sub">'
-            +'<a href="https://x.com/'+E(a.handle)+'" target="_blank" rel="noopener">@'+E(a.handle)+' ↗</a>'
-            +(a.x_user_id&&a.x_user_id!==a.handle?'<span class="sep">·</span><span>'+E(a.x_user_id)+'</span>':'')
+            +handleLink(a.handle)
+            +idChip(a.x_user_id)
             +'<span class="sep">·</span><span>'+ago(a.last_scored)+'</span>'
           +'</div>'
           +evidHtml
@@ -732,9 +742,10 @@ const SCRIPT = String.raw`
         +'<input type="checkbox"'+(wlSel.has(k)?' checked':'')+' aria-label="选中 @'+E(a.handle)+'">'
         +'<div class="av"><img src="'+E(av)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{textContent:\''+fb+'\'}))"></div>'
         +'<div class="who">'
-          +'<div class="name">'+E(a.display_name||('@'+a.handle))+'<span class="vlbl">白名单</span></div>'
+          +'<div class="name">'+nameLink(a)+'<span class="vlbl">白名单</span></div>'
           +'<div class="sub">'
-            +'<a href="https://x.com/'+E(a.handle)+'" target="_blank" rel="noopener">@'+E(a.handle)+' ↗</a>'
+            +handleLink(a.handle)
+            +idChip(a.x_user_id)
             +(note?'<span class="sep">·</span><span>'+E(note)+'</span>':'')
             +'<span class="sep">·</span><span>'+ago(a.last_scored)+'</span>'
           +'</div>'
@@ -825,10 +836,10 @@ const SCRIPT = String.raw`
         +'<input type="checkbox"'+(blSel.has(k)?' checked':'')+' aria-label="选中 @'+E(a.handle)+'">'
         +'<div class="av"><img src="'+E(av)+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{textContent:\''+fb+'\'}))"></div>'
         +'<div class="who">'
-          +'<div class="name">'+E(a.display_name||('@'+a.handle))+'<span class="vlbl">'+E(lblZh)+'</span></div>'
+          +'<div class="name">'+nameLink(a)+'<span class="vlbl">'+E(lblZh)+'</span></div>'
           +'<div class="sub">'
-            +'<a href="https://x.com/'+E(a.handle)+'" target="_blank" rel="noopener">@'+E(a.handle)+' ↗</a>'
-            +(a.x_user_id?'<span class="sep">·</span><span>'+E(a.x_user_id)+'</span>':'')
+            +handleLink(a.handle)
+            +idChip(a.x_user_id)
             +'<span class="sep">·</span><span>已公榜 '+ago(a.published_at)+'</span>'
           +'</div>'
         +'</div>'

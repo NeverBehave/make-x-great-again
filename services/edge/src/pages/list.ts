@@ -50,13 +50,13 @@ const CSS = `
   font-size:13px;font-weight:600;flex-shrink:0;border:1px solid var(--border)}
 .row .av img{width:100%;height:100%;object-fit:cover;display:block}
 .row .meta{min-width:0;display:grid;gap:6px}
-.row .top{display:flex;align-items:baseline;gap:8px;min-width:0}
-.row .handle{font-weight:650;font-size:14px;overflow:hidden;text-overflow:ellipsis;
+.row .top{display:flex;align-items:center;gap:8px;min-width:0}
+.row .display{font-weight:650;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap;letter-spacing:-.005em;min-width:0;max-width:min(32ch,44vw)}
-.row .handle a{color:var(--fg)}
-.row .handle a:hover{color:var(--accent)}
-.row .name{font-size:12.5px;color:var(--fg-3);overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap;font-weight:400;min-width:0;max-width:26ch}
+.row .display a{color:var(--fg)}
+.row .display a:hover{color:var(--accent)}
+.row .handle{font-size:12.5px;color:var(--fg-3);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;font-weight:400;min-width:0;max-width:28ch}
 .row .fresh{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:650;
   color:var(--accent);padding:1px 6px;border-radius:var(--r-sm);background:var(--accent-soft);
   letter-spacing:.02em;white-space:nowrap}
@@ -108,8 +108,8 @@ const CSS = `
   .aggr .c:last-child{grid-column:1/-1}
   .row{grid-template-columns:38px minmax(0,1fr) 70px;column-gap:12px;padding:12px 12px 12px 15px}
   .row .av{width:38px;height:38px}
-  .row .handle{max-width:42vw}
-  .row .name{max-width:22vw}
+  .row .display{max-width:42vw}
+  .row .handle{max-width:24vw}
   .row .ev{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;max-width:none}
   .row .ext{display:none}
   .row .conf .bar{width:48px}
@@ -120,8 +120,8 @@ const CSS = `
   .row .right{grid-column:2;justify-content:flex-start}
   .row .conf{align-items:flex-start;min-width:48px}
   .row .conf .bar{width:50px}
-  .row .handle{max-width:56vw;font-size:13.5px}
-  .row .name{display:none}
+  .row .display{max-width:58vw;font-size:13.5px}
+  .row .handle{max-width:42vw;font-size:11.5px}
 }
 `;
 
@@ -178,7 +178,12 @@ const SCRIPT = `
     var lbl=r.verdict_label||'uncertain';
     var conf=typeof r.confidence==='number'?Math.max(0,Math.min(100,Math.round(r.confidence*100))):0;
     var isFresh=r.published_at&&(Date.now()-r.published_at)<FRESH_MS;
-    var name=r.display_name?'<span class="name">'+esc(r.display_name)+'</span>':'';
+    var rawName=(r.display_name||'').trim();
+    var display=rawName||('@'+r.handle);
+    var handleLower=String(r.handle||'').toLowerCase();
+    var showHandle=rawName&&rawName.toLowerCase()!==handleLower&&rawName.toLowerCase()!==('@'+handleLower);
+    var profile='https://x.com/'+encodeURIComponent(r.handle);
+    var handle=showHandle?'<span class="handle">@'+esc(r.handle)+'</span>':'';
     var freshBadge=isFresh?'<span class="fresh">新</span>':'';
     var reps=r.reporters|0;
     // "N 人拉黑过" — 1 人也显示（说明至少一个维护者或 GH 用户上报过）
@@ -199,8 +204,8 @@ const SCRIPT = `
       +avatarHtml(r)
       +'<div class="meta">'
         +'<div class="top">'
-          +'<span class="handle"><a href="https://x.com/'+encodeURIComponent(r.handle)+'" target="_blank" rel="noopener noreferrer">@'+esc(r.handle)+'</a></span>'
-          +name
+          +'<span class="display"><a href="'+profile+'" target="_blank" rel="noopener noreferrer">'+esc(display)+'</a></span>'
+          +handle
           +freshBadge
         +'</div>'
         +'<div class="sub">'
@@ -215,7 +220,7 @@ const SCRIPT = `
           +'<span class="pct">'+conf+'%</span>'
           +'<div class="bar"><i style="width:'+conf+'%"></i></div>'
         +'</div>'
-        +'<a class="ext" href="https://x.com/'+encodeURIComponent(r.handle)+'" target="_blank" rel="noopener noreferrer" aria-label="去 X 主页">${ICON_EXT}</a>'
+        +'<a class="ext" href="'+profile+'" target="_blank" rel="noopener noreferrer" aria-label="去 X 主页">${ICON_EXT}</a>'
       +'</div>'
       +'</div>';
   }
