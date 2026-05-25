@@ -11,6 +11,9 @@ forkable blocklist.
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#项目状态)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
+[![Live](https://img.shields.io/badge/live-x.zuoluo.tv-38bdf8.svg)](https://x.zuoluo.tv)
+
+🌐 **Live**：[x.zuoluo.tv](https://x.zuoluo.tv) · 📋 [公开 spam 榜单](https://x.zuoluo.tv/list) · 📦 [安装扩展](https://github.com/foru17/x-spam-sentinel/releases/latest)
 
 [什么是这个](#是什么) · [怎么工作](#怎么工作) · [快速开始](#快速开始) · [架构](./docs/ARCHITECTURE.md) · [治理](./GOVERNANCE.md) · [贡献](./CONTRIBUTING.md)
 
