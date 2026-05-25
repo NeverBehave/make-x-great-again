@@ -1,152 +1,188 @@
-// Maintainer-only admin console. Self-contained HTML — the only thing it
-// shares with the public pages is the design tokens (same dark-glass +
-// cyan accent). Lives under /admin and authenticates with ADMIN_TOKEN that
-// the maintainer pastes once and we keep in localStorage. NEVER ships in
-// the consumer extension build.
-
+// Maintainer-only admin console. Self-contained — shares only the design
+// tokens with the public pages. base-ui inspired: monochrome canvas,
+// neutral borders, accent reserved for state, sharp corners.
+// Lives under /admin and authenticates with ADMIN_TOKEN (localStorage,
+// never ships in the consumer extension build).
 import { BRAND } from "../brand";
+
 const GH_REPO = BRAND.repo;
 
 const CSS = `:root{
   color-scheme:dark;
-  --bg:#0a0a0a; --fg:#e6edf3; --fg-2:#a3a8b3; --fg-3:#8b949e; --fg-4:#6b7280;
-  --border:rgba(255,255,255,.08); --border-2:rgba(255,255,255,.14);
-  --card:rgba(255,255,255,.035); --card-hi:rgba(255,255,255,.06);
-  --accent:#38bdf8; --accent-soft:rgba(56,189,248,.14);
-  --danger:#ef4444; --warn:#f59e0b; --ok:#10b981; --violet:#a855f7;
+  --bg:#0a0a0a; --bg-2:#111113;
+  --fg:#fafafa; --fg-2:#a1a1aa; --fg-3:#71717a; --fg-4:#52525b;
+  --border:rgba(255,255,255,.07); --border-strong:rgba(255,255,255,.14);
+  --card:rgba(255,255,255,.025); --card-hi:rgba(255,255,255,.05);
+  --accent:#38bdf8; --accent-soft:rgba(56,189,248,.12);
+  --danger:#ef4444; --danger-soft:rgba(239,68,68,.08);
+  --warn:#f59e0b; --ok:#10b981; --violet:#a855f7;
+  --r-sm:4px; --r:6px; --r-lg:10px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-body{min-height:100vh;background:
-  radial-gradient(900px 500px at 10% -10%,rgba(56,189,248,.05),transparent 60%),
-  var(--bg)}
+html,body{background:var(--bg);color:var(--fg);
+  font:13.5px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Inter","SF Pro Text","PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased}
+body{min-height:100vh}
 a{color:inherit;text-decoration:none}
 button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
 :focus{outline:none}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:-1px;border-radius:var(--r)}
 
-.wrap{max-width:1180px;margin:0 auto;padding:20px 28px 60px}
+.wrap{max-width:1200px;margin:0 auto;padding:22px 28px 60px}
 
 /* Top bar */
-.bar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:6px 0 22px;border-bottom:1px solid var(--border);margin-bottom:22px;flex-wrap:wrap}
-.bar h1{font-size:18px;font-weight:700;display:flex;align-items:center;gap:10px}
-.bar h1 svg{width:22px;height:22px;color:var(--accent)}
-.bar .sub{color:var(--fg-3);font-size:12.5px;margin-top:3px}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:6px 0 22px;border-bottom:1px solid var(--border);margin-bottom:22px;flex-wrap:wrap}
+.bar h1{font-size:17px;font-weight:600;display:flex;align-items:center;gap:10px;letter-spacing:-.005em}
+.bar h1 svg{width:20px;height:20px;color:var(--fg)}
+.bar .sub{color:var(--fg-3);font-size:12.5px;margin-top:4px}
+.bar .sub a{color:var(--fg-2);text-decoration:underline;text-decoration-color:var(--fg-4)}
+.bar .sub a:hover{color:var(--fg);text-decoration-color:var(--fg-3)}
 .bar .auth{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--fg-3)}
 .bar .auth .ok{color:var(--ok);display:inline-flex;align-items:center;gap:6px}
-.bar .auth .ok::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(16,185,129,.5);animation:pulse 2.4s ease-out infinite}
+.bar .auth .ok::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ok);
+  box-shadow:0 0 0 0 rgba(16,185,129,.5);animation:pulse 2.4s ease-out infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.5)}100%{box-shadow:0 0 0 7px rgba(16,185,129,0)}}
 
-/* Buttons — tiered */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:500;line-height:1;border:1px solid var(--border-2);background:var(--card);transition:background .15s,border-color .15s,transform .12s,color .15s;white-space:nowrap}
+/* Buttons — same tiers as Worker public pages */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 12px;
+  border-radius:var(--r);font-size:12.5px;font-weight:500;line-height:1;
+  border:1px solid var(--border-strong);background:transparent;color:var(--fg);
+  transition:background .12s,border-color .12s,color .12s,transform .08s;white-space:nowrap}
 .btn:hover{background:var(--card-hi);border-color:rgba(255,255,255,.22)}
-.btn:active{transform:translateY(1px)}
+.btn:active{transform:translateY(.5px)}
 .btn[disabled]{opacity:.4;cursor:not-allowed;transform:none}
-.btn.primary{background:var(--accent);color:#0a0a0a;border-color:transparent;font-weight:600}
-.btn.primary:hover{background:#7dd3fc}
-.btn.danger{color:#fca5a5;border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.06)}
-.btn.danger:hover{background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.55);color:#fecaca}
-.btn.sm{padding:5px 10px;font-size:12px;border-radius:7px}
-.btn.icon{padding:6px;border-radius:7px}
+.btn.primary{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:600}
+.btn.primary:hover{background:#fff;border-color:#fff}
+.btn.danger{color:#fca5a5;border-color:rgba(239,68,68,.32)}
+.btn.danger:hover{background:var(--danger-soft);border-color:rgba(239,68,68,.5);color:#fecaca}
+.btn.sm{padding:5px 10px;font-size:12px;border-radius:var(--r-sm)}
 
-/* Inputs / selects */
-input,select{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--border-2);border-radius:8px;padding:7px 11px;transition:border-color .15s}
+/* Inputs */
+input,select{font:inherit;color:var(--fg);background:transparent;
+  border:1px solid var(--border-strong);border-radius:var(--r);padding:7px 11px;
+  transition:border-color .12s}
 input:focus,select:focus{border-color:var(--accent);outline:none}
 input::placeholder{color:var(--fg-4)}
 
 /* Tabs */
-.tabs{display:flex;gap:6px;margin-bottom:16px}
-.tabs button{padding:8px 14px;border-radius:9px;font-size:13px;color:var(--fg-2);border:1px solid transparent;background:transparent;transition:color .15s,background .15s,border-color .15s}
-.tabs button:hover{color:var(--fg);background:var(--card)}
-.tabs button.on{color:var(--accent);background:var(--accent-soft);border-color:rgba(56,189,248,.3)}
-.tabs .count{margin-left:6px;font-size:11px;color:var(--fg-3);font-variant-numeric:tabular-nums}
-.tabs button.on .count{color:var(--accent)}
+.tabs{display:flex;gap:2px;margin-bottom:18px}
+.tabs button{padding:8px 14px;border-radius:var(--r);font-size:13px;color:var(--fg-3);
+  border:1px solid transparent;background:transparent;
+  transition:color .12s,background .12s,border-color .12s}
+.tabs button:hover{color:var(--fg);background:var(--card-hi)}
+.tabs button.on{color:var(--fg);background:var(--card-hi);border-color:var(--border-strong)}
+.tabs .count{margin-left:6px;font-size:11px;color:var(--fg-4);font-variant-numeric:tabular-nums}
+.tabs button.on .count{color:var(--fg-2)}
 
-/* Toolbar — filter chips + sort */
-.toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding:10px 12px;border-radius:11px;background:var(--card);border:1px solid var(--border)}
-.chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{padding:5px 11px;border-radius:999px;font-size:12px;color:var(--fg-2);border:1px solid var(--border);background:transparent;transition:all .15s}
+/* Toolbar */
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;border-radius:var(--r-lg);
+  background:var(--card);border:1px solid var(--border)}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{padding:5px 11px;border-radius:999px;font-size:12px;color:var(--fg-3);
+  border:1px solid var(--border-strong);background:transparent;transition:all .12s}
 .chip:hover{background:var(--card-hi);color:var(--fg)}
-.chip.on{color:var(--fg);background:var(--accent-soft);border-color:rgba(56,189,248,.4)}
-.chip .n{margin-left:5px;font-size:10.5px;color:var(--fg-3);font-variant-numeric:tabular-nums}
-.chip.on .n{color:var(--accent)}
+.chip.on{color:var(--fg);background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.chip .n{margin-left:5px;font-size:10.5px;color:var(--fg-3);font-variant-numeric:tabular-nums;opacity:.7}
+.chip.on .n{color:var(--bg);opacity:.6}
 .toolbar .right{display:flex;align-items:center;gap:8px}
-.toolbar select{padding:6px 26px 6px 10px;font-size:12.5px;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='%238b949e'><path d='M6 8L2 4h8z'/></svg>");background-repeat:no-repeat;background-position:right 8px center}
+.toolbar select{padding:6px 26px 6px 11px;font-size:12.5px;-webkit-appearance:none;appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='%2371717a'><path d='M6 8L2 4h8z'/></svg>");
+  background-repeat:no-repeat;background-position:right 9px center}
 
-/* Batch action bar — only shown when selection > 0 */
-.batch{display:none;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;margin-bottom:12px;border-radius:11px;background:linear-gradient(90deg,rgba(56,189,248,.08),rgba(56,189,248,.02));border:1px solid rgba(56,189,248,.3);animation:slidein .25s ease-out}
+/* Batch action bar */
+.batch{display:none;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 14px;margin-bottom:12px;border-radius:var(--r-lg);
+  background:var(--card-hi);border:1px solid var(--border-strong);animation:slidein .25s ease-out}
 .batch.on{display:flex}
 .batch .meta{font-size:13px;color:var(--fg)}
-.batch .meta b{color:var(--accent);font-variant-numeric:tabular-nums}
+.batch .meta b{color:var(--fg);font-variant-numeric:tabular-nums}
 .batch .actions{display:flex;gap:8px;flex-wrap:wrap}
 @keyframes slidein{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 
 /* Queue rows */
-.rows{display:flex;flex-direction:column;gap:6px}
-.qrow{display:grid;grid-template-columns:24px 40px 1fr 150px 90px auto;gap:14px;align-items:center;padding:11px 14px;border-radius:11px;background:var(--card);border:1px solid var(--border);transition:background .15s,border-color .15s,opacity .25s}
-.qrow:hover{background:var(--card-hi);border-color:var(--border-2)}
-.qrow.sel{background:rgba(56,189,248,.05);border-color:rgba(56,189,248,.3)}
+.rows{display:flex;flex-direction:column;gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+.qrow{display:grid;grid-template-columns:24px 40px 1fr 160px 90px auto;gap:14px;
+  align-items:center;padding:11px 14px;background:var(--bg);
+  transition:background .15s,opacity .25s}
+.qrow:hover{background:var(--card-hi)}
+.qrow.sel{background:var(--accent-soft)}
 .qrow.removing{opacity:.3;pointer-events:none}
 .qrow input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
-.qrow .av{width:40px;height:40px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#1a2238,#2a1640);display:flex;align-items:center;justify-content:center;color:var(--fg-4);font-size:14px;font-weight:600;flex-shrink:0}
+.qrow .av{width:40px;height:40px;border-radius:50%;overflow:hidden;background:var(--card-hi);
+  display:flex;align-items:center;justify-content:center;color:var(--fg-4);font-size:14px;
+  font-weight:600;flex-shrink:0}
 .qrow .av img{width:100%;height:100%;object-fit:cover;display:block}
 .qrow .who{min-width:0}
-.qrow .who .name{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.qrow .who .sub{font-size:11.5px;color:var(--fg-3);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.qrow .who .sub a{color:var(--accent)}
-.qrow .who .sub a:hover{color:#7dd3fc}
-.qrow .who .sub .sep{color:var(--fg-4);opacity:.6}
+.qrow .who .name{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;color:var(--fg);letter-spacing:-.005em}
+.qrow .who .sub{font-size:11.5px;color:var(--fg-3);margin-top:3px;display:flex;
+  align-items:center;gap:6px;flex-wrap:wrap}
+.qrow .who .sub a{color:var(--fg-2)}.qrow .who .sub a:hover{color:var(--accent)}
+.qrow .who .sub .sep{color:var(--fg-4);opacity:.5}
 .qrow .verdict{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
-.qrow .verdict .tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid currentColor;letter-spacing:.02em}
+.qrow .verdict .tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
+  padding:2.5px 8px;border-radius:999px;border:1px solid currentColor;letter-spacing:.02em}
 .qrow .verdict .tag.spam,.qrow .verdict .tag.likely_spam{color:var(--danger)}
 .qrow .verdict .tag.porn_bot{color:var(--violet)}
 .qrow .verdict .tag.uncertain{color:var(--fg-3)}
 .qrow .verdict .tag.legit{color:var(--ok)}
-.qrow .verdict .bar{width:80px;height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
-.qrow .verdict .bar i{display:block;height:100%;background:currentColor;border-radius:2px}
+.qrow .verdict .bar{width:80px;height:2px;background:var(--card-hi);border-radius:1px;overflow:hidden}
+.qrow .verdict .bar i{display:block;height:100%;background:currentColor;border-radius:1px}
 .qrow .verdict.spam,.qrow .verdict.likely_spam{color:var(--danger)}
 .qrow .verdict.porn_bot{color:var(--violet)}
 .qrow .verdict.uncertain{color:var(--fg-3)}
 .qrow .verdict.legit{color:var(--ok)}
-.qrow .verdict .pct{font-size:11.5px;color:var(--fg-2);font-variant-numeric:tabular-nums}
+.qrow .verdict .pct{font-size:11.5px;color:var(--fg-2);font-variant-numeric:tabular-nums;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .qrow .rep{font-size:12.5px;color:var(--fg-2);font-variant-numeric:tabular-nums}
 .qrow .rep .gt3{color:var(--ok);font-weight:600}
 .qrow .acts{display:flex;gap:6px;flex-shrink:0}
 
-/* Locked state — centered card */
+/* Locked state */
 .locked{min-height:60vh;display:flex;align-items:center;justify-content:center}
-.locked .card{max-width:420px;width:100%;padding:32px;border-radius:14px;background:var(--card);border:1px solid var(--border);text-align:center}
-.locked .card .lock{width:42px;height:42px;border-radius:11px;background:var(--accent-soft);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;margin-bottom:14px}
-.locked .card .lock svg{width:22px;height:22px}
-.locked .card h2{font-size:17px;font-weight:600;margin-bottom:6px}
-.locked .card p{font-size:13px;color:var(--fg-3);margin-bottom:18px;line-height:1.6}
+.locked .card{max-width:420px;width:100%;padding:36px 32px;border-radius:var(--r-lg);
+  background:var(--card);border:1px solid var(--border);text-align:center}
+.locked .card .lock{width:40px;height:40px;border-radius:var(--r);background:var(--card-hi);
+  color:var(--fg);display:inline-flex;align-items:center;justify-content:center;
+  margin-bottom:18px;border:1px solid var(--border-strong)}
+.locked .card .lock svg{width:18px;height:18px}
+.locked .card h2{font-size:17px;font-weight:600;margin-bottom:8px;color:var(--fg);letter-spacing:-.005em}
+.locked .card p{font-size:13px;color:var(--fg-3);margin-bottom:20px;line-height:1.6}
 .locked .card .form{display:flex;gap:8px}
-.locked .card input{flex:1}
+.locked .card input{flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
 
-/* Log view */
-.log{display:flex;flex-direction:column;gap:4px}
-.lrow{display:grid;grid-template-columns:140px 130px 110px 1fr 1fr;gap:14px;align-items:center;padding:8px 14px;border-radius:9px;border:1px solid var(--border);background:var(--card);font-size:12.5px}
-.lrow.head{background:transparent;border-color:transparent;color:var(--fg-3);font-size:11px;letter-spacing:.05em;text-transform:uppercase;padding:6px 14px}
-.lrow .t{color:var(--fg-3);font-variant-numeric:tabular-nums}
-.lrow .act{font-weight:600}
+/* Log */
+.log{display:flex;flex-direction:column;gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
+.lrow{display:grid;grid-template-columns:160px 130px 130px 1fr 1fr;gap:14px;align-items:center;
+  padding:9px 14px;background:var(--bg);font-size:12.5px;transition:background .12s}
+.lrow:hover{background:var(--card-hi)}
+.lrow.head{background:var(--card);color:var(--fg-3);font-size:11px;letter-spacing:.06em;
+  text-transform:uppercase;padding:8px 14px;font-weight:600}
+.lrow.head:hover{background:var(--card)}
+.lrow .t{color:var(--fg-3);font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
+.lrow .act{font-weight:600;font-size:12px}
 .lrow .act.approve{color:var(--ok)}
 .lrow .act.reject,.lrow .act.remove{color:var(--danger)}
-.lrow .actor{color:var(--fg-3)}
-.lrow .h a{color:var(--accent)}
+.lrow .actor{color:var(--fg-3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
+.lrow .h a{color:var(--fg)}.lrow .h a:hover{color:var(--accent)}
 .lrow .n{color:var(--fg-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-.empty{padding:60px 20px;text-align:center;color:var(--fg-3);border:1px dashed var(--border-2);border-radius:14px}
+.empty{padding:60px 20px;text-align:center;color:var(--fg-3);border:1px dashed var(--border);
+  border-radius:var(--r-lg)}
 .status{color:var(--fg-3);font-size:12px}
 
 @media (max-width:880px){
-  .wrap{padding:16px 18px 48px}
+  .wrap{padding:18px 18px 48px}
   .qrow{grid-template-columns:22px 36px 1fr 90px auto;gap:10px;padding:10px 12px}
   .qrow .verdict{display:none}
   .qrow .verdict.compact{display:flex;flex-direction:row;align-items:center;gap:6px}
   .qrow .rep{font-size:11.5px}
   .lrow{grid-template-columns:1fr;gap:4px;padding:10px 12px}
   .lrow.head{display:none}
-  .lrow .t,.lrow .actor{font-size:11px}
 }
 `;
 
@@ -155,20 +191,15 @@ const LOCK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 
 const SCRIPT = String.raw`
 (function(){
-  // ---- State ----
   var TOK=localStorage.getItem('xss_admin')||'';
   var VIEW='queue';
   var queue=[];
   var filter='all';
-  // Default: risk-severity first (spam/porn_bot/likely_spam ahead of legit/uncertain),
-  // ties broken by AI confidence DESC — so maintainers see what actually needs
-  // moderating, not the 158 obvious legit accounts the model classified.
   var sort='severity';
-  var sel=new Set();           // selected (handle|x_user_id)
+  var sel=new Set();
   var logCursor=null;
   var GH='${GH_REPO}';
 
-  // ---- Helpers ----
   function E(s){return (s==null?'':String(s)).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
   function $(id){return document.getElementById(id)}
   function setStatus(s){var el=$('status');if(el)el.textContent=s||''}
@@ -176,13 +207,12 @@ const SCRIPT = String.raw`
   function key(a){return (a.x_user_id||'')+'|'+a.handle}
   function api(p,o){return fetch(p,Object.assign({},o||{},{headers:Object.assign({'x-admin-token':TOK},(o&&o.headers)||{})}))}
 
-  // ---- Auth gate ----
   function renderShell(){
     if(!TOK){renderLocked();return}
     $('app').innerHTML=
       '<div class="bar">'
       +'<div><h1>'+ ${JSON.stringify(LOGO_SVG)} +'<span>审核台 · 守门员</span></h1>'
-      +'<div class="sub">仅维护者使用 · 通过=入公榜 · 驳回/移除=不公开 · 治理见 <a style="color:var(--accent)" href="'+GH+'/blob/main/docs/GOVERNANCE.md" target="_blank">GOVERNANCE</a></div></div>'
+      +'<div class="sub">仅维护者使用 · 通过 = 入公榜 · 驳回 / 移除 = 不公开 · 治理见 <a href="'+GH+'/blob/main/docs/GOVERNANCE.md" target="_blank">GOVERNANCE</a></div></div>'
       +'<div class="auth"><span class="ok">已认证</span><button class="btn sm" onclick="window.__xss.logout()">退出</button></div>'
       +'</div>'
       +'<div class="tabs">'
@@ -196,7 +226,7 @@ const SCRIPT = String.raw`
     $('app').innerHTML='<div class="locked"><div class="card">'
       +'<div class="lock">'+ ${JSON.stringify(LOCK_SVG)} +'</div>'
       +'<h2>需要维护者令牌</h2>'
-      +'<p>把 <code style="background:rgba(255,255,255,.06);padding:1px 6px;border-radius:4px;font-size:12px;color:#7dd3fc">ADMIN_TOKEN</code> 粘进来，仅在本浏览器 localStorage 保存。</p>'
+      +'<p>把 <code style="background:var(--card-hi);padding:1px 6px;border-radius:var(--r-sm);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--fg)">ADMIN_TOKEN</code> 粘进来，仅在本浏览器 localStorage 保存。</p>'
       +'<form class="form" onsubmit="event.preventDefault();window.__xss.save()">'
       +'<input id="t" type="password" autocomplete="off" placeholder="xss_…" />'
       +'<button class="btn primary" type="submit">解锁</button>'
@@ -205,7 +235,6 @@ const SCRIPT = String.raw`
     setTimeout(function(){var t=$('t');if(t)t.focus()},50);
   }
 
-  // ---- Queue ----
   function loadQueue(){
     setStatus('加载中…');
     api('/v1/admin/queue').then(function(r){
@@ -271,7 +300,6 @@ const SCRIPT = String.raw`
         +'</div>'
       +'</div>'
       +'<div class="rows" id="rows"></div>';
-    // Bind chip clicks
     Array.prototype.forEach.call(v.querySelectorAll('.chip'),function(b){
       b.addEventListener('click',function(){filter=b.dataset.f;sel.clear();renderQueue()})
     });
@@ -311,7 +339,6 @@ const SCRIPT = String.raw`
         +'</div>'
       +'</div>';
     }).join('');
-    // Bind row interactions
     Array.prototype.forEach.call(box.querySelectorAll('.qrow'),function(r){
       var k=r.dataset.k;
       var cb=r.querySelector('input[type=checkbox]');
@@ -355,13 +382,12 @@ const SCRIPT = String.raw`
   }
   function clearSel(){sel.clear();renderRows()}
 
-  // ---- Log ----
   function loadLog(more){
     var v=$('view');
     if(!more){v.innerHTML='<div class="log" id="log">'
       +'<div class="lrow head"><span>时间</span><span>动作</span><span>角色</span><span>账号</span><span>备注</span></div>'
       +'</div>'
-      +'<div style="text-align:center;padding:16px"><button class="btn sm" id="lm">加载更多</button></div>';
+      +'<div style="text-align:center;padding:18px"><button class="btn sm" id="lm">加载更多</button></div>';
       logCursor=null;$('lm').addEventListener('click',function(){loadLog(true)})}
     setStatus('加载中…');
     api('/v1/admin/log?limit=50'+(logCursor?'&before='+logCursor:'')).then(function(r){
@@ -388,7 +414,6 @@ const SCRIPT = String.raw`
     });
   }
 
-  // ---- View routing ----
   function tab(v){
     if(VIEW===v)return;VIEW=v;
     Array.prototype.forEach.call(document.querySelectorAll('.tabs button'),function(b){b.classList.toggle('on',b.dataset.v===v)});

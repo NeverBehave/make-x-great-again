@@ -52,10 +52,10 @@ const Avatar = ({ url, name }: { url?: string; name?: string }) => {
       src={url}
       referrerPolicy="no-referrer"
       alt=""
-      className="h-7 w-7 flex-none rounded-full bg-[#21262d] object-cover"
+      className="h-7 w-7 flex-none rounded-full bg-card-hi object-cover"
     />
   ) : (
-    <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-[#21262d] text-xs font-bold text-fg-3">
+    <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-card-hi text-xs font-bold text-fg-3">
       {mono}
     </span>
   );
@@ -74,18 +74,18 @@ function Btn({
 }) {
   const tone =
     tier === "primary"
-      ? "bg-fg text-bg border-transparent hover:bg-white shadow-[0_0_0_1px_rgba(56,189,248,0.5),0_4px_14px_-8px_rgba(56,189,248,0.4)]"
+      ? "bg-fg text-bg border-fg hover:bg-white hover:border-white font-semibold"
       : tier === "danger"
-        ? "border-danger/35 bg-danger-soft text-[#fca5a5] hover:bg-danger/20 hover:border-danger/55"
+        ? "border-danger/35 bg-transparent text-[#fca5a5] hover:bg-danger-soft hover:border-danger/50"
         : tier === "ghost"
-          ? "border-transparent bg-transparent text-fg-2 hover:bg-card hover:text-fg"
-          : "border-border-2 bg-card text-fg hover:bg-card-hi hover:border-[rgb(255_255_255/0.22)]";
-  const px = size === "sm" ? "px-2.5 py-1 text-[12px]" : "px-3 py-1.5 text-[13px]";
+          ? "border-transparent bg-transparent text-fg-2 hover:bg-card-hi hover:text-fg"
+          : "border-border-2 bg-transparent text-fg hover:bg-card-hi hover:border-[rgb(255_255_255/0.22)]";
+  const px = size === "sm" ? "px-2.5 py-1 text-[12px] rounded-sm" : "px-3 py-1.5 text-[13px] rounded-md";
   return (
     <button
       type="button"
       {...rest}
-      className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-md border font-medium leading-none transition-[background,border-color,transform,color] active:translate-y-px ${px} ${tone} ${className}`}
+      className={`inline-flex cursor-pointer items-center justify-center gap-1.5 border font-medium leading-none transition-[background,border-color,transform,color] active:translate-y-px ${px} ${tone} ${className}`}
     >
       {children}
     </button>
@@ -97,23 +97,22 @@ const Page = ({
   sub,
   children,
 }: { title: string; sub?: string; children?: React.ReactNode }) => (
-  <main className="max-w-[1100px] flex-1 px-8 py-7">
-    <h1 className="text-[22px] font-bold tracking-[-0.01em]">{title}</h1>
-    {sub && <div className="mb-6 mt-1 text-[13px] text-fg-3">{sub}</div>}
+  <main className="max-w-[1100px] flex-1 px-9 py-8">
+    <h1 className="text-[26px] font-semibold tracking-[-0.015em] text-fg">{title}</h1>
+    {sub && <div className="mb-7 mt-1.5 text-[13px] text-fg-3">{sub}</div>}
     {children}
   </main>
 );
 
 const SectionH = ({ children }: { children: React.ReactNode }) => (
-  <h2 className="mb-3 mt-1 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-fg-3">
-    <span>{children}</span>
-    <span aria-hidden className="h-px flex-1 bg-border" />
+  <h2 className="mb-4 mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-fg-3">
+    {children}
   </h2>
 );
 
 const td = "border-b border-border px-3 py-2.5 align-middle whitespace-nowrap";
-const th = `${td} text-[11px] font-semibold uppercase tracking-[0.05em] text-fg-3`;
-const trHover = "transition hover:bg-card";
+const th = `${td} text-[10.5px] font-semibold uppercase tracking-[0.06em] text-fg-3`;
+const trHover = "transition hover:bg-card-hi";
 
 function Overview() {
   const [s, setS] = useState<Awaited<ReturnType<typeof getStats>> | null>(null);
@@ -134,40 +133,28 @@ function Overview() {
         title={`${k} · ${d[k]}`}
       />
     ) : null;
-  const Card = ({ n, l, hero = false }: { n: number; l: string; hero?: boolean }) => (
-    <div
-      className={`relative overflow-hidden rounded-xl border border-border bg-card p-4 ${
-        hero
-          ? "bg-[linear-gradient(180deg,rgb(56_189_248/0.06),transparent)] before:absolute before:left-4 before:right-4 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,var(--color-accent),transparent)] before:content-['']"
-          : ""
-      }`}
-    >
-      <div
-        className={`font-variant-numeric:tabular-nums font-bold leading-[1.05] tracking-[-0.02em] ${
-          hero
-            ? "bg-[linear-gradient(180deg,#fff,#a3a8b3)] bg-clip-text text-[36px] text-transparent"
-            : "text-[24px]"
-        }`}
-      >
+  const Card = ({ n, l }: { n: number; l: string }) => (
+    <div className="bg-bg p-5">
+      <div className="font-mono text-[28px] font-semibold tabular-nums leading-[1.05] tracking-[-0.02em] text-fg">
         {n.toLocaleString("zh-CN")}
       </div>
-      <div className="mt-1.5 text-[12px] text-fg-3">{l}</div>
+      <div className="mt-2 text-[12px] text-fg-3">{l}</div>
     </div>
   );
   return (
     <Page title="概览" sub="本地统计 · 数据仅存于本机，无 PII">
-      <div className="mb-7 grid grid-cols-4 gap-3.5">
-        <Card hero n={s.detections} l="AI 检测总数" />
+      <div className="mb-8 grid grid-cols-4 gap-px overflow-hidden rounded-lg border border-border bg-border">
+        <Card n={s.detections} l="AI 检测总数" />
         <Card n={s.cacheHits} l="缓存命中 · 省下的 LLM 调用" />
         <Card n={bl} l="已拉黑账号" />
         <Card n={(d.spam ?? 0) + (d.porn_bot ?? 0)} l="判定为垃圾/色情bot" />
       </div>
       <SectionH>检测类别分布</SectionH>
-      <div className="my-2 flex h-2.5 overflow-hidden rounded-full bg-card">
+      <div className="my-2 flex h-1.5 overflow-hidden rounded-full bg-card">
         {seg("porn_bot", "#a855f7")}
         {seg("spam", "#ef4444")}
         {seg("likely_spam", "#f59e0b")}
-        {seg("uncertain", "#8b949e")}
+        {seg("uncertain", "#71717a")}
         {seg("legit", "#10b981")}
       </div>
       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-[12px] text-fg-3">
@@ -218,11 +205,11 @@ function Blocklist() {
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="搜索 @handle / 显示名 / 理由"
-        className="mb-4 w-[320px] rounded-lg border border-border-2 bg-card px-3 py-2 text-[13px] outline-none transition focus:border-accent"
+        className="mb-4 w-[320px] rounded-md border border-border-2 bg-transparent px-3 py-2 text-[13px] outline-none transition focus:border-accent"
       />
-      <div className="overflow-hidden rounded-xl border border-border bg-card/40">
+      <div className="overflow-hidden rounded-lg border border-border">
         <table className="w-full border-collapse text-[13px]">
-          <thead>
+          <thead className="bg-card">
             <tr>
               <th className={th}>账号</th>
               <th className={th}>判定</th>
@@ -239,7 +226,7 @@ function Blocklist() {
                   <div className="flex min-w-0 items-center gap-2.5">
                     <Avatar url={r.avatarUrl} name={r.displayName || r.handle} />
                     <div className="min-w-0">
-                      <div className="max-w-[220px] truncate font-semibold">
+                      <div className="max-w-[220px] truncate font-semibold tracking-[-0.005em]">
                         {r.displayName || `@${r.handle}`}
                       </div>
                       <div className="max-w-[220px] truncate text-[12px] text-fg-3">
@@ -256,7 +243,7 @@ function Blocklist() {
                   {r.reason || ""}
                 </td>
                 <td className={`${td} text-fg-3`}>{src[r.source]}</td>
-                <td className={`${td} text-fg-3`}>{when(r.ts)}</td>
+                <td className={`${td} font-mono text-[12px] text-fg-3`}>{when(r.ts)}</td>
                 <td className={td}>
                   <Btn
                     size="sm"
@@ -286,9 +273,9 @@ function Cache() {
       title="检测缓存"
       sub={`共 ${rows.length} 条 · 同账号再出现直接用缓存，0 次 LLM`}
     >
-      <div className="overflow-hidden rounded-xl border border-border bg-card/40">
+      <div className="overflow-hidden rounded-lg border border-border">
         <table className="w-full border-collapse text-[13px]">
-          <thead>
+          <thead className="bg-card">
             <tr>
               <th className={th}>账号</th>
               <th className={th}>判定</th>
@@ -304,7 +291,7 @@ function Cache() {
                   <div className="flex items-center gap-2.5">
                     <Avatar url={c.avatarUrl} name={c.displayName || c.handle} />
                     <div className="min-w-0">
-                      <div className="max-w-[220px] truncate font-semibold">
+                      <div className="max-w-[220px] truncate font-semibold tracking-[-0.005em]">
                         {c.displayName || `@${c.handle}`}
                       </div>
                       <div className="text-[12px] text-fg-3">@{c.handle}</div>
@@ -317,8 +304,8 @@ function Cache() {
                 <td className={`${td} max-w-[360px] whitespace-normal text-fg-3`}>
                   {c.verdict.reasons[0] ?? ""}
                 </td>
-                <td className={`${td} text-fg-3`}>{c.model}</td>
-                <td className={`${td} text-fg-3`}>{when(c.ts)}</td>
+                <td className={`${td} font-mono text-[12px] text-fg-3`}>{c.model}</td>
+                <td className={`${td} font-mono text-[12px] text-fg-3`}>{when(c.ts)}</td>
               </tr>
             ))}
           </tbody>
@@ -343,17 +330,17 @@ function Toggle({
         aria-checked={on}
         onClick={() => onChange(!on)}
         className={`mt-0.5 h-5 w-9 flex-none rounded-full transition ${
-          on ? "bg-accent" : "bg-[rgb(255_255_255/0.15)]"
+          on ? "bg-fg" : "bg-[rgb(255_255_255/0.12)]"
         }`}
       >
         <span
-          className={`block h-4 w-4 rounded-full bg-white transition ${
-            on ? "translate-x-4" : "translate-x-0.5"
+          className={`block h-4 w-4 rounded-full transition ${
+            on ? "translate-x-4 bg-bg" : "translate-x-0.5 bg-white"
           }`}
         />
       </button>
       <span>
-        <span className="font-medium">{label}</span>
+        <span className="font-medium text-fg">{label}</span>
         {hint && <span className="block text-[12px] text-fg-3">{hint}</span>}
       </span>
     </label>
@@ -402,7 +389,7 @@ function Settings() {
   }
   return (
     <Page title="设置" sub="登录与配置仅存于本机">
-      <div className="max-w-[680px] space-y-8">
+      <div className="max-w-[680px] space-y-9">
         <section>
           <SectionH>GitHub 登录</SectionH>
           <p className="mb-3 text-[13px] text-fg-2">
@@ -414,7 +401,7 @@ function Settings() {
                 <i className="block h-1.5 w-1.5 rounded-full bg-ok" />
                 已登录
               </span>
-              <code className="rounded bg-card-hi px-2 py-0.5 font-mono text-[12px] text-accent">
+              <code className="rounded-sm bg-card-hi px-2 py-0.5 font-mono text-[12px] text-fg">
                 @{login}
               </code>
               <Btn
@@ -466,14 +453,14 @@ function Settings() {
           <section>
             <SectionH>高级 · 服务端地址</SectionH>
             <p className="mb-2 text-[12px] text-fg-3">
-              留空 = 默认线上 <code className="font-mono">{EDGE_DEFAULT}</code>
+              留空 = 默认线上 <code className="font-mono text-fg">{EDGE_DEFAULT}</code>
             </p>
             <div className="flex gap-2">
               <input
                 value={st.edgeBase}
                 onChange={(e) => setSt({ ...st, edgeBase: e.target.value })}
                 placeholder={EDGE_DEFAULT}
-                className="w-[340px] rounded-lg border border-border-2 bg-card px-3 py-1.5 text-[12px] outline-none transition focus:border-accent"
+                className="w-[340px] rounded-md border border-border-2 bg-transparent px-3 py-1.5 text-[12px] font-mono outline-none transition focus:border-accent"
               />
               <Btn tier="primary" size="sm" onClick={() => save("edgeBase", st.edgeBase.trim())}>
                 保存
@@ -513,40 +500,40 @@ const About = () => (
       <p>
         基于 AI 的 X(Twitter) 反垃圾 / 色情机器人扩展。被动检测、本地优先、中心服务（Cloudflare）协同；用户一键拉黑即视为人工确认信号之一。
       </p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card p-4">
+      <div className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">
+        <div className="bg-bg p-4">
           <div className="text-[11px] uppercase tracking-[0.15em] text-fg-3">许可证</div>
-          <code className="mt-1 inline-block font-mono text-[13px] text-fg">AGPL-3.0</code>
+          <code className="mt-1 inline-block font-mono text-[13px] text-fg">{BRAND.license}</code>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="bg-bg p-4">
           <div className="text-[11px] uppercase tracking-[0.15em] text-fg-3">仓库</div>
           <a
             href={REPO}
             target="_blank"
             rel="noopener"
-            className="mt-1 inline-block text-[13px] text-accent hover:underline"
+            className="mt-1 inline-block text-[13px] text-fg hover:text-accent"
           >
             github.com/{BRAND.owner}/x-spam-sentinel ↗
           </a>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="bg-bg p-4">
           <div className="text-[11px] uppercase tracking-[0.15em] text-fg-3">公榜</div>
           <a
             href={`${EDGE_DEFAULT}/list`}
             target="_blank"
             rel="noopener"
-            className="mt-1 inline-block text-[13px] text-accent hover:underline"
+            className="mt-1 inline-block text-[13px] text-fg hover:text-accent"
           >
             最近 100 条已确认 ↗
           </a>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="bg-bg p-4">
           <div className="text-[11px] uppercase tracking-[0.15em] text-fg-3">治理</div>
           <a
-            href={`${REPO}/blob/main/docs/GOVERNANCE.md`}
+            href={BRAND.governance}
             target="_blank"
             rel="noopener"
-            className="mt-1 inline-block text-[13px] text-accent hover:underline"
+            className="mt-1 inline-block text-[13px] text-fg hover:text-accent"
           >
             申诉与移除机制 ↗
           </a>
@@ -589,9 +576,9 @@ export function App() {
   const Active = TABS.find((t) => t[0] === tab)?.[2] ?? Overview;
   return (
     <div className="flex min-h-screen">
-      <aside className="sticky top-0 flex h-screen w-[220px] flex-none flex-col gap-5 border-r border-border bg-card/40 px-4 py-5 backdrop-blur">
-        <div className="flex items-center gap-2 px-1 text-[15px] font-semibold tracking-[0.01em]">
-          <span className="text-accent">
+      <aside className="sticky top-0 flex h-screen w-[220px] flex-none flex-col gap-6 border-r border-border px-4 py-6">
+        <div className="flex items-center gap-2.5 px-1 text-[15px] font-semibold tracking-[-0.005em]">
+          <span className="text-fg">
             <Shield />
           </span>
           x-spam-sentinel
@@ -602,9 +589,9 @@ export function App() {
               key={id}
               type="button"
               onClick={() => setTab(id)}
-              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] transition ${
+              className={`flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-left text-[13px] transition ${
                 tab === id
-                  ? "bg-accent-soft text-accent shadow-[inset_2px_0_0_var(--color-accent)]"
+                  ? "bg-card-hi text-fg"
                   : "text-fg-3 hover:bg-card hover:text-fg"
               }`}
             >
@@ -617,7 +604,7 @@ export function App() {
             href={`${EDGE_DEFAULT}/list`}
             target="_blank"
             rel="noopener"
-            className="block text-accent hover:underline"
+            className="block text-fg-2 hover:text-fg"
           >
             看公榜 ↗
           </a>
@@ -625,11 +612,11 @@ export function App() {
             href={REPO}
             target="_blank"
             rel="noopener"
-            className="block text-fg-3 hover:text-fg"
+            className="block text-fg-2 hover:text-fg"
           >
             GitHub ↗
           </a>
-          <div className="pt-1.5">v{chrome.runtime.getManifest().version}</div>
+          <div className="pt-2 font-mono text-fg-4">v{chrome.runtime.getManifest().version}</div>
         </div>
       </aside>
       <Active />
