@@ -262,10 +262,35 @@ export function heuristic(s: Signals): Heuristic {
   let score = 0;
   const why: string[] = [];
   const blob = `${s.displayName} ${s.bio} ${s.recentTweets.join(" ")}`;
+
+  // Redirect-bait structural pattern, scored first so its outcome can gate
+  // the age-discount below. A short CJK reply whose payload is really just
+  // an @-mention to a dispatcher account (e.g. "x2,比她好看的没她骚q比她骚的
+  // 没她好看 @Xinxinxiaogou04 🍄🌳" or ")推特 @dadi2412 第一骚+yo"). Either
+  // an emoji garnish OR a single-character innuendo (骚/涩/约/sao) qualifies.
+  // Scoped to recentTweets (the current reply only) so legit profile bios
+  // with @-mentions aren't penalized.
+  const t = s.recentTweets[0] ?? "";
+  const INNUENDO_RE = /[骚涩约]|sao/i;
+  const shapeMatch =
+    !!t &&
+    t.length < 80 &&
+    HAS_CJK_RE.test(t) &&
+    HAS_MENTION_RE.test(t) &&
+    (EMOJI_RE.test(t) || INNUENDO_RE.test(t));
+  if (shapeMatch) {
+    score += 0.4;
+    why.push("导流模板：短中文回复 + @mention + (emoji|性暗示)");
+  }
+
   if (s.hasDefaultAvatar) {
     score += 0.35;
     why.push("默认头像");
   }
+  // Account age is a SOFT prior, not a veto. When the structural redirect-
+  // bait shape has already fired (above), the bait IS the spam — registration
+  // date is irrelevant; hijacked / aged-up bot accounts are common. So we
+  // only apply the old-account discount in the absence of shapeMatch.
   if (typeof s.accountAgeDays === "number") {
     if (s.accountAgeDays < 30) {
       score += 0.4;
@@ -273,7 +298,7 @@ export function heuristic(s: Signals): Heuristic {
     } else if (s.accountAgeDays < 90) {
       score += 0.25;
       why.push("较新账号(<90天)");
-    } else if (s.accountAgeDays > 730) {
+    } else if (s.accountAgeDays > 730 && !shapeMatch) {
       score -= 0.25;
       why.push("老账号(>2年)");
     }
@@ -293,26 +318,6 @@ export function heuristic(s: Signals): Heuristic {
   if (RANDOM_HANDLE_RE.test(s.handle)) {
     score += 0.15;
     why.push("机器生成式 handle");
-  }
-  // Redirect-bait structural pattern: a short CJK reply whose payload is
-  // really just an @-mention to a dispatcher account. Catches the new
-  // dominant Chinese porn-bot template (e.g. "x2,比她好看的没她骚q比她骚的
-  // 没她好看 @Xinxinxiaogou04 🍄🌳" or ")推特 @dadi2412 第一骚+yo") that
-  // earlier word lists miss entirely. Either an emoji garnish OR a
-  // single-character innuendo (骚/涩/色/约/sao) qualifies. Scoped to
-  // recentTweets (the current reply only) so legit profile bios with
-  // @-mentions aren't penalized.
-  const t = s.recentTweets[0] ?? "";
-  const INNUENDO_RE = /[骚涩约]|sao/i;
-  if (
-    t &&
-    t.length < 80 &&
-    HAS_CJK_RE.test(t) &&
-    HAS_MENTION_RE.test(t) &&
-    (EMOJI_RE.test(t) || INNUENDO_RE.test(t))
-  ) {
-    score += 0.35;
-    why.push("导流模板：短中文回复 + @mention + (emoji|性暗示)");
   }
   return { score: Math.max(0, Math.min(1, score)), why };
 }

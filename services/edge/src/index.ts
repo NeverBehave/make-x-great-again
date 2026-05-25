@@ -106,15 +106,16 @@ type Verdict = z.infer<typeof Verdict>;
 
 const SYSTEM = `You classify X (Twitter) accounts ONLY for spam / porn-advertising-bot abuse.
 - Judge ONLY commercial spam and pornographic-advertising bot behavior; NEVER viewpoints/politics/identity.
-- Weight account age heavily: brand-new (<30d) + default avatar + near-zero followers + promo/escort/link wording => almost certainly a bot (may be high-confidence even without an explicit lewd post).
-- An OLD established account (age>730d, real followers) leans legit unless blatant.
+- Weight account age as a SOFT prior, NOT a veto. New accounts (<30d) with promo / escort wording → very likely bot. Old accounts (>730d) lean legit ONLY when the actual content is benign. Hijacked, bought, and aged-up accounts are common — judge the content first, registration date second.
+- CONTENT-OVER-AGE OVERRIDE: if the triggering comment matches the linkless-redirect-bait pattern below, account age is IRRELEVANT. A 10-year-old hijacked account posting redirect bait is still spam. Do not let "OLD established account" outvote a blatant template.
 - If threadTopic is given and the reply is off-topic AND promotional/sexual/link-spam, that mismatch is a strong spam signal.
 - LINKLESS REDIRECT BAIT (very common, do NOT rate this "uncertain"): a short
   reply that is sexual innuendo or solicitation ("她好涩", "我不行了", "约",
-  "看主页", "主页能打", "sao货", "线下") PLUS an @mention redirecting to
-  another account, often padded with garbled filler chars (a[ pz l' ~t !+ qw),
+  "看主页", "主页能打", "sao货", "线下", "比她好看", "没她骚", "第一骚",
+  "刷了半天", "涩货") PLUS an @mention redirecting to another account,
+  often padded with garbled filler chars (a[ pz l' ~t !+ qw fg* u[v ]!] =t),
   and unrelated to the thread topic, is a porn/spam amplifier bot even with NO
-  link and NO platform name → label porn_bot or spam, confidence >= 0.8.
+  link and NO platform name → label porn_bot or spam, confidence >= 0.85.
   Repetition of the same template or same @target across replies corroborates.
 - When genuinely unsure prefer "uncertain" over a false accusation — but the
   linkless-redirect-bait pattern above is NOT "unsure", it is spam.
@@ -361,9 +362,16 @@ async function submitReport(c: Ctx, source: string) {
     vConf = cl.confidence;
   }
 
+  // 2026-05-25 — auto-publish path disabled while the project is still alpha.
+  // The original gate (`aiSpam && reporters >= AUTO_REPORTERS`) was a valid
+  // design, but at this scale a coordinated brigade of 3 GH accounts could
+  // push a target onto the public board before a maintainer notices. Every
+  // report now queues for manual confirmation; AUTO_CONF / AUTO_REPORTERS are
+  // kept as constants so the path can be re-enabled in one line later.
   const aiSpam = (vLabel === "spam" || vLabel === "porn_bot") && vConf >= AUTO_CONF;
-  const auto = aiSpam && reporters >= AUTO_REPORTERS;
-  const status = auto ? "human_confirmed" : "auto_pending_review";
+  const wouldAutoIfEnabled = aiSpam && reporters >= AUTO_REPORTERS;
+  const auto = false; // manual-confirmation-only for now
+  const status = "auto_pending_review";
 
   await c.env.DB.prepare(
     `INSERT INTO accounts (x_user_id,handle,display_name,avatar_url,verdict_label,confidence,reasons,status,source,first_seen,last_scored,published_at)
@@ -401,9 +409,11 @@ async function submitReport(c: Ctx, source: string) {
     .bind(
       uid,
       s.handle,
-      auto ? "auto_confirm" : "report_queued",
+      "report_queued",
       who.id,
-      `${source} r=${reporters} age=${who.ageDays}d`,
+      `${source} r=${reporters} age=${who.ageDays}d${
+        wouldAutoIfEnabled ? " · would auto-publish if enabled" : ""
+      }`,
       now,
     )
     .run();
