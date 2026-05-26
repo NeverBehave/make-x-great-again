@@ -1,8 +1,2090 @@
 {
   "schema": 1,
-  "generatedAt": 1779732033856,
-  "count": 1282,
+  "generatedAt": 1779753633803,
+  "count": 1434,
   "list": [
+    {
+      "handle": "kelloggcyn28717",
+      "x_user_id": "2058581551609511936",
+      "verdict_label": "uncertain",
+      "confidence": 0.35,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779750286675
+    },
+    {
+      "handle": "audream36839",
+      "x_user_id": "2058883731113615360",
+      "verdict_label": "uncertain",
+      "confidence": 0.45,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "t     \n                        \n                               75\n                                                         \nD",
+      "reporters": 1,
+      "published_at": 1779750282846
+    },
+    {
+      "handle": "lzp66998",
+      "x_user_id": null,
+      "verdict_label": "likely_spam",
+      "confidence": 0.66,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "gooooooo lfg\n\n$tip\n\n\n@tipcoineth",
+      "reporters": 1,
+      "published_at": 1779750280343
+    },
+    {
+      "handle": "cgxmovn74395",
+      "x_user_id": null,
+      "verdict_label": "uncertain",
+      "confidence": 0.55,
+      "reasons": [
+        "generic off-topic reply",
+        "default avatar and empty bio",
+        "random-looking handle",
+        "no link or explicit promotion",
+        "no porn/escort redirect pattern"
+      ],
+      "evidence_text": "Success comes to those who are willing to work for it.",
+      "reporters": 0,
+      "published_at": 1779750254988
+    },
+    {
+      "handle": "nbavrfj71731",
+      "x_user_id": null,
+      "verdict_label": "uncertain",
+      "confidence": 0.55,
+      "reasons": [
+        "generic off-topic platitude",
+        "default avatar and random-looking handle",
+        "no bio and minimal activity",
+        "no link, porn, or clear commercial promotion"
+      ],
+      "evidence_text": "You have the courage to be yourself and stand out from the crowd.",
+      "reporters": 0,
+      "published_at": 1779750251260
+    },
+    {
+      "handle": "vfpsad68921",
+      "x_user_id": null,
+      "verdict_label": "uncertain",
+      "confidence": 0.55,
+      "reasons": [
+        "off-topic generic inspirational quote",
+        "default avatar and empty bio",
+        "random-looking handle",
+        "no link, sexual solicitation, or clear promotion"
+      ],
+      "evidence_text": "Success is not about how much you have, but who you are.",
+      "reporters": 0,
+      "published_at": 1779750247285
+    },
+    {
+      "handle": "faye913907",
+      "x_user_id": "2058971739191750656",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "͏\n\n\n\n ­⁠",
+      "reporters": 1,
+      "published_at": 1779750236263
+    },
+    {
+      "handle": "zstoy480535",
+      "x_user_id": "2058937529328427008",
+      "verdict_label": "uncertain",
+      "confidence": 0.45,
+      "reasons": [
+        "generic motivational text",
+        "off-topic to thread",
+        "odd filler characters",
+        "no link or promotion",
+        "no sexual advertising"
+      ],
+      "evidence_text": "≤≥≯ Every challenge is an opportunity to learn and grow.",
+      "reporters": 0,
+      "published_at": 1779750187273
+    },
+    {
+      "handle": "kasora0127",
+      "x_user_id": "562550040237838336",
+      "verdict_label": "likely_spam",
+      "confidence": 0.78,
+      "reasons": [
+        "Posts external cloud-drive link",
+        "Promotes 'full version' content",
+        "Likely adult/pirated media context",
+        "Only recent tweet repeats trigger",
+        "Minimal account context"
+      ],
+      "evidence_text": "这个番找到了\n确实不赖啊\n\n\nhttps://\npan.quark.cn/s/dc3e9014a9a9\n\n完整的就这个哈啊",
+      "reporters": 0,
+      "published_at": 1779750166497
+    },
+    {
+      "handle": "kele970428",
+      "x_user_id": "2033559015985487872",
+      "verdict_label": "spam",
+      "confidence": 0.92,
+      "reasons": [
+        "VPN registration/referral link",
+        "promotional pricing pitch",
+        "recent tweet repeats trigger",
+        "commercial link spam"
+      ],
+      "evidence_text": "我这个也还行 一个月十来块钱\nhttps://\nconsole3.xenolink.net/#/register?cod\ne=JT8SVSDX\n…",
+      "reporters": 0,
+      "published_at": 1779750146335
+    },
+    {
+      "handle": "hongjunliu7",
+      "x_user_id": "1647159979194093569",
+      "verdict_label": "spam",
+      "confidence": 0.96,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "用了两年多，运营3年多，个人使用8K秒开，全天稳定。前段时间严打也没受影响，纯净度高，价格实在。多端登录方便，奈飞、迪士尼这些流媒体都能解锁，追剧无压力 \nhttps://\npanel.ykkk.best/#/register?cod\ne=u4KsXAuy\n…",
+      "reporters": 1,
+      "published_at": 1779750137923
+    },
+    {
+      "handle": "qdwceb32098",
+      "x_user_id": "2058877321772257280",
+      "verdict_label": "uncertain",
+      "confidence": 0.35,
+      "reasons": [
+        "no triggering comment or recent tweets to assess",
+        "0 followers and random-looking handle are weak signals",
+        "no promotional or sexual spam content shown"
+      ],
+      "evidence_text": "Happiness is a choice you make every day.",
+      "reporters": 0,
+      "published_at": 1779749895059
+    },
+    {
+      "handle": "ihydcl9019",
+      "x_user_id": "2058530180872740864",
+      "verdict_label": "uncertain",
+      "confidence": 0.45,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "༺ꦿ꙳ꦿ One sincere friend with comfortable chats is better than countless superficial acquaintances around you. ꦿ꙳◈༻",
+      "reporters": 1,
+      "published_at": 1779749850177
+    },
+    {
+      "handle": "llabay75371",
+      "x_user_id": "2058864802001526784",
+      "verdict_label": "uncertain",
+      "confidence": 0.52,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "u     \n                        \n                               59\n                                                         \ny",
+      "reporters": 1,
+      "published_at": 1779749846664
+    },
+    {
+      "handle": "ephwtxb83995",
+      "x_user_id": null,
+      "verdict_label": "uncertain",
+      "confidence": 0.47,
+      "reasons": [
+        "default avatar and random-looking handle",
+        "generic templated inspirational reply",
+        "off-topic to thread",
+        "no link, sexual solicitation, or commercial promotion"
+      ],
+      "evidence_text": "∫∬∭ You are braver than you realize, and you can overcome any challenge.",
+      "reporters": 0,
+      "published_at": 1779749844227
+    },
+    {
+      "handle": "btc_fields",
+      "x_user_id": null,
+      "verdict_label": "uncertain",
+      "confidence": 0.55,
+      "reasons": [
+        "sexual/off-topic comment",
+        "no link or @redirect in triggering comment",
+        "no clear commercial solicitation",
+        "default avatar and sexual display name are weak signals"
+      ],
+      "evidence_text": "群里柰子满天飞你妈推特上这么纯爱！",
+      "reporters": 0,
+      "published_at": 1779749835307
+    },
+    {
+      "handle": "ndefupv11030",
+      "x_user_id": null,
+      "verdict_label": "uncertain",
+      "confidence": 0.55,
+      "reasons": [
+        "generic off-topic motivational reply",
+        "odd filler characters prefix",
+        "default avatar and empty bio",
+        "no link, solicitation, porn, or commercial promo"
+      ],
+      "evidence_text": "∪∩∉ You have the strength to face any obstacle head-on.",
+      "reporters": 0,
+      "published_at": 1779749830843
+    },
+    {
+      "handle": "dnyhl268398",
+      "x_user_id": null,
+      "verdict_label": "uncertain",
+      "confidence": 0.55,
+      "reasons": [
+        "generic off-topic motivational reply",
+        "default avatar and random-looking handle",
+        "no link, porn, solicitation, or commercial promotion",
+        "insufficient evidence of spam/porn-ad bot"
+      ],
+      "evidence_text": "⊗⊕⊖ You have the strength to face any challenge with courage.",
+      "reporters": 0,
+      "published_at": 1779749830202
+    },
+    {
+      "handle": "hcuzdbr32968",
+      "x_user_id": null,
+      "verdict_label": "uncertain",
+      "confidence": 0.55,
+      "reasons": [
+        "generic off-topic motivational reply",
+        "default avatar and random-looking handle",
+        "no porn, solicitation, link, or commercial promo"
+      ],
+      "evidence_text": "∠∟⊥ You don't need to be perfect to be amazing; just be yourself.",
+      "reporters": 0,
+      "published_at": 1779749829591
+    },
+    {
+      "handle": "ajbyxrcv9190",
+      "x_user_id": "2058937542683025408",
+      "verdict_label": "uncertain",
+      "confidence": 0.55,
+      "reasons": [
+        "generic motivational text",
+        "off-topic to thread",
+        "random-looking handle",
+        "empty bio",
+        "no commercial link or porn solicitation"
+      ],
+      "evidence_text": "≡≈≠ You have the strength to face any fear and move forward.",
+      "reporters": 0,
+      "published_at": 1779749828787
+    },
+    {
+      "handle": "bethunezar39844",
+      "x_user_id": "2058940754018660352",
+      "verdict_label": "likely_spam",
+      "confidence": 0.86,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749821542
+    },
+    {
+      "handle": "fks112233",
+      "x_user_id": "2047667760478695424",
+      "verdict_label": "likely_spam",
+      "confidence": 0.78,
+      "reasons": [
+        "sexual solicitation wording",
+        "offline meetup implication",
+        "pornographic context",
+        "minimal account content"
+      ],
+      "evidence_text": "szx那可以来找我玩了！线下比划比划谁大谁粗",
+      "reporters": 0,
+      "published_at": 1779749819691
+    },
+    {
+      "handle": "glindapont89492",
+      "x_user_id": "2058506414260367360",
+      "verdict_label": "likely_spam",
+      "confidence": 0.78,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "ྀི",
+      "reporters": 1,
+      "published_at": 1779749816825
+    },
+    {
+      "handle": "jennoliva9504",
+      "x_user_id": "2058941627113275392",
+      "verdict_label": "likely_spam",
+      "confidence": 0.74,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749810597
+    },
+    {
+      "handle": "helinamich52140",
+      "x_user_id": "2058946686807158785",
+      "verdict_label": "likely_spam",
+      "confidence": 0.72,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749809444
+    },
+    {
+      "handle": "carterjane23288",
+      "x_user_id": "2058941626865909760",
+      "verdict_label": "likely_spam",
+      "confidence": 0.74,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749804207
+    },
+    {
+      "handle": "randerson4017",
+      "x_user_id": "2058941654808293377",
+      "verdict_label": "likely_spam",
+      "confidence": 0.72,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749802884
+    },
+    {
+      "handle": "ninthbit_ai",
+      "x_user_id": null,
+      "verdict_label": "likely_spam",
+      "confidence": 0.72,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "好湿！",
+      "reporters": 1,
+      "published_at": 1779749801044
+    },
+    {
+      "handle": "nbxisgha4721",
+      "x_user_id": null,
+      "verdict_label": "likely_spam",
+      "confidence": 0.66,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "∠∟⊥ Every day is a new opportunity to start over and chase your dreams.",
+      "reporters": 1,
+      "published_at": 1779749795177
+    },
+    {
+      "handle": "carlaneis183022",
+      "x_user_id": "2058941603230916608",
+      "verdict_label": "porn_bot",
+      "confidence": 0.78,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749781288
+    },
+    {
+      "handle": "cynthia1230543",
+      "x_user_id": "2058946558897369088",
+      "verdict_label": "porn_bot",
+      "confidence": 0.82,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "​",
+      "reporters": 1,
+      "published_at": 1779749780478
+    },
+    {
+      "handle": "willie22305304",
+      "x_user_id": "2058886865009168384",
+      "verdict_label": "porn_bot",
+      "confidence": 0.86,
+      "reasons": [
+        "display name uses escort-style wording",
+        "同城上门 suggests local in-person adult service",
+        "empty/invisible reply is off-topic to thread",
+        "profile appears promotional rather than personal"
+      ],
+      "evidence_text": "‌\n\n\n\n ⁠͏",
+      "reporters": 0,
+      "published_at": 1779749778300
+    },
+    {
+      "handle": "christo11046736",
+      "x_user_id": "2058939214612332544",
+      "verdict_label": "porn_bot",
+      "confidence": 0.86,
+      "reasons": [
+        "display name contains escort-style promo wording '同城上门'",
+        "empty/zero-width triggering comment unrelated to thread",
+        "recent tweet is only invisible/blank character",
+        "profile appears set up for sexual service advertising"
+      ],
+      "evidence_text": "‌",
+      "reporters": 0,
+      "published_at": 1779749777514
+    },
+    {
+      "handle": "carl1677444",
+      "x_user_id": "2058926952682045440",
+      "verdict_label": "porn_bot",
+      "confidence": 0.86,
+      "reasons": [
+        "display name contains escort-style wording",
+        "random-looking handle",
+        "blank/invisible-character comment",
+        "off-topic to thread",
+        "minimal empty recent activity"
+      ],
+      "evidence_text": "⁠\n\n‌‌\n ⁠",
+      "reporters": 0,
+      "published_at": 1779749776442
+    },
+    {
+      "handle": "richelle90079",
+      "x_user_id": "2058895905344942080",
+      "verdict_label": "porn_bot",
+      "confidence": 0.86,
+      "reasons": [
+        "display name contains escort-style promo wording",
+        "off-topic blank/zero-width reply",
+        "recent tweet repeats same blank content",
+        "no normal conversational content"
+      ],
+      "evidence_text": "͏‍\n\n\n\n⁠ ‍",
+      "reporters": 0,
+      "published_at": 1779749773482
+    },
+    {
+      "handle": "szopufc4k",
+      "x_user_id": "2058538114147323905",
+      "verdict_label": "porn_bot",
+      "confidence": 0.86,
+      "reasons": [
+        "display name contains 同城上门 escort-style wording",
+        "account branding suggests local sexual service advertising",
+        "empty bio and no recent tweets provide no benign context"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749772871
+    },
+    {
+      "handle": "zhrmmbptbxb",
+      "x_user_id": "2058538131729842176",
+      "verdict_label": "porn_bot",
+      "confidence": 0.86,
+      "reasons": [
+        "display name contains escort-style wording",
+        "commercial sexual service signal",
+        "random-looking handle",
+        "no benign content to offset spam indicators"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749772200
+    },
+    {
+      "handle": "charles83735012",
+      "x_user_id": "2058934099142713344",
+      "verdict_label": "porn_bot",
+      "confidence": 0.86,
+      "reasons": [
+        "display name uses escort-style promo wording",
+        "同城上门 suggests local sex-service advertising",
+        "empty/invisible triggering comment",
+        "empty bio and minimal content",
+        "off-topic relative to thread"
+      ],
+      "evidence_text": "​",
+      "reporters": 0,
+      "published_at": 1779749771559
+    },
+    {
+      "handle": "dianne1029511",
+      "x_user_id": "2058956621796040704",
+      "verdict_label": "porn_bot",
+      "confidence": 0.87,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "⁠\n​\n⁠ ­",
+      "reporters": 1,
+      "published_at": 1779749770924
+    },
+    {
+      "handle": "charles30249588",
+      "x_user_id": "2058933608761442304",
+      "verdict_label": "porn_bot",
+      "confidence": 0.88,
+      "reasons": [
+        "display name uses escort/service wording “同城上门”",
+        "empty bio with no normal account context",
+        "triggering comment is only invisible/blank characters",
+        "recent tweet also blank/invisible content",
+        "off-topic non-substantive engagement consistent with spam bot behavior"
+      ],
+      "evidence_text": "⁠\n\n\n\n­",
+      "reporters": 0,
+      "published_at": 1779749769170
+    },
+    {
+      "handle": "nancy0492744354",
+      "x_user_id": "2058240434837839873",
+      "verdict_label": "porn_bot",
+      "confidence": 0.88,
+      "reasons": [
+        "display name contains escort-style promo wording",
+        "同城免费线下 implies local offline sexual solicitation",
+        "triggering comment is meaningless filler",
+        "reply is unrelated to thread topic",
+        "recent tweet repeats same low-content pattern"
+      ],
+      "evidence_text": "™\n.（",
+      "reporters": 0,
+      "published_at": 1779749768493
+    },
+    {
+      "handle": "garop_evarqoj",
+      "x_user_id": "2058940750944174080",
+      "verdict_label": "porn_bot",
+      "confidence": 0.88,
+      "reasons": [
+        "display name contains escort/hookup wording",
+        "sexual local-service promotion signal",
+        "empty bio with minimal numeric posts",
+        "reply is off-topic and low-effort"
+      ],
+      "evidence_text": "3",
+      "reporters": 0,
+      "published_at": 1779749767869
+    },
+    {
+      "handle": "charles10486795",
+      "x_user_id": "2058933135442681857",
+      "verdict_label": "porn_bot",
+      "confidence": 0.88,
+      "reasons": [
+        "display name advertises local in-person service",
+        "blank/zero-width triggering comment",
+        "same blank post repeated in recent tweets",
+        "off-topic engagement on unrelated food/travel thread",
+        "random-looking handle consistent with promo bot"
+      ],
+      "evidence_text": "͏ ‌⁠",
+      "reporters": 0,
+      "published_at": 1779749767033
+    },
+    {
+      "handle": "candicejoh78328",
+      "x_user_id": null,
+      "verdict_label": "porn_bot",
+      "confidence": 0.88,
+      "reasons": [
+        "display name contains explicit sexual solicitation",
+        "default avatar",
+        "random-looking handle",
+        "no benign content to offset porn-ad signal"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749765782
+    },
+    {
+      "handle": "vut__eqokepay",
+      "x_user_id": "2058940746758299648",
+      "verdict_label": "porn_bot",
+      "confidence": 0.88,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "7",
+      "reporters": 1,
+      "published_at": 1779749763810
+    },
+    {
+      "handle": "charles43752400",
+      "x_user_id": "2058933796423032832",
+      "verdict_label": "porn_bot",
+      "confidence": 0.88,
+      "reasons": [
+        "display name uses escort-style wording 同城上门",
+        "blank/invisible-character reply unrelated to thread",
+        "recent tweet repeats blank/invisible content",
+        "profile appears designed for porn/escort advertising"
+      ],
+      "evidence_text": "͏\n\n\n‍\n ​­",
+      "reporters": 0,
+      "published_at": 1779749763213
+    },
+    {
+      "handle": "be_dmoxozrobp",
+      "x_user_id": "2058943483189329920",
+      "verdict_label": "porn_bot",
+      "confidence": 0.88,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "36\no‍\nH",
+      "reporters": 1,
+      "published_at": 1779749762490
+    },
+    {
+      "handle": "virginia1956564",
+      "x_user_id": "2058872623816146944",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "͏\n ⁠",
+      "reporters": 1,
+      "published_at": 1779749761755
+    },
+    {
+      "handle": "lqng215181",
+      "x_user_id": "1981933327436197888",
+      "verdict_label": "spam",
+      "confidence": 0.9,
+      "reasons": [
+        "commercial VPN/proxy promotion",
+        "contains external promotional link",
+        "reply advertises pricing/service",
+        "only recent tweet repeats same ad",
+        "empty bio with minimal account context"
+      ],
+      "evidence_text": "梯子搭配着他们家的\nhttps://\nfluxisp.com/?kwd=LV-x，ip用的，才二三十块钱",
+      "reporters": 0,
+      "published_at": 1779749760497
+    },
+    {
+      "handle": "jeanclark684047",
+      "x_user_id": "2055925135786610688",
+      "verdict_label": "spam",
+      "confidence": 0.9,
+      "reasons": [
+        "posts off-topic bait for gossip follow-up",
+        "contains external drive.uc.cn link",
+        "recent tweet repeats same link bait",
+        "minimal account context/bio"
+      ],
+      "evidence_text": "这个瓜后续，来了\n\nhttp://\ndrive.uc.cn/s/bcf4c7de62ac4",
+      "reporters": 0,
+      "published_at": 1779749754374
+    },
+    {
+      "handle": "carolyn1366531",
+      "x_user_id": "2058930986348351488",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "‍\n\n\n\n ­",
+      "reporters": 1,
+      "published_at": 1779749752994
+    },
+    {
+      "handle": "carlyn940281",
+      "x_user_id": "2058927197050507264",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name advertises 同城上门 service",
+        "empty/invisible triggering comment",
+        "recent tweet is also invisible filler",
+        "off-topic suspicious activity"
+      ],
+      "evidence_text": "͏\n⁠\n͏",
+      "reporters": 0,
+      "published_at": 1779749752237
+    },
+    {
+      "handle": "coy070080646014",
+      "x_user_id": "2058941580237504512",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name uses 同城上门 escort-style wording",
+        "commercial sexual service advertising signal",
+        "empty/blank post content suggests low-quality bot account",
+        "off-topic to thread"
+      ],
+      "evidence_text": "­",
+      "reporters": 0,
+      "published_at": 1779749751557
+    },
+    {
+      "handle": "shannon24380539",
+      "x_user_id": "2058378787218481152",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name contains same-city/offline sexual service wording",
+        "off-topic low-effort triggering comment",
+        "empty bio with minimal repetitive content",
+        "profile appears configured for porn/escort advertising"
+      ],
+      "evidence_text": "ྀི",
+      "reporters": 0,
+      "published_at": 1779749750718
+    },
+    {
+      "handle": "alice195433",
+      "x_user_id": "2058902881416167424",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "⁠\n‍",
+      "reporters": 1,
+      "published_at": 1779749749916
+    },
+    {
+      "handle": "glenn1650303",
+      "x_user_id": "2058925444573913089",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749749210
+    },
+    {
+      "handle": "harlan81217",
+      "x_user_id": "2058932131867365377",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749748531
+    },
+    {
+      "handle": "andrew453241",
+      "x_user_id": "2058908670201622528",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "­⁠‍ ­",
+      "reporters": 1,
+      "published_at": 1779749747814
+    },
+    {
+      "handle": "bruce9222089544",
+      "x_user_id": "2058926026462302208",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "‌​\n\n\n‍͏",
+      "reporters": 1,
+      "published_at": 1779749747178
+    },
+    {
+      "handle": "va_minojijyob",
+      "x_user_id": "2058938346978844673",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name uses escort/dating ad wording",
+        "同城速配 suggests local hookup promotion",
+        "日夜可约 implies sexual/escort availability",
+        "no benign content to offset spam signals"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749746477
+    },
+    {
+      "handle": "alicekit214242",
+      "x_user_id": "2058940754110955521",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "displayName contains escort/meetup wording",
+        "sexual solicitation context",
+        "no benign content provided",
+        "profile appears promotional"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749745800
+    },
+    {
+      "handle": "bakami_cninis",
+      "x_user_id": "2058940685278158848",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "‍‍",
+      "reporters": 1,
+      "published_at": 1779749745158
+    },
+    {
+      "handle": "connor_she53531",
+      "x_user_id": null,
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name contains explicit hookup/escort wording",
+        "commercial sexual solicitation signal",
+        "default avatar",
+        "no benign content present"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749744422
+    },
+    {
+      "handle": "_duvemofsubhe",
+      "x_user_id": "2058940685357838336",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749743823
+    },
+    {
+      "handle": "sirmebpo_pahk",
+      "x_user_id": "2058940685370425344",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749743039
+    },
+    {
+      "handle": "dane2089290",
+      "x_user_id": "2058947208448258048",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name uses escort-style wording '同城上门'",
+        "empty/blank triggering comment",
+        "recent tweet is only invisible/blank character",
+        "no benign content to offset promo signal"
+      ],
+      "evidence_text": "‌",
+      "reporters": 0,
+      "published_at": 1779749742291
+    },
+    {
+      "handle": "christo26278381",
+      "x_user_id": "2058939378873860096",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name contains escort-style promo wording: 同城上门",
+        "triggering comment is empty/invisible-character spam",
+        "reply is unrelated to thread topic",
+        "recent tweet repeats the same blank/invisible content",
+        "account appears used for low-effort promotional abuse"
+      ],
+      "evidence_text": "⁠\n\n‌",
+      "reporters": 0,
+      "published_at": 1779749741620
+    },
+    {
+      "handle": "_tedidqucukiy",
+      "x_user_id": "2058943483122180096",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "9",
+      "reporters": 1,
+      "published_at": 1779749740849
+    },
+    {
+      "handle": "yo_hatofuqv_u",
+      "x_user_id": "2058943532635992064",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "8",
+      "reporters": 1,
+      "published_at": 1779749740149
+    },
+    {
+      "handle": "ramo38867",
+      "x_user_id": "2058940746464702464",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749739263
+    },
+    {
+      "handle": "pandorarog31874",
+      "x_user_id": "2058946686257704961",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749738044
+    },
+    {
+      "handle": "btnomlxua",
+      "x_user_id": "2058538164885889025",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name contains 同城上门 local escort-style wording",
+        "random-looking handle",
+        "empty bio with no benign content",
+        "porn/sex advertising profile signal"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749737325
+    },
+    {
+      "handle": "xlzqsxnhgw",
+      "x_user_id": "2058538142467330048",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name uses escort-style wording '同城上门'",
+        "random-looking handle typical of spam accounts",
+        "account has no benign content to offset promotional sexual signal",
+        "context is pornographic promotion thread"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749736600
+    },
+    {
+      "handle": "fizqcvvuibc",
+      "x_user_id": "2058538074284638208",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name contains escort-style promo wording: 同城上门",
+        "random-looking handle",
+        "no benign content available",
+        "porn/sex-service advertising signal"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749736012
+    },
+    {
+      "handle": "rmommvunet",
+      "x_user_id": "2058537979661156352",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name contains 同城上门 escort-service wording",
+        "sexual/commercial solicitation signal",
+        "no benign content provided",
+        "profile appears oriented to porn advertising"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749735312
+    },
+    {
+      "handle": "honhtgsc0q",
+      "x_user_id": "2058537947507687424",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name contains escort-style wording",
+        "同城上门 indicates local sexual service advertising",
+        "random-looking handle",
+        "no benign content to offset promo signal"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749734595
+    },
+    {
+      "handle": "vqlvcyaz94",
+      "x_user_id": "2058537714048524288",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name advertises 同城上门 escort-style service",
+        "random-looking handle",
+        "pornographic-advertising context",
+        "no benign account content provided"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749733913
+    },
+    {
+      "handle": "tammy174957",
+      "x_user_id": "2058825496612257792",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name uses 同城上门 escort-style wording",
+        "triggering comment is blank/zero-width filler",
+        "recent tweet repeats blank filler",
+        "off-topic to hardware/software thread",
+        "profile appears promotional/sexual"
+      ],
+      "evidence_text": "​\n\n\n\n​ ‍",
+      "reporters": 0,
+      "published_at": 1779749733217
+    },
+    {
+      "handle": "benjamin1521766",
+      "x_user_id": "2058917347247681536",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "display name uses escort-style wording '同城上门'",
+        "no meaningful bio or content",
+        "blank/off-topic triggering reply",
+        "likely promotional sex-service account"
+      ],
+      "evidence_text": "⁠\n⁠\n\n\n ‍",
+      "reporters": 0,
+      "published_at": 1779749732509
+    },
+    {
+      "handle": "courtne0527945",
+      "x_user_id": "2058941470510399488",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "⁠\n\n\n\n͏ ­",
+      "reporters": 1,
+      "published_at": 1779749731652
+    },
+    {
+      "handle": "london_mar47115",
+      "x_user_id": null,
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749730900
+    },
+    {
+      "handle": "ta_zsarot_inv",
+      "x_user_id": null,
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749730215
+    },
+    {
+      "handle": "hector1614954",
+      "x_user_id": null,
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749729567
+    },
+    {
+      "handle": "ervin256689",
+      "x_user_id": "2058970456506482688",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "͏",
+      "reporters": 1,
+      "published_at": 1779749728737
+    },
+    {
+      "handle": "helen249431",
+      "x_user_id": "2058938396609781760",
+      "verdict_label": "porn_bot",
+      "confidence": 0.92,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749727937
+    },
+    {
+      "handle": "emmett561908",
+      "x_user_id": "2058900716635205632",
+      "verdict_label": "porn_bot",
+      "confidence": 0.92,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749727288
+    },
+    {
+      "handle": "elizabe63033109",
+      "x_user_id": "2058893105785380864",
+      "verdict_label": "porn_bot",
+      "confidence": 0.92,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749726609
+    },
+    {
+      "handle": "thomas497823120",
+      "x_user_id": "2058835787131543552",
+      "verdict_label": "porn_bot",
+      "confidence": 0.92,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "­\n\n‍\n\n ‍",
+      "reporters": 1,
+      "published_at": 1779749725462
+    },
+    {
+      "handle": "cassand53450941",
+      "x_user_id": "2058931394974306304",
+      "verdict_label": "porn_bot",
+      "confidence": 0.92,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "​­͏ ͏",
+      "reporters": 1,
+      "published_at": 1779749724521
+    },
+    {
+      "handle": "believer61120",
+      "x_user_id": "2058940685173329920",
+      "verdict_label": "porn_bot",
+      "confidence": 0.92,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "3",
+      "reporters": 1,
+      "published_at": 1779749723598
+    },
+    {
+      "handle": "bellemodes40570",
+      "x_user_id": null,
+      "verdict_label": "porn_bot",
+      "confidence": 0.92,
+      "reasons": [
+        "display name advertises free hookups",
+        "sexual/escort-style wording",
+        "default avatar",
+        "no benign content to offset promo signals"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749722921
+    },
+    {
+      "handle": "henry9034735674",
+      "x_user_id": null,
+      "verdict_label": "porn_bot",
+      "confidence": 0.92,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749722209
+    },
+    {
+      "handle": "onrcyrr",
+      "x_user_id": "1834050210147827712",
+      "verdict_label": "porn_bot",
+      "confidence": 0.93,
+      "reasons": [
+        "sexual solicitation/innuendo phrase",
+        "redirects users to another @account",
+        "off-topic to thread",
+        "matches linkless porn-spam bait template",
+        "recent tweet repeats same promo pattern"
+      ],
+      "evidence_text": "推特𝑐第一骚\n@23_oguzhand\n `",
+      "reporters": 0,
+      "published_at": 1779749721509
+    },
+    {
+      "handle": "gary89705127160",
+      "x_user_id": "2058918845780262912",
+      "verdict_label": "porn_bot",
+      "confidence": 0.93,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749720888
+    },
+    {
+      "handle": "mazb__usickab",
+      "x_user_id": "2058940685701832704",
+      "verdict_label": "porn_bot",
+      "confidence": 0.93,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "8",
+      "reporters": 1,
+      "published_at": 1779749720229
+    },
+    {
+      "handle": "lenalindsa73900",
+      "x_user_id": null,
+      "verdict_label": "porn_bot",
+      "confidence": 0.93,
+      "reasons": [
+        "Display name is explicit sexual/porn-advertising wording",
+        "Random-looking handle",
+        "Default avatar",
+        "No benign content to offset spam signals"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749719533
+    },
+    {
+      "handle": "masoudnina741",
+      "x_user_id": "2058943483206057984",
+      "verdict_label": "porn_bot",
+      "confidence": 0.93,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "9",
+      "reporters": 1,
+      "published_at": 1779749718726
+    },
+    {
+      "handle": "joshuarita59620",
+      "x_user_id": "2058940795185664000",
+      "verdict_label": "porn_bot",
+      "confidence": 0.94,
+      "reasons": [
+        "display name advertises offline sexual resources",
+        "prompts users to click avatar/join group",
+        "account content is essentially blank/invisible filler",
+        "matches porn promotion bot pattern"
+      ],
+      "evidence_text": "‌\n\n͏",
+      "reporters": 0,
+      "published_at": 1779749718017
+    },
+    {
+      "handle": "douglassca5017",
+      "x_user_id": "2058940794829152256",
+      "verdict_label": "porn_bot",
+      "confidence": 0.94,
+      "reasons": [
+        "display name advertises real-life hookups/escort access",
+        "commercial sexual solicitation wording",
+        "empty bio and no benign content",
+        "profile appears created for porn/escort promotion"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749717378
+    },
+    {
+      "handle": "chochotaaai",
+      "x_user_id": "1530962704579473409",
+      "verdict_label": "porn_bot",
+      "confidence": 0.94,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "她太涩了m 我真顶不住\n@mengyyw\n 8g",
+      "reporters": 1,
+      "published_at": 1779749716670
+    },
+    {
+      "handle": "xepsegu_pujgu",
+      "x_user_id": "2058943522309636096",
+      "verdict_label": "porn_bot",
+      "confidence": 0.94,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "3",
+      "reporters": 1,
+      "published_at": 1779749716006
+    },
+    {
+      "handle": "akabum04",
+      "x_user_id": null,
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "zs3,比她好看的没她骚s比她骚的没她好看\n@Xxiaodai05",
+      "reporters": 1,
+      "published_at": 1779749715313
+    },
+    {
+      "handle": "eness_kskn",
+      "x_user_id": "1934260311244017664",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "a2,比她好看的没她骚w比她骚的没她好看\n@BLACQKL_1",
+      "reporters": 1,
+      "published_at": 1779749714772
+    },
+    {
+      "handle": "_mio_mondo",
+      "x_user_id": "1839410057068634112",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "linkless sexual redirect bait",
+        "uses phrase 第一骚",
+        "redirects via @mention",
+        "garbled filler characters",
+        "off-topic promotional reply",
+        "repeated same template"
+      ],
+      "evidence_text": "(c推特𝚌]第一骚\n@acrmrve\n =",
+      "reporters": 0,
+      "published_at": 1779749713969
+    },
+    {
+      "handle": "hachatryanirina",
+      "x_user_id": "2056413583777697792",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "sexual solicitation phrase “第一骚”",
+        "redirects users via @mention",
+        "short template-like reply",
+        "off-topic to thread",
+        "matches linkless porn redirect bait pattern"
+      ],
+      "evidence_text": "ff推特𝒅第一骚\n@bbusradumann\n h",
+      "reporters": 1,
+      "published_at": 1779749713220
+    },
+    {
+      "handle": "gs1905fanus",
+      "x_user_id": "2004421185132523520",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "我约过她真实极品 \n@your_zhen1",
+      "reporters": 1,
+      "published_at": 1779749712607
+    },
+    {
+      "handle": "muratnv21653651",
+      "x_user_id": "1258855595572105217",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "Your gaze is a whisper my soul can’t ignore.我约过她真实极品 \n@your_zhen1",
+      "reporters": 1,
+      "published_at": 1779749711789
+    },
+    {
+      "handle": "cetinkaya0707",
+      "x_user_id": "445878849364963329",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "我推特上面认识的炮友\n@Miaomiao_12z",
+      "reporters": 1,
+      "published_at": 1779749711105
+    },
+    {
+      "handle": "se7engs1",
+      "x_user_id": "1520482981177180161",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "linkless redirect bait pattern",
+        "sexual solicitation wording",
+        "mentions another account for redirect",
+        "off-topic to thread",
+        "template-like recent tweet"
+      ],
+      "evidence_text": "推特͎b͎第一骚\n@mslmshn1907\n l",
+      "reporters": 0,
+      "published_at": 1779749710276
+    },
+    {
+      "handle": "sbelgelendirme",
+      "x_user_id": "1904501902311829504",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "sexual solicitation wording",
+        "@mention redirect bait",
+        "off-topic to thread",
+        "garbled filler characters",
+        "repeated same template"
+      ],
+      "evidence_text": "线下我就曰过̴b̴这个骚货\n@mslmshn1907\n f",
+      "reporters": 0,
+      "published_at": 1779749707739
+    },
+    {
+      "handle": "yusufgezgin1",
+      "x_user_id": "592211379924443136",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "linkless sexual redirect bait",
+        "contains @mention to another account",
+        "off-topic to thread",
+        "template repeated in recent tweet"
+      ],
+      "evidence_text": "她好涩我不行了\n@23_oguzhand\n \"",
+      "reporters": 0,
+      "published_at": 1779749706851
+    },
+    {
+      "handle": "mrayleign48267",
+      "x_user_id": "2058940798897623042",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "display name advertises local meetups/resources",
+        "uses '看我简介' profile-redirect promo wording",
+        "escort/porn-adjacent solicitation language",
+        "random-looking handle consistent with bot account"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749706195
+    },
+    {
+      "handle": "janeesther75283",
+      "x_user_id": "2058940792761376768",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "display name advertises profile as local hookup/meetup resources",
+        "explicit sexual/escort-style promotion",
+        "random-looking handle",
+        "no benign recent content to offset spam signals"
+      ],
+      "evidence_text": null,
+      "reporters": 0,
+      "published_at": 1779749705538
+    },
+    {
+      "handle": "sarzu4145",
+      "x_user_id": "1480757049445261313",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "sexual solicitation phrase",
+        "@mention redirect bait",
+        "off-topic to thread",
+        "template-like short reply",
+        "matches known porn spam pattern"
+      ],
+      "evidence_text": "推特q第一骚 \n@Ugur_tas19_03\n e",
+      "reporters": 0,
+      "published_at": 1779749704882
+    },
+    {
+      "handle": "sewhas_oyux_g",
+      "x_user_id": "2058940746456272896",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "6",
+      "reporters": 1,
+      "published_at": 1779749703915
+    },
+    {
+      "handle": "maybayke",
+      "x_user_id": "1697964626481225728",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "比她好看的没她骚a͎比她骚的没她好看 \n@dadi2412\n t",
+      "reporters": 0,
+      "published_at": 1779749703025
+    },
+    {
+      "handle": "jusisuhuwop__",
+      "x_user_id": null,
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749702475
+    },
+    {
+      "handle": "mastercamptr",
+      "x_user_id": "1035503013383815178",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "sexual solicitation wording",
+        "redirects to @mentioned account",
+        "linkless redirect-bait pattern",
+        "off-topic promotional porn spam",
+        "template-like repeated tweet"
+      ],
+      "evidence_text": "线下sao货没人比她sao \n@mslmshn1907\n aia",
+      "reporters": 0,
+      "published_at": 1779749691144
+    },
+    {
+      "handle": "fundadogramaci",
+      "x_user_id": "1561979767469051906",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "sexual solicitation wording",
+        "redirects to @mentioned account",
+        "garbled filler characters",
+        "off-topic reply to browser promo thread",
+        "matches linkless porn redirect-bait pattern"
+      ],
+      "evidence_text": "线下sao货没人比她sao \n@mslmshn1907\n e\"&",
+      "reporters": 0,
+      "published_at": 1779749690399
+    },
+    {
+      "handle": "benfatihpolat",
+      "x_user_id": "1672361522746519556",
+      "verdict_label": "porn_bot",
+      "confidence": 0.96,
+      "reasons": [
+        "linkless redirect bait pattern",
+        "sexual solicitation/innuendo wording",
+        "redirects to another @account",
+        "off-topic to thread",
+        "template-like repeated recent tweet"
+      ],
+      "evidence_text": "cw比她好看的没她骚𝓭比她骚的没她好看\n@mslmshn1907\n w",
+      "reporters": 0,
+      "published_at": 1779749689545
+    },
+    {
+      "handle": "ozormanhalil",
+      "x_user_id": "1035907783365943296",
+      "verdict_label": "porn_bot",
+      "confidence": 0.96,
+      "reasons": [
+        "matches linkless sexual redirect-bait template",
+        "sexual solicitation wording in Chinese",
+        "redirects to @acrmrve without context",
+        "off-topic to thread topic",
+        "garbled filler characters",
+        "same promo content in recent tweet"
+      ],
+      "evidence_text": "比她好看的d没她骚͓̽d͓̽比她骚的没她好看\n@acrmrve\n v",
+      "reporters": 0,
+      "published_at": 1779749688894
+    },
+    {
+      "handle": "aksuhasan21",
+      "x_user_id": "2042305973361033216",
+      "verdict_label": "porn_bot",
+      "confidence": 0.96,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "Every step you take pulls me deeper into your gravity.我推特上面认识的炮友\n@Miaomiao_12z\n\n你迈出的每一步都让我更深地陷入你的引力之中。我推特上面认识的炮友   @Miaomiao_12z",
+      "reporters": 1,
+      "published_at": 1779749687695
+    },
+    {
+      "handle": "gzmmsrgn",
+      "x_user_id": "847872440827092994",
+      "verdict_label": "porn_bot",
+      "confidence": 0.96,
+      "reasons": [
+        "sexual solicitation-style phrase",
+        "redirects via @mention",
+        "off-topic to UI thread",
+        "matches linkless redirect bait pattern",
+        "same template in recent tweet"
+      ],
+      "evidence_text": "她好涩我不行了\n@acrmrve\n &",
+      "reporters": 0,
+      "published_at": 1779749685927
+    },
+    {
+      "handle": "viarouz1",
+      "x_user_id": "888329138850975745",
+      "verdict_label": "porn_bot",
+      "confidence": 0.96,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "线下sao货没人比她sao  \n@dadi2412\n c'+",
+      "reporters": 1,
+      "published_at": 1779749685232
+    },
+    {
+      "handle": "lisa_oleksak",
+      "x_user_id": null,
+      "verdict_label": "porn_bot",
+      "confidence": 0.96,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "线下我就曰过b͓̽这个骚货 \n@dadi2412\n s",
+      "reporters": 1,
+      "published_at": 1779749684479
+    },
+    {
+      "handle": "soysalparmida",
+      "x_user_id": "1273248096701513730",
+      "verdict_label": "porn_bot",
+      "confidence": 0.96,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "推特α第一骚 \n@rumeysaaunal\n _",
+      "reporters": 1,
+      "published_at": 1779749683734
+    },
+    {
+      "handle": "resulacay",
+      "x_user_id": "1992527523209416704",
+      "verdict_label": "porn_bot",
+      "confidence": 0.96,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "比她好看的没她骚比她骚的没她好看 \n@TuudoPelaLua_\n  l",
+      "reporters": 1,
+      "published_at": 1779749683029
+    },
+    {
+      "handle": "oguzhanduysak",
+      "x_user_id": "1558734751695085568",
+      "verdict_label": "porn_bot",
+      "confidence": 0.96,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "线下sao货没人比她sao  \n@rumeysaaunal\n ~ng",
+      "reporters": 1,
+      "published_at": 1779749682244
+    },
+    {
+      "handle": "yldz_irmk",
+      "x_user_id": "1963833614472302592",
+      "verdict_label": "porn_bot",
+      "confidence": 0.96,
+      "reasons": [
+        "sexual explicit solicitation",
+        "@mention redirect bait",
+        "garbled filler characters",
+        "matches linkless porn-spam template",
+        "recent tweet repeats triggering comment"
+      ],
+      "evidence_text": "线下我就曰过̴a̴这个骚货\n@acrmrve\n w",
+      "reporters": 0,
+      "published_at": 1779749681453
+    },
+    {
+      "handle": "alibayram1970",
+      "x_user_id": "1242849034215317504",
+      "verdict_label": "porn_bot",
+      "confidence": 0.97,
+      "reasons": [
+        "linkless sexual redirect bait",
+        "promotes another @account",
+        "off-topic to thread",
+        "template-like repeated tweet",
+        "porn solicitation wording"
+      ],
+      "evidence_text": "线下sao货没人比她sao \n@23_oguzhand\n \\)/",
+      "reporters": 0,
+      "published_at": 1779749680775
+    },
+    {
+      "handle": "feoonardo",
+      "x_user_id": "1637717334843351041",
+      "verdict_label": "porn_bot",
+      "confidence": 0.97,
+      "reasons": [
+        "sexual solicitation wording",
+        "redirects to @mention",
+        "off-topic to thread",
+        "matches linkless porn bait template",
+        "repeated same promo post"
+      ],
+      "evidence_text": "线下sao货没人比她sao \n@bbusradumann\n ]",
+      "reporters": 0,
+      "published_at": 1779749679964
+    },
+    {
+      "handle": "senasiyah1",
+      "x_user_id": "1700220243396718592",
+      "verdict_label": "porn_bot",
+      "confidence": 0.97,
+      "reasons": [
+        "sexual solicitation wording",
+        "redirects via @mention",
+        "off-topic to thread",
+        "matches linkless redirect-bait pattern",
+        "repeated template in recent tweet"
+      ],
+      "evidence_text": "线下我就曰过𝐝这个骚货\n@mslmshn1907\n b",
+      "reporters": 0,
+      "published_at": 1779749679257
+    },
+    {
+      "handle": "h_zelalk",
+      "x_user_id": "2050712499910332416",
+      "verdict_label": "porn_bot",
+      "confidence": 0.97,
+      "reasons": [
+        "sexual solicitation wording",
+        "redirects to @mention",
+        "garbled filler padding",
+        "off-topic to thread",
+        "matches linkless redirect bait pattern"
+      ],
+      "evidence_text": "线下sao货没人比她sao \n@bbusradumann\n [rp",
+      "reporters": 0,
+      "published_at": 1779749678558
+    },
+    {
+      "handle": "fadimedogan2013",
+      "x_user_id": "1834349441098063872",
+      "verdict_label": "porn_bot",
+      "confidence": 0.97,
+      "reasons": [
+        "linkless sexual redirect bait",
+        "contains @mention to another account",
+        "off-topic to thread",
+        "template-like porn solicitation phrase"
+      ],
+      "evidence_text": "比她好看的没她骚͜͡c͜͡比她骚的没她好看\n@23_oguzhand\n h",
+      "reporters": 0,
+      "published_at": 1779749677915
+    },
+    {
+      "handle": "erin_eengel",
+      "x_user_id": "942465591641645062",
+      "verdict_label": "porn_bot",
+      "confidence": 0.97,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "她好涩我不行了 \n@rumeysaaunal\n ⁯q",
+      "reporters": 1,
+      "published_at": 1779749677072
+    },
+    {
+      "handle": "dokerasli",
+      "x_user_id": "1528875254",
+      "verdict_label": "porn_bot",
+      "confidence": 0.97,
+      "reasons": [
+        "sexual solicitation/innuendo template",
+        "@mention redirect bait",
+        "off-topic to thread",
+        "repeated same promo text",
+        "matches known linkless porn-spam pattern"
+      ],
+      "evidence_text": "比她好看的没她骚₳比她骚的没她好看\n@23_oguzhand\n )",
+      "reporters": 0,
+      "published_at": 1779749676398
+    },
+    {
+      "handle": "gerardode_paz",
+      "x_user_id": "763875272768749568",
+      "verdict_label": "porn_bot",
+      "confidence": 0.97,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "线下sao货没人比她sao  \n@dadi2412\n t^s",
+      "reporters": 1,
+      "published_at": 1779749675215
+    },
+    {
+      "handle": "mustafaerenabay",
+      "x_user_id": "1309176711641206789",
+      "verdict_label": "porn_bot",
+      "confidence": 0.97,
+      "reasons": [
+        "linkless sexual redirect bait",
+        "uses porn solicitation wording",
+        "redirects to @mention target",
+        "off-topic to thread",
+        "template-like filler characters"
+      ],
+      "evidence_text": "比她好看的没她骚a̲̅比她骚的没她好看 \n@TuudoPelaLua_\n  a",
+      "reporters": 0,
+      "published_at": 1779749674450
+    },
+    {
+      "handle": "_jebocqajwawl",
+      "x_user_id": "2058943483625590785",
+      "verdict_label": "porn_bot",
+      "confidence": 0.97,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "0",
+      "reporters": 1,
+      "published_at": 1779749673698
+    },
+    {
+      "handle": "emindagg",
+      "x_user_id": "1325335686845771777",
+      "verdict_label": "porn_bot",
+      "confidence": 0.97,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "线下sao货没人比她sao  \n@TuudoPelaLua_\n  c[r",
+      "reporters": 1,
+      "published_at": 1779749672604
+    },
+    {
+      "handle": "edward1099032",
+      "x_user_id": "2058963684274155520",
+      "verdict_label": "porn_bot",
+      "confidence": 0.88,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "​​ ‌",
+      "reporters": 1,
+      "published_at": 1779749669429
+    },
+    {
+      "handle": "furozfi_mum_n",
+      "x_user_id": "2058995805743382528",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 1,
+      "published_at": 1779749667341
+    },
+    {
+      "handle": "egkutca",
+      "x_user_id": "1737586648576061441",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "比她好看的⁯q没她骚ɔ比她骚的没她好看\n@23_oguzhand\n o",
+      "reporters": 1,
+      "published_at": 1779749665674
+    },
+    {
+      "handle": "w_emel",
+      "x_user_id": "1717227907397902336",
+      "verdict_label": "porn_bot",
+      "confidence": 0.96,
+      "reasons": [
+        "sexual solicitation wording",
+        "redirects to @dadi2412",
+        "matches linkless redirect-bait template",
+        "garbled filler characters",
+        "repeated same promo tweet"
+      ],
+      "evidence_text": "线下sao货没人比她sao  \n@dadi2412\n \"r;",
+      "reporters": 0,
+      "published_at": 1779749664904
+    },
+    {
+      "handle": "mibga_yadyo_f",
+      "x_user_id": "2058938344449703936",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 2,
+      "published_at": 1779749663427
+    },
+    {
+      "handle": "ahmetar25829192",
+      "x_user_id": "1441790068327342084",
+      "verdict_label": "porn_bot",
+      "confidence": 0.95,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "推特𝙖第一骚 \n@dadi2412\n r",
+      "reporters": 2,
+      "published_at": 1779749662502
+    },
+    {
+      "handle": "tuwmexah_covj",
+      "x_user_id": "2058930725953634305",
+      "verdict_label": "porn_bot",
+      "confidence": 0.9,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": null,
+      "reporters": 2,
+      "published_at": 1779749661651
+    },
+    {
+      "handle": "byvetman",
+      "x_user_id": "1241813077923856385",
+      "verdict_label": "porn_bot",
+      "confidence": 0.96,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "}g比她好看的没她骚 \n@TuudoPelaLua_\n  比她骚的没她好看n\\f",
+      "reporters": 1,
+      "published_at": 1779749659239
+    },
+    {
+      "handle": "xb8mgux5wz54998",
+      "x_user_id": "2012743795125698560",
+      "verdict_label": "porn_bot",
+      "confidence": 0.98,
+      "reasons": [
+        "Sexual solicitation wording",
+        "Linkless redirect bait with @mention",
+        "Off-topic to thread",
+        "Garbled filler characters",
+        "Template-like porn spam"
+      ],
+      "evidence_text": "\\(线下我就曰过𝑏?这个骚货\n@23_oguzhand\n k",
+      "reporters": 0,
+      "published_at": 1779749654401
+    },
+    {
+      "handle": "sblsryy",
+      "x_user_id": "1911486611574984704",
+      "verdict_label": "porn_bot",
+      "confidence": 0.98,
+      "reasons": [
+        "linkless redirect bait pattern",
+        "sexual solicitation phrasing",
+        "mentions another account as redirect",
+        "off-topic to thread",
+        "repeated same template"
+      ],
+      "evidence_text": "比她好看的没她骚𝕕比她骚的没她好看\n@bbusradumann\n \\",
+      "reporters": 0,
+      "published_at": 1779749653634
+    },
+    {
+      "handle": "alcn09",
+      "x_user_id": "1985259181494919168",
+      "verdict_label": "porn_bot",
+      "confidence": 0.98,
+      "reasons": [
+        "reported"
+      ],
+      "evidence_text": "线下sao货没人比她sao  \n@Ugur_tas19_03\n s}v",
+      "reporters": 1,
+      "published_at": 1779749652794
+    },
+    {
+      "handle": "yukseeel",
+      "x_user_id": "1581424760080273410",
+      "verdict_label": "porn_bot",
+      "confidence": 0.98,
+      "reasons": [
+        "sexual solicitation/innuendo wording",
+        "redirects to @mentioned account",
+        "linkless redirect-bait template",
+        "garbled filler characters",
+        "only recent tweet repeats trigger"
+      ],
+      "evidence_text": "线下sao货没人比她sao \n@23_oguzhand\n j`)",
+      "reporters": 0,
+      "published_at": 1779749651865
+    },
     {
       "handle": "mufuks",
       "x_user_id": "1429031801",
@@ -2358,7 +4440,7 @@
         "reported"
       ],
       "evidence_text": "她太涩了w我真顶不住\n@yunbaozw\n 7i",
-      "reporters": 2,
+      "reporters": 3,
       "published_at": 1779722975867
     },
     {
@@ -2430,7 +4512,7 @@
         "reported"
       ],
       "evidence_text": "sao货 q没人比她sao\n@yeyebbz\n 2y",
-      "reporters": 3,
+      "reporters": 4,
       "published_at": 1779722969805
     },
     {
@@ -2454,7 +4536,7 @@
         "reported"
       ],
       "evidence_text": "sao货a 没人比她sao\n@mengyyw\n 8q",
-      "reporters": 4,
+      "reporters": 5,
       "published_at": 1779722968489
     },
     {
@@ -2742,7 +4824,7 @@
         "reported"
       ],
       "evidence_text": "线下sao货没人比她sao cr \n@rumeysaaunal\n ]",
-      "reporters": 1,
+      "reporters": 2,
       "published_at": 1779722567615
     },
     {
@@ -4482,14 +6564,10 @@
       "verdict_label": "porn_bot",
       "confidence": 0.97,
       "reasons": [
-        "matches linkless sexual redirect-bait template",
-        "promotes/redirects to @dadi2412",
-        "off-topic reply to thread",
-        "garbled filler characters",
-        "same content repeated in recent tweet"
+        "reported"
       ],
       "evidence_text": "比她好看的没她骚 \n@dadi2412\n 比她骚的没她好看)g,",
-      "reporters": 1,
+      "reporters": 2,
       "published_at": 1779721150809
     },
     {
@@ -9792,14 +11870,10 @@
       "verdict_label": "porn_bot",
       "confidence": 0.93,
       "reasons": [
-        "sexual solicitation/innuendo template",
-        "redirects to another @account",
-        "garbled filler characters",
-        "repeated same promo comment",
-        "matches linkless redirect-bait pattern"
+        "reported"
       ],
       "evidence_text": "x2,比她好看的没她骚q比她骚的没她好看\n@Xinxinxiaogou04",
-      "reporters": 0,
+      "reporters": 1,
       "published_at": 1779713383658
     },
     {
@@ -11585,14 +13659,10 @@
       "verdict_label": "porn_bot",
       "confidence": 0.97,
       "reasons": [
-        "linkless redirect bait pattern",
-        "sexual solicitation wording",
-        "redirects to another @account",
-        "off-topic to thread",
-        "template-like recent tweet"
+        "reported"
       ],
       "evidence_text": "&线下sao货没人比她sao |. \n@dadi2412\n ;",
-      "reporters": 0,
+      "reporters": 1,
       "published_at": 1779711717753
     },
     {
@@ -13131,14 +15201,10 @@
       "verdict_label": "porn_bot",
       "confidence": 0.95,
       "reasons": [
-        "linkless sexual redirect bait",
-        "contains solicitation-style porn wording",
-        "mentions another account as redirect",
-        "off-topic to thread",
-        "template-like spam comment"
+        "reported"
       ],
       "evidence_text": ";线下sao货没人比她sao \\, \n@TuudoPelaLua_\n  ,",
-      "reporters": 1,
+      "reporters": 2,
       "published_at": 1779711468269
     },
     {
