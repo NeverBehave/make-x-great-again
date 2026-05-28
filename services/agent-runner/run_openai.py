@@ -97,11 +97,29 @@ def worker_call(method: str, path: str, body: dict[str, Any] | None = None) -> d
         return {"_error": str(e)[:200]}
 
 
-def llm_chat(prompt: str) -> tuple[dict[str, Any] | None, str]:
-    """OpenAI-compatible chat completion. Returns (parsed_json_or_None, raw)."""
+def avatar_hi_res(url: str | None) -> str | None:
+    """Twitter image URLs come with size suffix; bump _normal to _400x400 so
+    the vision model can actually read overlaid Chinese text."""
+    if not url:
+        return None
+    return url.replace("_normal.", "_400x400.")
+
+
+def llm_chat(prompt: str, image_url: str | None = None) -> tuple[dict[str, Any] | None, str]:
+    """OpenAI-compatible chat completion. Returns (parsed_json_or_None, raw).
+    If image_url is provided, sends a multimodal message so the vision model
+    can inspect the profile avatar — critical for P7 (watermarked promo
+    avatars like 全国安排) which text-only signals miss."""
+    if image_url:
+        content: list[dict[str, Any]] | str = [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": image_url}},
+        ]
+    else:
+        content = prompt
     body = {
         "model": LLM_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [{"role": "user", "content": content}],
         "temperature": 0.1,
         # Many proxies accept this; ones that don't will ignore it.
         "response_format": {"type": "json_object"},
@@ -195,8 +213,13 @@ def process_one(item: dict[str, Any]) -> dict[str, Any]:
         .replace("WORKER_REASONS_PLACEHOLDER", _esc(worker_reasons_str)[:400])
     )
 
+    avatar_url = avatar_hi_res(item.get("avatar_url"))
     t0 = time.time()
-    verdict, raw = llm_chat(prompt)
+    verdict, raw = llm_chat(prompt, image_url=avatar_url)
+    # If the multimodal call failed (some proxies dislike image_url), fall
+    # back to text-only — losing P7 detection but still producing a verdict.
+    if verdict is None and avatar_url:
+        verdict, raw = llm_chat(prompt, image_url=None)
     elapsed = round(time.time() - t0, 1)
 
     if verdict is None:
@@ -204,7 +227,6 @@ def process_one(item: dict[str, Any]) -> dict[str, Any]:
         # forever (Worker queue filter caps failed agent_attempts<3).
         body = {
             "handle": handle,
-            "x_user_id": uid,
             "decision": "annotate",
             "label": "uncertain",
             "confidence": 0.0,
@@ -216,6 +238,10 @@ def process_one(item: dict[str, Any]) -> dict[str, Any]:
             "error": "parse_failure",
             "notes": raw[:1500],
         }
+        # Worker rejects null x_user_id (zod schema is optional, not nullable);
+        # only attach when we have a real uid.
+        if uid:
+            body["x_user_id"] = uid
         resp = worker_call("POST", "/v1/agent/decide", body)
         return {
             "handle": handle,
@@ -230,7 +256,6 @@ def process_one(item: dict[str, Any]) -> dict[str, Any]:
     decision = route_decision(verdict)
     body = {
         "handle": handle,
-        "x_user_id": uid,
         "decision": decision,
         "label": verdict.get("label") or "uncertain",
         "confidence": float(verdict.get("confidence") or 0.0),
@@ -242,6 +267,8 @@ def process_one(item: dict[str, Any]) -> dict[str, Any]:
         "signals_hash": signals_hash,
         "notes": (verdict.get("notes") or "")[:1500],
     }
+    if uid:
+        body["x_user_id"] = uid
     resp = worker_call("POST", "/v1/agent/decide", body)
     return {
         "handle": handle,
