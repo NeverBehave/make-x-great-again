@@ -86,9 +86,21 @@ export const STYLE = `
 .hd { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
 .hd .x { margin-left: auto; cursor: pointer; color: var(--muted); display: flex; }
 .hd .x:hover { color: var(--text); }
-.sub { display: flex; gap: 12px; margin: 10px 0 12px; font-size: 12px; color: var(--muted); }
-.dot { display: inline-flex; align-items: center; gap: 5px; }
-.dot i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.sub {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px; margin: 10px 0 12px;
+  font-size: 11px; color: var(--muted);
+}
+.metric {
+  min-width: 0; height: 30px; display: flex; align-items: center; justify-content: center;
+  gap: 4px; padding: 0 5px; border-radius: 8px;
+  background: color-mix(in srgb, var(--muted) 7%, transparent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden;
+}
+.metric b { color: var(--text); font-size: 12px; font-weight: 760; line-height: 1; }
+.metric em { font-style: normal; overflow: hidden; text-overflow: ellipsis; }
+.metric i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex: none; }
 .btn {
   width: 100%; border: 0; border-radius: 10px; padding: 9px 12px;
   font-size: 13px; font-weight: 600; cursor: pointer; color: #fff;
@@ -109,6 +121,11 @@ export const STYLE = `
 .xss-act.done {
   background: var(--safe); color: #fff; opacity: .9;
 }
+.xss-act.queue {
+  background: transparent; color: var(--brand);
+  border: 1px solid var(--brand);
+}
+.xss-act.queue.busy { animation: xpulse 1.2s ease-in-out infinite; }
 .xss-act.retry {
   background: transparent; color: var(--warn);
   border: 1px solid var(--warn);
@@ -135,6 +152,85 @@ export const STYLE = `
 .row { display: flex; gap: 14px; margin-top: 10px; font-size: 12px; }
 .lnk { color: var(--muted); cursor: pointer; }
 .lnk:hover { color: var(--text); }
+.block-progress {
+  margin: -2px 0 13px;
+}
+.progress-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px; font-size: 11px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.progress-head b {
+  color: var(--text); font-size: 11px; font-weight: 750;
+}
+.progress-track {
+  height: 9px; display: flex; overflow: hidden; border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
+}
+.progress-seg {
+  height: 100%; min-width: 0; transition: width .22s ease;
+}
+.progress-seg + .progress-seg {
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--surface) 70%, transparent);
+}
+.progress-seg.done { background: linear-gradient(90deg, color-mix(in srgb, var(--safe) 78%, #fff), var(--safe)); }
+.progress-seg.active {
+  background:
+    repeating-linear-gradient(115deg, rgba(255,255,255,.22) 0 6px, transparent 6px 12px),
+    linear-gradient(90deg, color-mix(in srgb, var(--danger) 72%, #fff), var(--danger));
+  animation: pbarshift .9s linear infinite;
+}
+.progress-seg.queued { background: linear-gradient(90deg, color-mix(in srgb, var(--brand) 76%, #fff), var(--brand)); }
+.progress-seg.failed { background: linear-gradient(90deg, color-mix(in srgb, var(--warn) 76%, #fff), var(--warn)); }
+.progress-seg.idle { background: color-mix(in srgb, var(--muted) 24%, transparent); }
+.progress-legend {
+  display: flex; flex-wrap: wrap; gap: 5px 10px; margin-top: 7px;
+  color: var(--muted); font-size: 10.5px;
+}
+.progress-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.progress-legend i { width: 6px; height: 6px; border-radius: 999px; display: inline-block; }
+.queue-table {
+  max-height: 226px; overflow: auto; margin: 0 -4px 10px; padding: 0 4px;
+  scrollbar-width: thin;
+}
+.qrow {
+  display: flex; align-items: flex-start; gap: 8px; padding: 6px 4px;
+  border-radius: 10px; transform-origin: top center;
+  transition: background .14s ease, opacity .14s ease;
+}
+.qrow.new { animation: qrowin .24s cubic-bezier(.2,.7,.2,1); }
+.qrow.active { background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.qrow.queued { background: color-mix(in srgb, var(--brand) 7%, transparent); }
+.qrow.failed { background: color-mix(in srgb, var(--warn) 8%, transparent); }
+.qrow.done {
+  overflow: hidden;
+  background: color-mix(in srgb, var(--safe) 8%, transparent);
+  animation: qrowdone .96s ease forwards;
+}
+.qavatar {
+  width: 26px; height: 26px; border-radius: 50%; flex: none; object-fit: cover;
+  transition: filter .18s ease, opacity .18s ease;
+}
+.qavatar.blank { background: var(--border); }
+.qbody { min-width: 0; flex: 1; }
+.qname {
+  font-weight: 650; font-size: 12px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.qmeta { font-size: 11px; }
+.qsnip {
+  font-size: 11px; color: var(--muted); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.qnote { font-size: 11px; }
+.qrow.done .qavatar {
+  filter: grayscale(1); opacity: .38;
+}
+.qrow.done .qname,
+.qrow.done .qsnip {
+  text-decoration: line-through; opacity: .52;
+}
 svg { display: block; }
 .xss-badge {
   --badge-color: var(--muted);
@@ -298,6 +394,20 @@ svg { display: block; }
   cursor: default;
   animation: xpulse 1.6s ease-in-out infinite;
 }
+.xss-badge.blocking {
+  --badge-color: var(--danger);
+  color: #fff;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--danger) 92%, #fff), var(--danger));
+  border-color: color-mix(in srgb, var(--danger) 90%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 18%, transparent), 0 2px 9px color-mix(in srgb, var(--danger) 24%, transparent);
+  overflow: visible;
+  animation: xblockpulse 1.25s ease-in-out infinite;
+}
+.xss-badge.blocking .xss-ico::after {
+  content: ""; position: absolute; inset: -4px; border-radius: 999px;
+  border: 1.5px solid color-mix(in srgb, #fff 30%, transparent);
+  border-top-color: #fff; animation: xspin .72s linear infinite;
+}
 @keyframes xrise { from { opacity: 0; transform: translateY(4px); } }
 @keyframes xpop  { from { opacity: 0; transform: scale(.9); } }
 @keyframes xspin { to { transform: rotate(360deg); } }
@@ -305,6 +415,24 @@ svg { display: block; }
 @keyframes xpulse { 0%,100% { opacity: .55; } 50% { opacity: .95; } }
 @keyframes xradar { to { transform: rotate(360deg); } }
 @keyframes xbreath { 0%,100% { filter: saturate(1); } 50% { filter: saturate(1.35); } }
+@keyframes xblockpulse {
+  0%,100% { transform: translateY(0); filter: brightness(1); }
+  50% { transform: translateY(-1px); filter: brightness(1.1); }
+}
+@keyframes qrowin {
+  from { opacity: 0; transform: translateY(-7px) scale(.985); }
+}
+@keyframes qrowdone {
+  0% { opacity: 1; max-height: 86px; transform: translateX(0); }
+  55% { opacity: .78; max-height: 86px; transform: translateX(0); }
+  100% {
+    opacity: 0; max-height: 0; transform: translateX(12px);
+    padding-top: 0; padding-bottom: 0;
+  }
+}
+@keyframes pbarshift {
+  to { background-position: 22px 0, 0 0; }
+}
 
 /* New-hit motion: one compact radar lap, slow at first then faster. */
 .pill.hit-pulse .scan-radar {
@@ -325,7 +453,14 @@ svg { display: block; }
   .card.open { animation: fade .18s ease-out; }
   @keyframes fade { from { opacity: 0; } }
   .xss-badge.fresh, .xss-badge.known { animation: fade .18s ease-out; }
-  .xss-badge.analyzing .xss-ico::after, .scan-radar.busy, .scan-radar.busy .scan-sweep { animation: none; }
+  .xss-badge.analyzing .xss-ico::after,
+  .xss-badge.blocking,
+  .xss-badge.blocking .xss-ico::after,
+  .scan-radar.busy,
+  .scan-radar.busy .scan-sweep,
+  .qrow.new,
+  .qrow.done,
+  .progress-seg.active { animation: none; }
   .xss-badge.pending { animation: none; opacity: .7; }
   .pill.hit-pulse .scan-radar { animation: none; }
 }
@@ -406,6 +541,9 @@ export interface Finding {
   avatarUrl?: string;
   displayName?: string;
   snippet?: string;
+  blockSource?: "manual" | "block_all" | "list_hit" | "cache_hit";
+  blockQueued?: boolean;
+  blockActive?: boolean;
   blockFailed?: boolean;
   /** Set by drain() after a successful block — used by the card to strike
    *  the row through and replace the per-row button with "已拉黑". */
@@ -416,6 +554,13 @@ export interface Finding {
   selected?: boolean;
   verdict: Verdict;
 }
+
+const BLOCK_SOURCE_TEXT: Record<NonNullable<Finding["blockSource"]>, string> = {
+  manual: "手动",
+  block_all: "批量",
+  list_hit: "公榜自动",
+  cache_hit: "缓存自动",
+};
 
 export interface BubbleHandlers {
   onBlockAll: (f: Finding[]) => void;
@@ -440,7 +585,14 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
 
   root.append(pill, card);
   let open = false;
+  let autoOpenedForBlocking = false;
+  let userClosedBlockingQueue = false;
+  let autoCollapseTimer: ReturnType<typeof setTimeout> | undefined;
   let findings: Finding[] = [];
+  const visibleRows = new Set<string>();
+  const rowWasBlocked = new Map<string, boolean>();
+  const hiddenDoneRows = new Set<string>();
+  const doneHideTimers = new Map<string, ReturnType<typeof setTimeout>>();
   let scanning = 0; // accounts currently being checked (visible progress)
   // Total accounts we've gotten a verdict (or skip-decision) on this page.
   // Lets the pill say "已扫 N · 检查中 M · 命中 K" so the user feels the
@@ -451,6 +603,106 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
     f.some((x) => x.verdict.label === "spam" || x.verdict.label === "porn_bot")
       ? "--danger"
       : "--warn";
+
+  const rowKey = (f: Finding) => f.userId || `h:${f.handle.toLowerCase()}`;
+
+  const blockStats = () => {
+    const done = findings.filter((x) => x.blocked).length;
+    const active = findings.filter((x) => x.blockActive && !x.blocked).length;
+    const failed = findings.filter((x) => x.blockFailed && !x.blocked).length;
+    const queued = findings.filter(
+      (x) => x.blockQueued && !x.blockActive && !x.blocked && !x.blockFailed,
+    ).length;
+    return {
+      found: findings.length,
+      done,
+      active,
+      failed,
+      queued,
+      pending: active + queued,
+    };
+  };
+
+  function clearAutoCollapse() {
+    if (autoCollapseTimer) {
+      clearTimeout(autoCollapseTimer);
+      autoCollapseTimer = undefined;
+    }
+  }
+
+  function clearDoneTimer(id: string) {
+    const timer = doneHideTimers.get(id);
+    if (timer) clearTimeout(timer);
+    doneHideTimers.delete(id);
+  }
+
+  function scheduleDoneHide(id: string) {
+    if (hiddenDoneRows.has(id) || doneHideTimers.has(id)) return;
+    doneHideTimers.set(
+      id,
+      setTimeout(() => {
+        doneHideTimers.delete(id);
+        hiddenDoneRows.add(id);
+        if (open) renderCard();
+      }, 1050),
+    );
+  }
+
+  function syncDoneRows(next: Finding[]) {
+    const live = new Set(next.map(rowKey));
+    for (const id of [...hiddenDoneRows]) {
+      if (!live.has(id)) hiddenDoneRows.delete(id);
+    }
+    for (const id of [...doneHideTimers.keys()]) {
+      if (!live.has(id)) clearDoneTimer(id);
+    }
+    for (const id of [...rowWasBlocked.keys()]) {
+      if (!live.has(id)) rowWasBlocked.delete(id);
+    }
+
+    next.forEach((f) => {
+      const id = rowKey(f);
+      const wasBlocked = rowWasBlocked.get(id) === true;
+      const isBlocked = f.blocked === true;
+      if (!isBlocked) {
+        rowWasBlocked.set(id, false);
+        hiddenDoneRows.delete(id);
+        clearDoneTimer(id);
+        return;
+      }
+      rowWasBlocked.set(id, true);
+      if (!wasBlocked) scheduleDoneHide(id);
+    });
+  }
+
+  function progressWidth(count: number, total: number) {
+    if (count <= 0 || total <= 0) return "0%";
+    return `${Math.max(0, Math.min(100, (count / total) * 100)).toFixed(2)}%`;
+  }
+
+  function progressSegment(kind: "done" | "active" | "queued" | "failed" | "idle", count: number, total: number) {
+    if (count <= 0) return "";
+    return `<span class="progress-seg ${kind}" style="width:${progressWidth(count, total)}"></span>`;
+  }
+
+  function renderBlockProgress(blocks: ReturnType<typeof blockStats>, idle: number) {
+    const total = Math.max(1, blocks.found);
+    const donePct = Math.round((blocks.done / total) * 100);
+    const pending = blocks.active + blocks.queued + idle;
+    return `<div class="block-progress" aria-label="拉黑进度 ${donePct}%">
+      <div class="progress-head">
+        <span>${pending > 0 ? `剩余 ${pending}` : "处理完成"}</span>
+        <b>${donePct}%</b>
+      </div>
+      <div class="progress-track">
+        ${progressSegment("done", blocks.done, total)}
+        ${progressSegment("active", blocks.active, total)}
+        ${progressSegment("queued", blocks.queued, total)}
+        ${progressSegment("failed", blocks.failed, total)}
+        ${progressSegment("idle", idle, total)}
+      </div>
+    </div>`;
+  }
 
   function progressMarkup(opts: {
     iconName: string;
@@ -480,8 +732,31 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
       : scanned > 0
         ? 100
         : 0;
-    // Spammy findings present → alarm tone takes priority, shows count.
+    // Findings/handled records present → keep a visible activity trail.
     if (findings.length) {
+      const blocks = blockStats();
+      if (blocks.pending > 0) {
+        pill.innerHTML = progressMarkup({
+          iconName: "shield-x",
+          iconColor: "var(--danger)",
+          title: "拉黑中",
+          count: `${blocks.done}/${blocks.found}`,
+          percent: Math.max(8, Math.round((blocks.done / Math.max(1, blocks.found)) * 100)),
+          busy: true,
+          danger: true,
+        });
+        return;
+      }
+      if (blocks.done > 0 && blocks.done + blocks.failed >= blocks.found) {
+        pill.innerHTML = progressMarkup({
+          iconName: "shield-check",
+          iconColor: "var(--safe)",
+          title: "已拉黑",
+          count: String(blocks.done),
+          percent: 100,
+        });
+        return;
+      }
       const c = `var(${sev(findings)})`;
       pill.innerHTML = progressMarkup({
         iconName: "shield-alert",
@@ -524,7 +799,7 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
         <div class="sub" style="display:block;line-height:1.6">
           正在被动检查本页账号。发现可疑的垃圾/色情机器人时，会在这里提示并提供一键处理。</div>
         <div class="row"><span class="lnk" data-gov>为什么 / 治理</span></div>`;
-      card.querySelector("[data-x]")?.addEventListener("click", collapse);
+      card.querySelector("[data-x]")?.addEventListener("click", () => collapse());
       card.querySelector("[data-gov]")?.addEventListener("click", () =>
         window.open(BRAND.governance, "_blank", "noopener"),
       );
@@ -534,21 +809,49 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
       (x) => x.verdict.label === "spam" || x.verdict.label === "porn_bot",
     ).length;
     const warn = findings.length - danger;
-    const pendingCount = findings.filter((x) => !x.blocked).length;
-    const doneCount = findings.length - pendingCount;
+    const blocks = blockStats();
+    const doneCount = blocks.done;
+    const activeCount = blocks.active;
+    const queuedCount = blocks.queued;
+    const failedCount = blocks.failed;
+    const idleCount = Math.max(
+      0,
+      findings.length - doneCount - activeCount - queuedCount - failedCount,
+    );
+    const actionableCount = findings.filter(
+      (x) => !x.blocked && !x.blockQueued && !x.blockActive,
+    ).length;
     // Bulk action operates on the subset the user has left checked.
     // Default state of a fresh finding is selected (selected !== false).
-    const selectedPending = findings.filter((x) => !x.blocked && x.selected !== false).length;
+    const selectedPending = findings.filter(
+      (x) => !x.blocked && !x.blockQueued && !x.blockActive && x.selected !== false,
+    ).length;
+    const visibleFindings = [
+      ...findings.filter((x) => !x.blocked && (x.blockActive || x.blockQueued)),
+      ...findings.filter((x) => !x.blocked && !x.blockActive && !x.blockQueued),
+      ...findings.filter((x) => x.blocked && !hiddenDoneRows.has(rowKey(x))),
+    ];
     card.innerHTML = `
-      <div class="hd">${icon("shield-alert", "var(--brand)", 16)}
-        <span>本页发现 ${findings.length} 个可疑账号</span>
-        <span class="x" data-x>${icon("x", "currentColor", 14)}</span></div>
-      <div class="sub">
-        ${danger ? `<span class="dot"><i style="background:var(--danger)"></i>${danger} 色情/垃圾bot</span>` : ""}
-        ${warn ? `<span class="dot"><i style="background:var(--warn)"></i>${warn} 疑似</span>` : ""}
-      </div>
-      <div style="max-height:208px;overflow:auto;margin:0 -4px 10px">
-        ${findings
+	      <div class="hd">${icon("shield-alert", "var(--brand)", 16)}
+	        <span>${actionableCount || activeCount || queuedCount ? `本页命中 ${findings.length} 个账号` : `本页已拉黑 ${doneCount} 个账号`}</span>
+	        <span class="x" data-x>${icon("x", "currentColor", 14)}</span></div>
+	      <div class="sub">
+	        <span class="metric" title="色情/垃圾 ${danger}，疑似 ${warn}">
+	          <i style="background:var(--danger)"></i><b>${findings.length}</b><em>命中</em>
+	        </span>
+	        <span class="metric" title="正在后台拉黑">
+	          <i style="background:var(--danger)"></i><b>${activeCount}</b><em>正在</em>
+	        </span>
+	        <span class="metric" title="等待后台拉黑">
+	          <i style="background:var(--brand)"></i><b>${queuedCount}</b><em>待拉</em>
+	        </span>
+	        <span class="metric" title="${failedCount ? `失败 ${failedCount}，` : ""}已成功拉黑">
+	          <i style="background:${failedCount ? "var(--warn)" : "var(--safe)"}"></i><b>${doneCount}</b><em>已拉</em>
+	        </span>
+	      </div>
+      ${renderBlockProgress(blocks, idleCount)}
+      <div class="queue-table">
+        ${visibleFindings
           .map((f) => {
             const m = LABEL[f.verdict.label];
             const col = `var(${m.varName})`;
@@ -556,47 +859,76 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
             // We still defense-in-depth escape the URL because attacker-
             // controlled fields shouldn't reach attribute context raw.
             const av = f.avatarUrl
-              ? `<img src="${escHtml(f.avatarUrl)}" width="26" height="26" style="border-radius:50%;flex:none" alt="">`
-              : `<span style="width:26px;height:26px;border-radius:50%;flex:none;background:var(--border)"></span>`;
+              ? `<img src="${escHtml(f.avatarUrl)}" class="qavatar" alt="">`
+              : `<span class="qavatar blank"></span>`;
             const name = escHtml(f.displayName?.trim() || `@${f.handle}`);
             const snip = f.snippet
               ? escHtml(f.snippet.replace(/\s+/g, " ").trim()).slice(0, 60)
               : "";
-            const id = f.userId || `h:${f.handle}`;
+            const id = rowKey(f);
+            const isNew = !visibleRows.has(id);
+            visibleRows.add(id);
+            const rowState = f.blocked
+              ? "done"
+              : f.blockActive
+                ? "active"
+                : f.blockQueued
+                  ? "queued"
+                  : f.blockFailed
+                    ? "failed"
+                    : "";
+            const rowClass = ["qrow", isNew ? "new" : "", rowState].filter(Boolean).join(" ");
             const checked = f.blocked ? false : f.selected !== false;
             const actClass = f.blocked
               ? "xss-act done"
-              : f.blockFailed
-                ? "xss-act retry"
-                : "xss-act";
-            const actText = f.blocked ? "已拉黑" : f.blockFailed ? "重试" : "拉黑";
-            return `<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 4px">
+              : f.blockActive
+                ? "xss-act queue busy"
+                : f.blockQueued
+                  ? "xss-act queue"
+                  : f.blockFailed
+                    ? "xss-act retry"
+                  : "xss-act";
+            const actText = f.blocked
+              ? "已拉黑"
+              : f.blockActive
+                ? "拉黑中"
+                : f.blockQueued
+                  ? "待拉黑"
+                  : f.blockFailed
+                    ? "重试"
+                    : "拉黑";
+            const source = f.blockSource ? ` · ${BLOCK_SOURCE_TEXT[f.blockSource]}` : "";
+            return `<div class="${rowClass}">
               <input type="checkbox" class="xss-row-cb" data-sel="${id}"
                 aria-label="选中 @${escHtml(f.handle)}"
-                ${checked ? "checked" : ""} ${f.blocked ? "disabled" : ""}>
+                ${checked ? "checked" : ""} ${f.blocked || f.blockQueued || f.blockActive ? "disabled" : ""}>
               ${av}
-              <div style="min-width:0;flex:1">
-                <div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${f.blocked ? ";text-decoration:line-through;opacity:.55" : ""}">${name}</div>
-                <div style="font-size:11px;color:${col}">@${escHtml(f.handle)} · ${m.zh} ${(f.verdict.confidence * 100).toFixed(0)}%</div>
-                ${snip ? `<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap${f.blocked ? ";text-decoration:line-through;opacity:.55" : ""}">${snip}</div>` : ""}
-                ${f.blockFailed ? `<div style="font-size:11px;color:var(--warn)">自动屏蔽失败 · <a href="https://x.com/${escHtml(f.handle)}" target="_blank" rel="noopener" style="color:var(--warn)">手动屏蔽</a></div>` : ""}
-                ${f.blocked ? `<div style="font-size:11px;color:var(--safe)">✓ 已拉黑</div>` : ""}
+              <div class="qbody">
+                <div class="qname">${name}</div>
+                <div class="qmeta" style="color:${col}">@${escHtml(f.handle)} · ${m.zh} ${(f.verdict.confidence * 100).toFixed(0)}%</div>
+                ${snip ? `<div class="qsnip">${snip}</div>` : ""}
+                ${f.blockFailed ? `<div class="qnote" style="color:var(--warn)">自动屏蔽失败 · <a href="https://x.com/${escHtml(f.handle)}" target="_blank" rel="noopener" style="color:var(--warn)">手动屏蔽</a></div>` : ""}
+                ${f.blockActive && !f.blocked ? `<div class="qnote" style="color:var(--danger)">正在后台拉黑${source}</div>` : ""}
+                ${f.blockQueued && !f.blockActive && !f.blocked ? `<div class="qnote" style="color:var(--brand)">待后台拉黑${source}</div>` : ""}
+                ${f.blocked ? `<div class="qnote" style="color:var(--safe)">✓ 已拉黑${source}</div>` : ""}
               </div>
-              <button class="${actClass}" data-one="${id}"${f.blocked ? " disabled" : ""}>${actText}</button>
+              <button class="${actClass}" data-one="${id}"${f.blocked || f.blockQueued || f.blockActive ? " disabled" : ""}>${actText}</button>
             </div>`;
           })
           .join("")}
       </div>
       ${
-        pendingCount === 0
+        actionableCount === 0 && activeCount === 0 && queuedCount === 0
           ? `<button class="btn" disabled style="background:var(--safe)">✓ 已全部处理 (${doneCount})</button>`
+          : activeCount || queuedCount
+            ? `<button class="btn" disabled style="background:var(--brand)">后台拉黑中 · 正在 ${activeCount} · 待 ${queuedCount}</button>`
           : selectedPending === 0
-            ? `<button class="btn" disabled style="opacity:.55">未选中任何账号 (剩余 ${pendingCount})</button>`
-            : `<button class="btn" data-block>一键拉黑选中 ${selectedPending}${doneCount ? ` · 已完成 ${doneCount}` : ""}${selectedPending < pendingCount ? ` · 跳过 ${pendingCount - selectedPending}` : ""}</button>`
+            ? `<button class="btn" disabled style="opacity:.55">未选中任何账号 (剩余 ${actionableCount})</button>`
+            : `<button class="btn" data-block>一键拉黑选中 ${selectedPending}${doneCount ? ` · 已完成 ${doneCount}` : ""}${selectedPending < actionableCount ? ` · 跳过 ${actionableCount - selectedPending}` : ""}</button>`
       }
       <div class="row"><span class="lnk" data-each>逐个查看处理</span>
         <span class="lnk" data-ign>忽略本页</span></div>`;
-    card.querySelector("[data-x]")?.addEventListener("click", collapse);
+    card.querySelector("[data-x]")?.addEventListener("click", () => collapse());
     card.querySelector("[data-ign]")?.addEventListener("click", () => {
       h.onDismiss();
       root.remove();
@@ -605,13 +937,13 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
     card.querySelectorAll<HTMLElement>("[data-one]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.one;
-        const f = findings.find((x) => (x.userId || `h:${x.handle}`) === id);
+        const f = findings.find((x) => rowKey(x) === id);
         if (f) {
+          f.blockQueued = true;
+          f.blockFailed = false;
           h.onBlockOne(f);
-          btn.textContent = "已拉黑";
-          btn.classList.remove("retry");
-          btn.classList.add("done");
-          (btn as HTMLButtonElement).disabled = true;
+          renderPill();
+          renderCard();
         }
       });
     });
@@ -620,7 +952,7 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
     card.querySelectorAll<HTMLInputElement>("[data-sel]").forEach((cb) => {
       cb.addEventListener("change", () => {
         const id = cb.dataset.sel;
-        const f = findings.find((x) => (x.userId || `h:${x.handle}`) === id);
+        const f = findings.find((x) => rowKey(x) === id);
         if (f) {
           f.selected = cb.checked;
           renderCard(); // re-render so bulk button count updates immediately
@@ -633,20 +965,59 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
       b.textContent = "处理中…";
       // Bulk only blocks the SELECTED, unblocked findings. The drain() in
       // content.ts will get a curated array, not "all findings".
-      h.onBlockAll(findings.filter((x) => !x.blocked && x.selected !== false));
+      const selected = findings.filter(
+        (x) => !x.blocked && !x.blockQueued && !x.blockActive && x.selected !== false,
+      );
+      selected.forEach((f) => {
+        f.blockQueued = true;
+        f.blockFailed = false;
+      });
+      renderPill();
+      renderCard();
+      h.onBlockAll(selected);
     });
   }
 
-  function expand() {
+  function expand(opts: { auto?: boolean } = {}) {
+    clearAutoCollapse();
     open = true;
+    autoOpenedForBlocking = !!opts.auto;
     card.classList.add("open");
     renderCard();
   }
-  function collapse() {
+  function collapse(opts: { manual?: boolean } = {}) {
+    clearAutoCollapse();
+    if (opts.manual !== false && blockStats().pending > 0) {
+      userClosedBlockingQueue = true;
+    }
     open = false;
     card.classList.remove("open");
   }
-  pill.addEventListener("click", () => (open ? collapse() : expand()));
+  function syncBlockPanel(blocks = blockStats()) {
+    if (blocks.pending > 0) {
+      clearAutoCollapse();
+      if (!open && !userClosedBlockingQueue) expand({ auto: true });
+      return;
+    }
+    userClosedBlockingQueue = false;
+    if (autoOpenedForBlocking && open) {
+      clearAutoCollapse();
+      autoCollapseTimer = setTimeout(() => {
+        autoOpenedForBlocking = false;
+        collapse({ manual: false });
+      }, 1800);
+      return;
+    }
+    if (!open) autoOpenedForBlocking = false;
+  }
+  pill.addEventListener("click", () => {
+    if (open) {
+      collapse();
+    } else {
+      userClosedBlockingQueue = false;
+      expand();
+    }
+  });
   root.addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Escape") collapse();
   });
@@ -659,7 +1030,7 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
       localStorage.setItem("xss_onboarded", "1");
       expand();
       setTimeout(() => {
-        if (!findings.length) collapse();
+        if (!findings.length) collapse({ manual: false });
       }, 6000);
     }
   } catch {
@@ -671,9 +1042,13 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
     update(f: Finding[]) {
       const grew = f.length > findings.length;
       findings = f;
+      syncDoneRows(f);
       root.style.display = "";
       renderPill();
-      if (open) renderCard();
+      const wasOpen = open;
+      const blocks = blockStats();
+      syncBlockPanel(blocks);
+      if (open && wasOpen) renderCard();
       if (grew) {
         // New finding: replay one compact radar lap without resizing the pill.
         pill.classList.remove("hit-pulse");
@@ -785,17 +1160,21 @@ async function runReportButton(btn: HTMLButtonElement, action: () => void | Prom
   }
 }
 
-/** Animated transient states for newly-found accounts. */
-export function createStatusBadge(kind: "analyzing" | "pending"): HTMLElement {
+/** Animated transient states for newly-found and queued accounts. */
+export function createStatusBadge(kind: "analyzing" | "pending" | "blocking"): HTMLElement {
   const el = document.createElement("span");
   if (kind === "analyzing") {
     el.className = "xss-badge analyzing labeled";
     el.setAttribute("aria-label", "MXGA 正在分析");
     el.innerHTML = `<span class="xss-ico">${icon("shield", "currentColor", 12)}</span><span class="xss-label">分析</span>`;
-  } else {
+  } else if (kind === "pending") {
     el.className = "xss-badge pending labeled";
     el.setAttribute("aria-label", "MXGA 排队检测");
     el.innerHTML = `<span class="xss-ico">${icon("shield", "currentColor", 12)}</span><span class="xss-label">排队</span>`;
+  } else {
+    el.className = "xss-badge blocking labeled";
+    el.setAttribute("aria-label", "MXGA 已加入后台拉黑队列");
+    el.innerHTML = `<span class="xss-ico">${icon("shield-x", "currentColor", 12)}</span><span class="xss-label">屏蔽中</span>`;
   }
   return el;
 }

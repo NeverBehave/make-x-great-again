@@ -43,6 +43,7 @@ export type BgRequest =
   | { type: "whitelist_status" }
   | { type: "whitelist_refresh" }
   | { type: "lookup"; userId: string }
+  | { type: "lookup_batch"; userIds: string[] }
   | { type: "classify"; signals: Omit<Signals, "isProfile"> }
   | { type: "report_spam"; signals: Omit<Signals, "isProfile"> }
   | { type: "confirm_spam"; signals: Omit<Signals, "isProfile"> }

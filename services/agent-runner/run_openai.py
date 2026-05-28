@@ -201,7 +201,7 @@ def process_one(item: dict[str, Any]) -> dict[str, Any]:
 
     if verdict is None:
         # Failure path — annotate with error so the row doesn't get retried
-        # forever (Worker queue filter caps agent_attempts<3).
+        # forever (Worker queue filter caps failed agent_attempts<3).
         body = {
             "handle": handle,
             "x_user_id": uid,
@@ -213,6 +213,7 @@ def process_one(item: dict[str, Any]) -> dict[str, Any]:
             "action": "needs_human",
             "model": LLM_MODEL,
             "signals_hash": signals_hash,
+            "error": "parse_failure",
             "notes": raw[:1500],
         }
         resp = worker_call("POST", "/v1/agent/decide", body)

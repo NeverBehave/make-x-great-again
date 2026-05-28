@@ -586,6 +586,9 @@ function statusForRuleAction(action: string): "human_confirmed" | "whitelisted" 
 const app = new Hono<{ Bindings: Env }>();
 app.use("*", cors());
 
+const HOUR_MS = 3600_000;
+const DAY_MS = 24 * HOUR_MS;
+
 app.get("/v1/health", async (c) => {
   const r = await c.env.DB.prepare(
     "SELECT count(*) n FROM accounts WHERE status='human_confirmed'",
@@ -1622,23 +1625,93 @@ app.get("/v1/whitelist", async (c) => {
 });
 
 app.get("/v1/list/meta", async (c) => {
+  const now = Date.now();
   const r = await c.env.DB.prepare(
     `SELECT count(*) n,
             max(published_at) latest,
+            sum(CASE WHEN published_at >= ? THEN 1 ELSE 0 END) AS day,
             sum(CASE WHEN published_at >= ? THEN 1 ELSE 0 END) AS week,
             (SELECT count(*) FROM accounts WHERE status='auto_pending_review') AS pending
        FROM accounts WHERE status='human_confirmed'`,
   )
-    .bind(Date.now() - 7 * 24 * 3600_000)
-    .first<{ n: number; latest: number | null; week: number; pending: number }>();
+    .bind(now - DAY_MS, now - 7 * DAY_MS)
+    .first<{ n: number; latest: number | null; day: number; week: number; pending: number }>();
   c.header("Cache-Control", "public, max-age=30, s-maxage=60");
   return c.json({
     count: r?.n ?? 0,
+    day: r?.day ?? 0,
     week: r?.week ?? 0,
     pending: r?.pending ?? 0,
     generatedAt: r?.latest ?? null,
     version: `d1-${r?.n ?? 0}`,
   });
+});
+
+// Public trend data for the landing page. The server returns 48 hourly buckets
+// so the UI can show the latest 24h while still having enough data for future
+// "past 48h" charts without changing the API.
+app.get("/v1/list/trends", async (c) => {
+  const now = Date.now();
+  const hourStart = Math.floor(now / HOUR_MS) * HOUR_MS;
+  const hourlyStart = hourStart - 47 * HOUR_MS;
+  const hourlyEnd = hourStart + HOUR_MS;
+  const hourly = Array.from({ length: 48 }, (_, i) => ({
+    at: hourlyStart + i * HOUR_MS,
+    count: 0,
+  }));
+
+  const hourlyRows = await c.env.DB.prepare(
+    `SELECT CAST(published_at / ? AS INTEGER) * ? AS bucket,
+            count(*) AS n
+       FROM accounts
+      WHERE status='human_confirmed'
+        AND published_at IS NOT NULL
+        AND published_at >= ?
+        AND published_at < ?
+      GROUP BY bucket
+      ORDER BY bucket ASC`,
+  )
+    .bind(HOUR_MS, HOUR_MS, hourlyStart, hourlyEnd)
+    .all<{ bucket: number; n: number }>();
+  const hourlyIndex = new Map(hourly.map((point, index) => [point.at, index]));
+  for (const row of hourlyRows.results ?? []) {
+    const index = hourlyIndex.get(row.bucket);
+    if (index !== undefined) hourly[index].count = row.n;
+  }
+
+  const rawTz = Number(c.req.query("tz"));
+  const timezoneOffsetMinutes =
+    Number.isFinite(rawTz) && Math.abs(rawTz) <= 14 * 60 ? Math.trunc(rawTz) : 0;
+  const offsetMs = timezoneOffsetMinutes * 60_000;
+  const currentLocalDay = Math.floor((now - offsetMs) / DAY_MS);
+  const dailyStart = (currentLocalDay - 6) * DAY_MS + offsetMs;
+  const dailyEnd = (currentLocalDay + 1) * DAY_MS + offsetMs;
+  const daily = Array.from({ length: 7 }, (_, i) => ({
+    at: dailyStart + i * DAY_MS,
+    count: 0,
+  }));
+
+  const dailyRows = await c.env.DB.prepare(
+    `SELECT CAST((published_at - ?) / ? AS INTEGER) * ? + ? AS bucket,
+            count(*) AS n
+       FROM accounts
+      WHERE status='human_confirmed'
+        AND published_at IS NOT NULL
+        AND published_at >= ?
+        AND published_at < ?
+      GROUP BY bucket
+      ORDER BY bucket ASC`,
+  )
+    .bind(offsetMs, DAY_MS, DAY_MS, offsetMs, dailyStart, dailyEnd)
+    .all<{ bucket: number; n: number }>();
+  const dailyIndex = new Map(daily.map((point, index) => [point.at, index]));
+  for (const row of dailyRows.results ?? []) {
+    const index = dailyIndex.get(row.bucket);
+    if (index !== undefined) daily[index].count = row.n;
+  }
+
+  c.header("Cache-Control", "public, max-age=30, s-maxage=60");
+  return c.json({ now, timezoneOffsetMinutes, hourly, daily });
 });
 
 // Public paginated spam list — backs the /list page and any external mirror.
@@ -1966,8 +2039,9 @@ app.get("/v1/agent/queue", async (c) => {
 //   "annotate"  → status untouched, agent_* columns updated only
 //
 // We always write the agent_* annotations and append a review_log row with
-// actor='agent:<agent_id>'. We never touch status=human_confirmed or
-// status=whitelisted — those values are explicitly rejected.
+// actor='agent:<agent_id>' only when the row is still in the fresh agent queue.
+// We never touch status=human_confirmed or status=whitelisted — stale agent
+// decisions lose the race and return 409 without changing audit state.
 const AgentDecideBody = z.object({
   x_user_id: z.string().regex(/^\d+$/).optional(),
   handle: z.string().min(1).max(64),
@@ -1980,6 +2054,7 @@ const AgentDecideBody = z.object({
   action: z.enum(["approve_block", "reject_legit", "needs_human"]),
   model: z.string().max(80).optional(),
   signals_hash: z.string().max(64).optional(),
+  error: z.string().max(1000).optional(),
   notes: z.string().max(2000).optional(),
 });
 
@@ -1988,6 +2063,14 @@ function statusForAgentDecision(d: z.infer<typeof AgentDecideBody>["decision"]):
   if (d === "whitelist") return "agent_whitelist";
   if (d === "pending") return "agent_pending";
   return null; // annotate-only
+}
+
+function isAgentFailureAttempt(body: z.infer<typeof AgentDecideBody>): boolean {
+  if (body.decision !== "annotate" || body.action !== "needs_human") return false;
+  if (body.error) return true;
+  return body.label === "uncertain" && body.confidence === 0
+    ? body.reasons.some((r) => /fail|timeout|parse/i.test(r))
+    : false;
 }
 
 app.post("/v1/agent/decide", async (c) => {
@@ -2007,27 +2090,40 @@ app.post("/v1/agent/decide", async (c) => {
   const reasonsJson = JSON.stringify(body.reasons);
   const signalsJson = JSON.stringify(body.signals);
   const decidedBy = `agent:${a.agentId}`;
-  const stmts: D1PreparedStatement[] = [];
+  const failedAttempt = isAgentFailureAttempt(body);
+  const noteShort = (body.notes ?? "").slice(0, 400);
+  const agentError = body.error
+    ? body.error.slice(0, 1000)
+    : failedAttempt
+      ? (body.notes || body.reasons.join(" · ") || "agent_failed").slice(0, 1000)
+      : null;
+  const signalGuard = body.signals_hash
+    ? " AND (signals_hash IS NULL OR signals_hash=?)"
+    : "";
 
   // Write annotation columns. Update statement targets the canonical row;
   // matches by uid when present (preferred), else by normalized handle.
+  // The status guard prevents a stale agent decision from downgrading a row
+  // already handled by admin or another stronger path.
   const annotateSql = uid
     ? `UPDATE accounts
           SET agent_id=?, agent_label=?, agent_confidence=?, agent_reasons=?,
               agent_signals=?, agent_evidence=?, agent_action=?, agent_model=?,
-              agent_at=?, agent_signals_hash=?, agent_attempts=agent_attempts+1,
-              agent_error=NULL,
+              agent_at=?, agent_signals_hash=?,
+              agent_attempts=CASE WHEN ?=1 THEN agent_attempts+1 ELSE 0 END,
+              agent_error=?,
               last_decided_by=?, last_decided_at=?
               ${nextStatus ? ", status=?" : ""}
-        WHERE lower(handle)=? AND x_user_id=?`
+        WHERE lower(handle)=? AND x_user_id=? AND status='auto_pending_review'${signalGuard}`
     : `UPDATE accounts
           SET agent_id=?, agent_label=?, agent_confidence=?, agent_reasons=?,
               agent_signals=?, agent_evidence=?, agent_action=?, agent_model=?,
-              agent_at=?, agent_signals_hash=?, agent_attempts=agent_attempts+1,
-              agent_error=NULL,
+              agent_at=?, agent_signals_hash=?,
+              agent_attempts=CASE WHEN ?=1 THEN agent_attempts+1 ELSE 0 END,
+              agent_error=?,
               last_decided_by=?, last_decided_at=?
               ${nextStatus ? ", status=?" : ""}
-        WHERE lower(handle)=? AND x_user_id IS NULL`;
+        WHERE lower(handle)=? AND x_user_id IS NULL AND status='auto_pending_review'${signalGuard}`;
   const annotateBinds: unknown[] = [
     a.agentId,
     body.label,
@@ -2039,27 +2135,38 @@ app.post("/v1/agent/decide", async (c) => {
     body.model ?? null,
     now,
     body.signals_hash ?? null,
+    failedAttempt ? 1 : 0,
+    agentError,
     decidedBy,
     now,
   ];
   if (nextStatus) annotateBinds.push(nextStatus);
   annotateBinds.push(handle);
   if (uid) annotateBinds.push(uid);
+  if (body.signals_hash) annotateBinds.push(body.signals_hash);
 
-  stmts.push(c.env.DB.prepare(annotateSql).bind(...annotateBinds));
+  const updated = await c.env.DB.prepare(annotateSql).bind(...annotateBinds).run();
+  const changes = Number(updated.meta?.changes ?? 0);
+  if (changes === 0) {
+    return c.json(
+      {
+        ok: false,
+        error: "stale_agent_decision",
+        detail: "row is no longer in the fresh agent queue",
+      },
+      409,
+    );
+  }
 
   // Audit: every agent decision lands in review_log so the maintainer
   // panel and the public audit log can show "decided by agent:hermes" with
   // a click-through to the reasons.
   const logAction = nextStatus ? `agent_${body.decision}` : "agent_annotate";
-  const noteShort = (body.notes ?? "").slice(0, 400);
-  stmts.push(
-    c.env.DB.prepare(
-      "INSERT INTO review_log (x_user_id,handle,action,actor,note,at) VALUES (?,?,?,?,?,?)",
-    ).bind(uid, handle, logAction, decidedBy, noteShort, now),
-  );
-
-  await c.env.DB.batch(stmts);
+  await c.env.DB.prepare(
+    "INSERT INTO review_log (x_user_id,handle,action,actor,note,at) VALUES (?,?,?,?,?,?)",
+  )
+    .bind(uid, handle, logAction, decidedBy, noteShort, now)
+    .run();
   return c.json({
     ok: true,
     agent_id: a.agentId,
@@ -2180,10 +2287,34 @@ function agentPromoteStmts(
     const sql = xUserId
       ? `UPDATE accounts
             SET status='auto_pending_review',
+                agent_id=NULL,
+                agent_label=NULL,
+                agent_confidence=NULL,
+                agent_reasons=NULL,
+                agent_signals=NULL,
+                agent_evidence=NULL,
+                agent_action=NULL,
+                agent_model=NULL,
+                agent_at=NULL,
+                agent_signals_hash=NULL,
+                agent_attempts=0,
+                agent_error=NULL,
                 last_decided_by=NULL, last_decided_at=NULL
           WHERE lower(handle)=? AND x_user_id=?`
       : `UPDATE accounts
             SET status='auto_pending_review',
+                agent_id=NULL,
+                agent_label=NULL,
+                agent_confidence=NULL,
+                agent_reasons=NULL,
+                agent_signals=NULL,
+                agent_evidence=NULL,
+                agent_action=NULL,
+                agent_model=NULL,
+                agent_at=NULL,
+                agent_signals_hash=NULL,
+                agent_attempts=0,
+                agent_error=NULL,
                 last_decided_by=NULL, last_decided_at=NULL
           WHERE lower(handle)=? AND x_user_id IS NULL`;
     const stmt = env.DB.prepare(sql);

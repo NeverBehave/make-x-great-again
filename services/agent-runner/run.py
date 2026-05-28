@@ -209,8 +209,8 @@ def process_one(item: dict[str, Any]) -> dict[str, Any]:
     verdict, raw = run_hermes(handle)
     elapsed = round(time.time() - t0, 1)
     if verdict is None:
-        # Hermes failed/timed out — mark attempt and bail. The Worker queue
-        # filter on agent_attempts<3 caps retries.
+        # Hermes failed/timed out — mark one failed attempt and bail. The
+        # Worker queue filter on agent_attempts<3 caps retries.
         body = {
             "handle": handle,
             "x_user_id": uid,
@@ -222,6 +222,7 @@ def process_one(item: dict[str, Any]) -> dict[str, Any]:
             "action": "needs_human",
             "model": "grok-4.3",
             "signals_hash": signals_hash,
+            "error": "parse_or_timeout",
             "notes": (raw[:1500] if raw else "no output"),
         }
         resp = http_json("POST", "/v1/agent/decide", body)

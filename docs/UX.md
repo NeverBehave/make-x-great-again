@@ -91,8 +91,8 @@ Behaviour:
 - Auto-minimizes to the pill after ~8s idle; dismiss is **per-tab, persisted**.
 - `role="status"`, `aria-live="polite"`, focusable, **Esc closes**,
   respects `prefers-reduced-motion`.
-- **一键拉黑全部** is user-initiated: opens a 1-line confirm → runs X's
-  native block per account with a progress row and a **5s undo** window.
+- **一键拉黑全部** is user-initiated: enqueues selected accounts → calls X's
+  native block endpoint with global pacing and progress feedback.
   Never silent, never auto (governance + matches "不完全自动 block").
 - Empty state: bubble simply never appears (no "0 found" noise).
 

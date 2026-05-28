@@ -546,6 +546,8 @@ function Toggle({
 function Settings() {
   const [login, setLogin] = useState("");
   const [flow, setFlow] = useState("");
+  const [device, setDevice] = useState<{ code: string; uri: string } | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [cleared, setCleared] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
   const [st, setSt] = useState<Settings | null>(null);
@@ -558,6 +560,7 @@ function Settings() {
     if (typeof location !== "undefined" && /[?&]login=1\b/.test(location.search)) {
       const url = new URL(location.href);
       url.searchParams.delete("login");
+      url.searchParams.set("tab", "settings");
       history.replaceState({}, "", url.toString());
       // Wait a tick so the initial render with the login UI mounts before
       // ghLogin() opens the GitHub verification tab.
@@ -572,8 +575,32 @@ function Settings() {
     await setSetting(k, v);
     setSt((p) => (p ? { ...p, [k]: v } : p));
   };
+  async function copyDeviceCode() {
+    if (!device) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(device.code);
+      } else {
+        throw new Error("clipboard unavailable");
+      }
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = device.code;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 1500);
+  }
   async function ghLogin() {
     setFlow("正在获取设备码…");
+    setDevice(null);
+    setCopiedCode(false);
     const s = await bg<{
       user_code: string;
       verification_uri: string;
@@ -586,11 +613,13 @@ function Settings() {
     }
     const { user_code, verification_uri, device_code, interval } = s.data;
     window.open(verification_uri, "_blank", "noopener");
-    setFlow(`在打开的页面输入码：${user_code}，授权后自动完成…`);
+    setDevice({ code: user_code, uri: verification_uri });
+    setFlow("在打开的 GitHub 页面输入验证码，授权后会自动完成。");
     const poll = async () => {
       const r = await bg<{ login?: string }>({ type: "gh_poll", deviceCode: device_code });
       if (r.ok && r.data?.login) {
         setFlow("");
+        setDevice(null);
         refresh();
         return;
       }
@@ -631,7 +660,32 @@ function Settings() {
               用 GitHub 登录
             </Btn>
           )}
-          {flow && <p className="mt-2 text-[12px] text-warn">{flow}</p>}
+          {device ? (
+            <div className="mt-3 rounded-lg border border-border-2 bg-card p-3 shadow-sm">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span className="text-[12px] font-medium text-fg-2">GitHub 验证码</span>
+                <a
+                  href={device.uri}
+                  target="_blank"
+                  rel="noopener"
+                  className="text-[12px] text-accent transition hover:underline"
+                >
+                  打开验证页 ↗
+                </a>
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="flex min-h-11 flex-1 items-center justify-center rounded-md border border-border bg-bg px-3 font-mono text-[22px] font-semibold tracking-[0.18em] text-fg tabular-nums">
+                  {device.code}
+                </code>
+                <Btn size="sm" tier={copiedCode ? "default" : "primary"} onClick={copyDeviceCode}>
+                  {copiedCode ? "已复制" : "复制"}
+                </Btn>
+              </div>
+              {flow && <p className="mt-2 text-[12px] text-fg-3">{flow}</p>}
+            </div>
+          ) : (
+            flow && <p className="mt-2 text-[12px] text-warn">{flow}</p>
+          )}
         </section>
 
         {st && (
@@ -802,10 +856,35 @@ const TABS = [
   ["settings", "设置", Settings],
   ["about", "关于", About],
 ] as const;
+type TabId = (typeof TABS)[number][0];
+const tabIds = new Set<TabId>(TABS.map(([id]) => id));
+
+function tabFromLocation(): TabId {
+  if (typeof location === "undefined") return "overview";
+  const url = new URL(location.href);
+  const fromQuery = url.searchParams.get("tab");
+  const fromHash = url.hash.replace(/^#/, "");
+  if (url.searchParams.get("login") === "1") return "settings";
+  if (fromQuery && tabIds.has(fromQuery as TabId)) return fromQuery as TabId;
+  if (fromHash && tabIds.has(fromHash as TabId)) return fromHash as TabId;
+  return "overview";
+}
+
+function setTabUrl(id: TabId) {
+  if (typeof history === "undefined" || typeof location === "undefined") return;
+  const url = new URL(location.href);
+  url.searchParams.set("tab", id);
+  url.hash = "";
+  history.replaceState({}, "", url.toString());
+}
 
 export function App() {
-  const [tab, setTab] = useState<(typeof TABS)[number][0]>("overview");
+  const [tab, setTabState] = useState<TabId>(() => tabFromLocation());
   const Active = TABS.find((t) => t[0] === tab)?.[2] ?? Overview;
+  const setTab = (id: TabId) => {
+    setTabState(id);
+    setTabUrl(id);
+  };
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 flex h-screen w-[220px] flex-none flex-col gap-6 border-r border-border px-4 py-6">

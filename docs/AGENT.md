@@ -20,9 +20,10 @@ Crucially:
   statuses; the public list (`status='human_confirmed'`) and the
   official whitelist (`status='whitelisted'`) are unchanged.
 - **The governance red line holds.** `GOVERNANCE.md` says AI alone never
-  auto-publishes. The agent decision endpoint hard-refuses
-  `human_confirmed`/`whitelisted` writes — only humans and the existing
-  AI≥0.9 + ≥3 GH-reporters rule can flip those.
+  auto-publishes. The agent decision endpoint can only write private
+  staging statuses while the row is still in `auto_pending_review`; stale
+  agent decisions return `409 stale_agent_decision` instead of overwriting
+  a human/admin decision.
 - **Plug-in friendly.** Anyone can write a runner that talks to the two
   endpoints described below. Hermes is one possible runner; Claude/Codex
   on a server, GPT-4o on a Cloudflare durable object, your own Python
@@ -58,15 +59,15 @@ Crucially:
 | `agent_blacklist`     | Side-channel agent confidently says spam — staged    | Agent (via `/v1/agent/decide`)      | **no**          |
 | `agent_whitelist`     | Side-channel agent says legit — staged               | Agent                               | **no**          |
 | `agent_pending`       | Agent saw it but abstained ("待定")                  | Agent                               | no              |
-| `human_confirmed`     | Maintainer-approved spam — on the public list        | Human admin (or AI+reporters rule)  | **yes**         |
+| `human_confirmed`     | Maintainer-approved spam — on the public list        | Human admin                         | **yes**         |
 | `whitelisted`         | Maintainer-approved legit                            | Human admin                         | (positive list) |
 | `rejected`            | Maintainer rejected                                  | Human admin                         | no              |
 | `removed`             | Was public, unpublished by admin                     | Human admin                         | no              |
 | `auto_legit`          | In-Worker LLM said legit                             | Worker                              | no              |
 
 Promoting `agent_blacklist` → `human_confirmed` is **always** a human
-action (or governed by AI+reporters). The agent does the boring screening;
-the maintainer does the publishing.
+action in the current alpha. The agent does the boring screening; the
+maintainer does the publishing.
 
 ## D1 schema additions
 
@@ -88,8 +89,8 @@ from `ADMIN_TOKEN`; the runner host stores it in a `chmod 600` file.
 
 Returns up to `N` (default 30, max 100) `auto_pending_review` rows the
 agent hasn't yet scored — or has scored against a stale `signals_hash`.
-Sorted `last_scored DESC`. `agent_attempts < 3` filter caps retries on
-chronic failures.
+Sorted `last_scored DESC`. `agent_attempts < 3` caps retries on chronic
+agent failures; successful agent decisions reset this counter to 0.
 
 ```jsonc
 {
@@ -146,17 +147,23 @@ time.
   "action": "approve_block",     // one of: approve_block | reject_legit | needs_human
   "model": "grok-4.3",           // free-form model identifier
   "signals_hash": "abc123…",     // echo back the one from /queue
+  "error": "parse_or_timeout",    // optional; only for failure annotations
   "notes": "Account bio explicitly promotes 同城上门 services …"
 }
 ```
 
 The Worker:
-1. Writes all `agent_*` columns and `last_decided_by='agent:<agent_id>'`.
-2. Flips `status` if `decision != "annotate"` (and not into a
+1. Updates the row only if it is still `status='auto_pending_review'`
+   (and, when supplied, still matches the posted `signals_hash`).
+   Otherwise it returns `409 stale_agent_decision` and writes nothing.
+2. Writes all `agent_*` columns and `last_decided_by='agent:<agent_id>'`.
+   On failure annotations, also stores `agent_error`.
+3. Flips `status` if `decision != "annotate"` (and not into a
    public-tier status — those writes are rejected at the type level).
-3. Inserts one `review_log` row with
+4. Inserts one `review_log` row with
    `actor='agent:<agent_id>'`, `action='agent_<decision>'`.
-4. Bumps `agent_attempts` (the cap prevents loops on chronic failures).
+5. Bumps `agent_attempts` only for failed annotate attempts; successful
+   decisions reset it to 0.
 
 Returns `{ok:true, agent_id, status: "agent_blacklist" | … | "(annotate-only)"}`.
 

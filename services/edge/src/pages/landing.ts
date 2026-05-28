@@ -9,7 +9,7 @@ const CSS = `
    in the eyebrow chip to anchor "this is for X" instantly.
    .hero-row is the outer flex container with the mascot on the right;
    .hero is the text column (text/eyebrow/h1/lede/CTAs/meta/install-note). */
-.hero-row{display:grid;grid-template-columns:minmax(0,1fr) 360px;align-items:start;gap:48px;
+.hero-row{display:grid;grid-template-columns:minmax(0,1fr) 380px;align-items:start;gap:40px;
   padding:56px 0 34px;max-width:none}
 .hero{min-width:0;padding:0;max-width:680px}
 .hero-side{display:flex;flex-direction:column;align-items:center;gap:18px;min-width:0}
@@ -91,10 +91,10 @@ section.block h2{font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;
 /* First-screen stats */
 .hero-stats{width:100%;max-width:380px}
 .hero-stats .stats-foot{justify-content:center}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border);
   border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden}
-.stat{padding:16px 14px 15px;background:var(--bg);min-width:0}
-.stat .n{font-size:25px;font-weight:600;letter-spacing:-.025em;font-variant-numeric:tabular-nums;
+.stat{padding:14px 16px 13px;background:var(--bg);min-width:0}
+.stat .n{font-size:26px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;
   line-height:1.05;color:var(--fg);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .stat .skel{display:inline-block;width:46px;height:26px;background:linear-gradient(90deg,
   var(--card),var(--card-hi),var(--card));
@@ -109,6 +109,53 @@ section.block h2{font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;
 .stats-foot .pip{display:inline-flex;align-items:center;gap:6px}
 .stats-foot .pip i{width:5px;height:5px;border-radius:50%;background:var(--ok);
   box-shadow:0 0 0 0 rgba(16,185,129,.55);animation:pulse 2.4s ease-out infinite}
+
+/* Public trend charts — compact, dependency-free SVG charts. They borrow the
+   same area/fill language as the dashboard charts in clash-master, but stay
+   native to this Worker-rendered landing page. */
+.trend-block{padding:2px 0 42px;max-width:none}
+.trend-strip{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  margin-bottom:12px;padding:0 2px}
+.trend-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--fg-3)}
+.trend-eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 42%,transparent);
+  animation:pulse 2.4s ease-out infinite}
+.trend-updated{font-size:12px;color:var(--fg-3);font-variant-numeric:tabular-nums}
+.trend-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(260px,.7fr);gap:14px}
+.trend-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-card);padding:16px;min-width:0;overflow:hidden}
+.trend-card header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+  margin-bottom:12px}
+.trend-card h2{font-size:13.5px;font-weight:600;color:var(--fg);letter-spacing:-.005em;margin:0}
+.trend-card p{font-size:12px;color:var(--fg-3);margin-top:3px}
+.trend-total{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:19px;
+  font-weight:600;color:var(--fg);letter-spacing:-.02em;font-variant-numeric:tabular-nums;
+  white-space:nowrap}
+.trend-chart{height:166px;position:relative}
+.trend-chart svg{width:100%;height:100%;display:block;overflow:visible}
+.trend-gridline{stroke:var(--border-strong);stroke-width:1;stroke-dasharray:4 5;opacity:.65}
+.trend-axis{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  color:var(--fg-4);font-size:11px;margin-top:8px;font-variant-numeric:tabular-nums}
+.trend-axis span{min-width:0;white-space:nowrap}
+.trend-axis.hourly span{flex:1;text-align:center}.trend-axis.hourly span:first-child{text-align:left}
+.trend-axis.hourly span:last-child{text-align:right}
+.trend-axis.daily span{flex:1;text-align:center}.trend-axis.daily span:first-child{text-align:left}
+.trend-axis.daily span:last-child{text-align:right}
+.trend-hit{cursor:crosshair}
+.trend-tip{position:absolute;left:0;top:0;z-index:3;pointer-events:none;opacity:0;
+  transform:translate(-50%,calc(-100% - 10px));transition:opacity .12s ease,transform .12s ease;
+  min-width:112px;padding:7px 9px;border:1px solid var(--border-strong);border-radius:var(--r);
+  background:color-mix(in srgb,var(--bg) 92%,transparent);box-shadow:var(--shadow-elev);
+  color:var(--fg);font-size:12px;line-height:1.35;backdrop-filter:blur(8px)}
+.trend-tip.show{opacity:1;transform:translate(-50%,calc(-100% - 6px))}
+.trend-tip strong{display:block;font-weight:600;margin-bottom:2px}
+.trend-tip span{display:block;color:var(--fg-3);font-variant-numeric:tabular-nums}
+.trend-empty{height:166px;border:1px dashed var(--border-strong);border-radius:var(--r);
+  color:var(--fg-3);font-size:12px;display:flex;align-items:center;justify-content:center}
+.trend-skel{height:166px;border-radius:var(--r);background:linear-gradient(90deg,
+  var(--card),var(--card-hi),var(--card));background-size:200% 100%;
+  animation:shim 1.4s ease-in-out infinite}
 
 /* FEED block — sits directly under hero, no big section header.
    feed-head is a quiet eyebrow + "see all" link, then the feed itself. */
@@ -247,10 +294,10 @@ section.block h2{font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;
   .pillar .n{font-size:11px}
   .pillar .status{align-self:flex-start;margin-top:4px}
   .trust{grid-template-columns:1fr}
-  .stats{grid-template-columns:repeat(3,1fr)}
-  .stat{padding:14px 10px}
-  .stat .n{font-size:22px}
+  .stat{padding:13px 12px 12px}
+  .stat .n{font-size:23px}
   .stat .lbl{font-size:10.5px}
+  .trend-grid{grid-template-columns:1fr}
   section.block{padding:48px 0}
 }
 @media (max-width:440px){
@@ -267,6 +314,7 @@ section.block h2{font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;
   .stat{padding:10px 7px}
   .stat .n{font-size:18px}
   .stat .lbl{font-size:10px;margin-top:5px}
+  .trend-axis.hourly span:nth-child(even){display:none}
   .stats-foot{margin-top:9px;font-size:11.5px}
 }
 `;
@@ -287,6 +335,7 @@ const HERO_STATS = `
 <div class="hero-stats" aria-label="当前运行数据">
   <div class="stats">
     <div class="stat"><div class="n" id="sCount" data-v="0"><span class="skel"></span></div><div class="lbl">已确认</div></div>
+    <div class="stat"><div class="n" id="sDay" data-v="0"><span class="skel"></span></div><div class="lbl">24h新增</div></div>
     <div class="stat"><div class="n" id="sWeek" data-v="0"><span class="skel"></span></div><div class="lbl">本周新增</div></div>
     <div class="stat"><div class="n" id="sPending" data-v="0"><span class="skel"></span></div><div class="lbl">待复核</div></div>
   </div>
@@ -333,6 +382,39 @@ const HERO = `
   </div>
   ${HERO_STATS}
 </div>
+</section>
+`;
+
+const TRENDS = `
+<section class="trend-block" aria-labelledby="trendTitle">
+  <div class="trend-strip">
+    <span class="trend-eyebrow" id="trendTitle"><i class="dot" aria-hidden="true"></i>公开趋势</span>
+    <span class="trend-updated" id="trendAgo">加载中...</span>
+  </div>
+  <div class="trend-grid">
+    <article class="trend-card" aria-label="过去 24 小时每小时新增 spam">
+      <header>
+        <div>
+          <h2>过去 24 小时</h2>
+          <p>每小时新增 spam</p>
+        </div>
+        <strong class="trend-total" id="trend24Total">—</strong>
+      </header>
+      <div class="trend-chart" id="trend24Chart"><div class="trend-skel"></div></div>
+      <div class="trend-axis hourly" id="trend24Ticks" aria-hidden="true"></div>
+    </article>
+    <article class="trend-card" aria-label="过去一周每天处理 spam">
+      <header>
+        <div>
+          <h2>过去一周</h2>
+          <p>每天处理 spam</p>
+        </div>
+        <strong class="trend-total" id="trend7Total">—</strong>
+      </header>
+      <div class="trend-chart" id="trend7Chart"><div class="trend-skel"></div></div>
+      <div class="trend-axis daily" id="trend7Ticks" aria-hidden="true"></div>
+    </article>
+  </div>
 </section>
 `;
 
@@ -420,8 +502,107 @@ const SCRIPT = `
 
   function esc(s){return (s==null?'':String(s)).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
   function fmt(n){return typeof n==='number'?n.toLocaleString('zh-CN'):'—'}
+  function plus(n){return n>0?'+'+fmt(n):fmt(n)}
   function ago(ms){if(!ms)return'';var d=Date.now()-ms,s=Math.round(d/1000);if(s<10)return'刚刚';if(s<60)return s+'s';var m=Math.round(s/60);if(m<60)return m+'m';var h=Math.round(m/60);if(h<24)return h+'h';return Math.round(h/24)+'d'}
   function agoLong(ms){if(!ms)return'';var d=Date.now()-ms,s=Math.round(d/1000);if(s<60)return s+' 秒前';var m=Math.round(s/60);if(m<60)return m+' 分钟前';var h=Math.round(m/60);if(h<24)return h+' 小时前';return Math.round(h/24)+' 天前'}
+  function setText(id,v){var el=document.getElementById(id);if(el)el.textContent=v}
+  function total(items){return (items||[]).reduce(function(sum,item){return sum+(Number(item.count)||0)},0)}
+  function hourLabel(ms){return new Date(ms).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false})}
+  function dayLabel(ms){return new Date(ms).toLocaleDateString('zh-CN',{month:'numeric',day:'numeric'})}
+  function weekLabel(ms){return new Date(ms).toLocaleDateString('zh-CN',{weekday:'short'})}
+  function dayLongLabel(ms){return new Date(ms).toLocaleDateString('zh-CN',{month:'long',day:'numeric',weekday:'short'})}
+  function setTicks(id,items){
+    var el=document.getElementById(id);if(!el)return;
+    el.innerHTML=(items||[]).map(function(t){return '<span>'+esc(t)+'</span>'}).join('');
+  }
+  function bindTrendTooltip(el){
+    var tip=el&&el.querySelector('.trend-tip');if(!tip)return;
+    function show(target){
+      tip.innerHTML='<strong>'+esc(target.getAttribute('data-tip-title')||'')+'</strong><span>'+esc(target.getAttribute('data-tip-value')||'')+'</span>';
+      tip.style.left=(target.getAttribute('data-tip-x')||'50')+'%';
+      tip.style.top=(target.getAttribute('data-tip-y')||'50')+'%';
+      tip.classList.add('show');
+    }
+    function hide(){tip.classList.remove('show')}
+    el.querySelectorAll('[data-tip-title]').forEach(function(target){
+      target.addEventListener('mouseenter',function(){show(target)});
+      target.addEventListener('focus',function(){show(target)});
+      target.addEventListener('mouseleave',hide);
+      target.addEventListener('blur',hide);
+    });
+  }
+
+  function gridLines(w,h,top,base){
+    var out='';
+    for(var i=0;i<4;i++){
+      var y=top+(base-top)*i/3;
+      out+='<line class="trend-gridline" x1="0" x2="'+w+'" y1="'+y.toFixed(1)+'" y2="'+y.toFixed(1)+'"/>';
+    }
+    return out;
+  }
+
+  function renderAreaChart(el,data,label){
+    if(!el)return;
+    if(!data.length){el.innerHTML='<div class="trend-empty">暂无数据</div>';return}
+    var sum=total(data);
+    if(sum===0){el.innerHTML='<div class="trend-empty">这段时间暂无新增</div>';return}
+    var w=640,h=170,top=10,base=146,left=8,right=8;
+    var max=Math.max(1,Math.max.apply(null,data.map(function(p){return Number(p.count)||0})));
+    var pts=data.map(function(p,i){
+      var x=left+(data.length===1?0:i*(w-left-right)/(data.length-1));
+      var y=top+(base-top)*(1-((Number(p.count)||0)/max));
+      return {x:x,y:y,count:Number(p.count)||0,at:p.at};
+    });
+    var line=pts.map(function(p,i){return (i?'L':'M')+p.x.toFixed(1)+','+p.y.toFixed(1)}).join(' ');
+    var area=line+' L'+pts[pts.length-1].x.toFixed(1)+','+base+' L'+pts[0].x.toFixed(1)+','+base+' Z';
+    var dots=pts.map(function(p){
+      return '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="3" fill="var(--accent)" opacity=".9"/>';
+    }).join('');
+    var slot=(w-left-right)/(data.length-1);
+    var hits=pts.map(function(p,i){
+      var x=Math.max(0,p.x-slot/2);
+      var ww=Math.min(w-x,slot);
+      var title=hourLabel(p.at)+' - '+hourLabel(p.at+3600_000);
+      return '<rect class="trend-hit" tabindex="0" x="'+x.toFixed(1)+'" y="0" width="'+ww.toFixed(1)+'" height="'+base+'" fill="transparent" style="pointer-events:all" data-tip-title="'+esc(title)+'" data-tip-value="'+esc(fmt(p.count)+' 条新增')+'" data-tip-x="'+(p.x/w*100).toFixed(2)+'" data-tip-y="'+(p.y/h*100).toFixed(2)+'"><title>'+esc(title+' · '+fmt(p.count)+' 条新增')+'</title></rect>';
+    }).join('');
+    el.innerHTML='<svg role="img" aria-label="'+esc(label)+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'
+      +'<defs><linearGradient id="trend24Fill" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stop-color="var(--accent)" stop-opacity=".30"/><stop offset="95%" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>'
+      +gridLines(w,h,top,base)
+      +'<path d="'+area+'" fill="url(#trend24Fill)"/>'
+      +'<path d="'+line+'" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>'
+      +dots+hits+'</svg><div class="trend-tip" role="tooltip"></div>';
+    bindTrendTooltip(el);
+  }
+
+  function renderBarChart(el,data,label){
+    if(!el)return;
+    if(!data.length){el.innerHTML='<div class="trend-empty">暂无数据</div>';return}
+    var sum=total(data);
+    if(sum===0){el.innerHTML='<div class="trend-empty">这周暂无新增</div>';return}
+    var w=420,h=170,top=10,base=146,left=10,right=10;
+    var max=Math.max(1,Math.max.apply(null,data.map(function(p){return Number(p.count)||0})));
+    var slot=(w-left-right)/data.length;
+    var barW=Math.max(18,slot*.56);
+    var bars=data.map(function(p,i){
+      var count=Number(p.count)||0;
+      var bh=Math.max(count?3:0,(base-top)*(count/max));
+      var x=left+i*slot+(slot-barW)/2;
+      var y=base-bh;
+      return '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+bh.toFixed(1)+'" rx="4" fill="var(--violet)" opacity="'+(count?'.9':'.25')+'"/>';
+    }).join('');
+    var hits=data.map(function(p,i){
+      var count=Number(p.count)||0;
+      var x=left+i*slot;
+      var cx=x+slot/2;
+      var y=top+(base-top)*(1-(count/max));
+      var title=dayLongLabel(p.at);
+      return '<rect class="trend-hit" tabindex="0" x="'+x.toFixed(1)+'" y="0" width="'+slot.toFixed(1)+'" height="'+base+'" fill="transparent" style="pointer-events:all" data-tip-title="'+esc(title)+'" data-tip-value="'+esc(fmt(count)+' 条处理')+'" data-tip-x="'+(cx/w*100).toFixed(2)+'" data-tip-y="'+(y/h*100).toFixed(2)+'"><title>'+esc(title+' · '+fmt(count)+' 条处理')+'</title></rect>';
+    }).join('');
+    el.innerHTML='<svg role="img" aria-label="'+esc(label)+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'
+      +gridLines(w,h,top,base)
+      +bars+hits+'</svg><div class="trend-tip" role="tooltip"></div>';
+    bindTrendTooltip(el);
+  }
 
   // ---- Stat count-up animation ----
   function countTo(el,target,ms){
@@ -446,12 +627,34 @@ const SCRIPT = `
   function refreshMeta(){
     fetch('/v1/list/meta').then(function(r){return r.json()}).then(function(j){
       countTo(document.getElementById('sCount'),j.count,650);
+      countTo(document.getElementById('sDay'),(j.day>0?'+':'')+j.day,650);
       countTo(document.getElementById('sWeek'),(j.week>0?'+':'')+j.week,650);
       countTo(document.getElementById('sPending'),j.pending,650);
       document.getElementById('sAgo').textContent=j.generatedAt?('刚刚同步 '+agoLong(j.generatedAt)):'每分钟同步'
     }).catch(function(){
-      ['sCount','sWeek','sPending'].forEach(function(id){var el=document.getElementById(id);if(el)el.textContent='—'})
+      ['sCount','sDay','sWeek','sPending'].forEach(function(id){var el=document.getElementById(id);if(el)el.textContent='—'})
     })
+  }
+
+  function refreshTrends(){
+    fetch('/v1/list/trends?tz='+encodeURIComponent(new Date().getTimezoneOffset()))
+      .then(function(r){return r.json()})
+      .then(function(j){
+        var hourly=(j.hourly||[]).slice(-24);
+        var daily=j.daily||[];
+        setText('trend24Total',plus(total(hourly)));
+        setText('trend7Total',plus(total(daily)));
+        setTicks('trend24Ticks',hourly.length?[0,4,8,12,16,20,23].map(function(i){return i===23?'现在':hourLabel(hourly[Math.min(i,hourly.length-1)].at)}):['—']);
+        setTicks('trend7Ticks',daily.map(function(d){return dayLabel(d.at)}));
+        setText('trendAgo',j.now?('刚刚同步 '+agoLong(j.now)):'刚刚同步');
+        renderAreaChart(document.getElementById('trend24Chart'),hourly,'过去 24 小时每小时新增 spam');
+        renderBarChart(document.getElementById('trend7Chart'),daily,'过去一周每天处理 spam');
+      })
+      .catch(function(){
+        setText('trendAgo','趋势加载失败');
+        var a=document.getElementById('trend24Chart');if(a)a.innerHTML='<div class="trend-empty">趋势加载失败</div>';
+        var b=document.getElementById('trend7Chart');if(b)b.innerHTML='<div class="trend-empty">趋势加载失败</div>';
+      })
   }
 
   // ---- Live feed (most recent 10) ----
@@ -543,8 +746,10 @@ const SCRIPT = `
 
   // ---- Boot ----
   refreshMeta();
+  refreshTrends();
   loadInitial();
   setInterval(refreshMeta,60000);
+  setInterval(refreshTrends,60000);
   setInterval(pollFeed,20000);
   // Keep relative timestamps fresh every 30s without hitting the API
   setInterval(function(){if(rows.length){feedEl.querySelectorAll('.feed-row').forEach(function(el,i){var t=el.querySelector('.t');if(t&&rows[i])t.textContent=ago(rows[i].published_at)});feedAgo.textContent='上次 '+agoLong(lastPollAt)}},30000);
@@ -557,7 +762,7 @@ export function landingHtml(): string {
     current: "home",
     css: CSS,
     head: `<meta name="description" content="MXGA 是开源 X 扩展：标出广告号和色情引流号，拉黑由你确认。">`,
-    body: HERO + FEED + PILLARS + TRUST,
+    body: HERO + FEED + TRENDS + PILLARS + TRUST,
     script: SCRIPT,
   });
 }

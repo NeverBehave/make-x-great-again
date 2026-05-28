@@ -34,29 +34,6 @@ function send<T = unknown>(msg: unknown): Promise<BgResponse & { data?: T }> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function articleOf(node: Element | null): HTMLElement | null {
-  return (node?.closest("article") as HTMLElement) ?? null;
-}
-
-/** Find a currently-rendered tweet authored by this account. */
-function findArticleFor(_userId?: string, handle?: string): HTMLElement | null {
-  for (const art of document.querySelectorAll<HTMLElement>(
-    'article[data-testid="tweet"]',
-  )) {
-    if (handle) {
-      const nb = art.querySelector('[data-testid="User-Name"]');
-      if (
-        nb &&
-        [...nb.querySelectorAll<HTMLAnchorElement>('a[href^="/"]')].some(
-          (a) => (a.getAttribute("href") ?? "").toLowerCase() === `/${handle.toLowerCase()}`,
-        )
-      )
-        return art;
-    }
-  }
-  return null;
-}
-
 function hideTweet(node: Element | null) {
   const cell =
     node?.closest('[data-testid="cellInnerDiv"]') ?? node?.closest("article");
@@ -64,100 +41,208 @@ function hideTweet(node: Element | null) {
 }
 
 // X web's long-standing public bearer (same one the site itself uses).
-const X_BEARER =
+const FALLBACK_X_BEARER =
   "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
 const ct0 = () => (document.cookie.match(/ct0=([^;]+)/)?.[1] ?? "");
 
-/**
- * Real X block via the site's own authenticated endpoint, using the user's
- * existing session (same first-party request the Block button makes). This
- * is the user-initiated action they explicitly asked for: it blocks on
- * their X account so it syncs to every browser/client. Falls back to DOM
- * automation only if this fails.
- */
-async function apiBlock(userId?: string, handle?: string): Promise<boolean> {
+const BLOCK_DELAY_MS = 1200;
+const BLOCK_JITTER_MS = 700;
+const BLOCK_SUCCESS_SETTLE_MS = 180;
+const BLOCK_SHORT_COOLDOWN_EVERY = 45;
+const BLOCK_SHORT_COOLDOWN_MS = 8_000;
+const BLOCK_LONG_COOLDOWN_EVERY = 120;
+const BLOCK_LONG_COOLDOWN_MS = 60_000;
+const BLOCK_RATE_LIMIT_COOLDOWN_MS = 45_000;
+const BLOCK_TRANSIENT_COOLDOWN_MS = 8_000;
+const LS_LAST_BLOCK = "mxga:last-x-block-api";
+const LS_BLOCK_ROUND = "mxga:x-block-round";
+const BLOCK_LOCK_NAME = "mxga-x-block-api";
+
+interface BlockRound {
+  count: number;
+  cooldownUntil: number;
+}
+
+interface BlockAttempt {
+  ok: boolean;
+  status?: number;
+  retryable?: boolean;
+  retryAfterMs?: number;
+}
+
+type LockCapableNavigator = Navigator & {
+  locks?: {
+    request<T>(name: string, callback: () => T | Promise<T>): Promise<T>;
+  };
+};
+
+function blockApiOrigin() {
+  return location.hostname.endsWith("twitter.com") ? "https://twitter.com" : "https://x.com";
+}
+
+function normalizeBlockHandle(handle?: string) {
+  return String(handle ?? "").trim().replace(/^@+/, "");
+}
+
+function storageNumber(key: string) {
   try {
+    return Number(localStorage.getItem(key) || 0) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function setStorageNumber(key: string, value: number) {
+  try {
+    localStorage.setItem(key, String(Math.max(0, Math.floor(value))));
+  } catch {
+    /* localStorage can be blocked; per-tab pacing still applies */
+  }
+}
+
+function readBlockRound(): BlockRound {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_BLOCK_ROUND) || "{}") as Partial<BlockRound>;
+    return {
+      count: Math.max(0, Number(raw.count || 0) || 0),
+      cooldownUntil: Math.max(0, Number(raw.cooldownUntil || 0) || 0),
+    };
+  } catch {
+    return { count: 0, cooldownUntil: 0 };
+  }
+}
+
+function writeBlockRound(round: BlockRound) {
+  try {
+    localStorage.setItem(
+      LS_BLOCK_ROUND,
+      JSON.stringify({
+        count: Math.max(0, Number(round.count || 0) || 0),
+        cooldownUntil: Math.max(0, Number(round.cooldownUntil || 0) || 0),
+      }),
+    );
+  } catch {
+    /* non-fatal */
+  }
+}
+
+function nextBlockCooldown(count: number) {
+  if (count > 0 && count % BLOCK_LONG_COOLDOWN_EVERY === 0) return BLOCK_LONG_COOLDOWN_MS;
+  if (count > 0 && count % BLOCK_SHORT_COOLDOWN_EVERY === 0) return BLOCK_SHORT_COOLDOWN_MS;
+  return 0;
+}
+
+function parseRetryAfterMs(value: string | null) {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const at = Date.parse(value);
+  return Number.isFinite(at) ? Math.max(0, at - Date.now()) : undefined;
+}
+
+function recordBlockBackoff(ms: number) {
+  if (ms <= 0) return;
+  const round = readBlockRound();
+  writeBlockRound({
+    ...round,
+    cooldownUntil: Math.max(round.cooldownUntil, Date.now() + ms),
+  });
+}
+
+function recordBlockFailure(attempt: BlockAttempt) {
+  if (attempt.status === 429) {
+    recordBlockBackoff(attempt.retryAfterMs ?? BLOCK_RATE_LIMIT_COOLDOWN_MS);
+  } else if (attempt.retryable) {
+    recordBlockBackoff(BLOCK_TRANSIENT_COOLDOWN_MS);
+  }
+}
+
+function retryDelayForAttempt(attempt: BlockAttempt, tries: number) {
+  if (!attempt.retryable) return 0;
+  if (attempt.status === 429) {
+    return Math.min(60_000, attempt.retryAfterMs ?? BLOCK_RATE_LIMIT_COOLDOWN_MS);
+  }
+  return Math.min(12_000, 900 * 2 ** Math.max(0, tries - 1));
+}
+
+async function waitForBlockSlot() {
+  while (true) {
+    const round = readBlockRound();
+    const cooldownRemaining = round.cooldownUntil - Date.now();
+    if (cooldownRemaining > 0) {
+      await sleep(Math.min(1000, cooldownRemaining));
+      continue;
+    }
+
+    const lastAt = storageNumber(LS_LAST_BLOCK);
+    const jitter = Math.floor(Math.random() * BLOCK_JITTER_MS);
+    const remaining = lastAt + BLOCK_DELAY_MS + jitter - Date.now();
+    if (remaining <= 0) break;
+    await sleep(Math.min(1000, remaining));
+  }
+  setStorageNumber(LS_LAST_BLOCK, Date.now());
+}
+
+function recordBlockSuccess() {
+  const round = readBlockRound();
+  const count = round.count + 1;
+  const cooldownMs = nextBlockCooldown(count);
+  writeBlockRound({
+    count,
+    cooldownUntil: cooldownMs ? Date.now() + cooldownMs : 0,
+  });
+}
+
+async function withBlockLock<T>(fn: () => Promise<T>): Promise<T> {
+  const locks = (navigator as LockCapableNavigator).locks;
+  return locks ? locks.request(BLOCK_LOCK_NAME, fn) : fn();
+}
+
+/** Silent X block via the first-party blocks/create endpoint. */
+async function apiBlock(userId?: string, handle?: string): Promise<BlockAttempt> {
+  try {
+    const csrf = ct0();
+    if (!csrf) return { ok: false, retryable: false };
+    const screenName = normalizeBlockHandle(handle);
     const body = new URLSearchParams();
-    if (userId && /^\d+$/.test(userId)) body.set("user_id", userId);
-    else if (handle) body.set("screen_name", handle);
-    else return false;
-    const res = await fetch("https://x.com/i/api/1.1/blocks/create.json", {
+    if (screenName) body.set("screen_name", screenName);
+    else if (userId && /^\d+$/.test(userId)) body.set("user_id", userId);
+    else return { ok: false, retryable: false };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15_000);
+    const res = await fetch(`${blockApiOrigin()}/i/api/1.1/blocks/create.json`, {
       method: "POST",
       credentials: "include",
+      signal: controller.signal,
       headers: {
-        authorization: X_BEARER,
-        "x-csrf-token": ct0(),
+        authorization: FALLBACK_X_BEARER,
+        "x-csrf-token": csrf,
         "x-twitter-auth-type": "OAuth2Session",
         "x-twitter-active-user": "yes",
         "content-type": "application/x-www-form-urlencoded",
       },
       body: body.toString(),
-    });
-    return res.ok;
+    }).finally(() => clearTimeout(timer));
+    const status = res.status;
+    return {
+      ok: res.ok,
+      status,
+      retryAfterMs: parseRetryAfterMs(res.headers.get("retry-after")),
+      retryable: status === 408 || status === 425 || status === 429 || status >= 500,
+    };
   } catch {
-    return false;
+    return { ok: false, retryable: true };
   }
 }
 
-const waitFor = async <T>(fn: () => T, tries = 24, gap = 80): Promise<T | null> => {
-  for (let i = 0; i < tries; i++) {
-    const v = fn();
-    if (v) return v;
-    await sleep(gap);
-  }
-  return null;
-};
-
-/**
- * PRIMARY block path: drive X's OWN block UI (caret → Block → confirm). X's
- * own JS issues the correctly-signed request (incl. the per-request
- * transaction id we can't forge), so it genuinely blocks on the account and
- * syncs to every client. Returns true ONLY when the confirm was clicked and
- * the dialog closed (real success — never a false positive).
- *
- * `trigger` may be:
- *  - an `<article>` element (feed / reply tree): we look for `[data-testid="caret"]`
- *  - the profile header (when the user is ON the target's profile page): we
- *    fall back to `[data-testid="userActions"]` which opens the same menu.
- */
-async function nativeBlock(trigger: HTMLElement): Promise<boolean> {
-  try {
-    // Tweet caret first; profile "..." button second.
-    const opener =
-      trigger.querySelector<HTMLElement>('[data-testid="caret"]') ??
-      document.querySelector<HTMLElement>('[data-testid="userActions"]');
-    if (!opener) return false;
-    opener.click();
-    const item = await waitFor(() => {
-      const direct = document.querySelector<HTMLElement>(
-        '[data-testid="block"], [role="menuitem"][data-testid="block"]',
-      );
-      if (direct) return direct;
-      const items = document.querySelectorAll<HTMLElement>(
-        '[role="menuitem"], [data-testid="Dropdown"] [role="menuitem"]',
-      );
-      return [...items].find((m) => /\bblock\b|屏蔽|封锁|拉黑/i.test(m.innerText)) ?? null;
-    });
-    if (!item) {
-      document.body.click(); // close the menu
-      return false;
-    }
-    item.click();
-    const confirm = await waitFor(() =>
-      document.querySelector<HTMLElement>('[data-testid="confirmationSheetConfirm"]'),
-    );
-    if (!confirm) return false;
-    confirm.click();
-    // Real success: the confirm sheet goes away.
-    const gone = await waitFor(
-      () => !document.querySelector('[data-testid="confirmationSheetConfirm"]'),
-      20,
-      80,
-    );
-    return !!gone;
-  } catch {
-    return false;
-  }
+async function coordinatedApiBlock(userId?: string, handle?: string): Promise<BlockAttempt> {
+  return withBlockLock(async () => {
+    await waitForBlockSlot();
+    const attempt = await apiBlock(userId, handle);
+    if (attempt.ok) recordBlockSuccess();
+    else recordBlockFailure(attempt);
+    return attempt;
+  });
 }
 
 /** Each inline badge gets its own shadow host so X CSS can't touch it. */
@@ -185,7 +270,7 @@ function clearMounts(anchor: HTMLElement) {
 
 /** Lightweight "queued" marker — NOT a final mount, so scan() revisits it
  *  once the token bucket refills (newly loaded comments never get stuck). */
-function mountStatus(anchor: HTMLElement, kind: "analyzing" | "pending") {
+function mountStatus(anchor: HTMLElement, kind: "analyzing" | "pending" | "blocking") {
   const cls = kind === "pending" ? "xss-pending" : "xss-mount";
   if (anchor.querySelector(`:scope > .${cls}`)) return;
   const host = document.createElement("span");
@@ -203,6 +288,10 @@ function mountStatus(anchor: HTMLElement, kind: "analyzing" | "pending") {
   anchor.appendChild(host);
 }
 const mountPending = (a: HTMLElement) => mountStatus(a, "pending");
+function mountBlocking(anchor: HTMLElement) {
+  clearMounts(anchor);
+  mountStatus(anchor, "blocking");
+}
 
 export default defineContentScript({
   matches: ["https://x.com/*", "https://twitter.com/*"],
@@ -248,6 +337,62 @@ export default defineContentScript({
     });
     const isReplyContext = () => /^\/[^/]+\/status\/\d+/.test(location.pathname);
     const keyOf = (s: Signals) => s.userId || `h:${s.handle}`;
+    type QSource = "manual" | "list_hit" | "cache_hit";
+    type QItem = {
+      key: string;
+      sig: Signals;
+      tries: number;
+      source: QSource;
+      verdict?: Verdict;
+    };
+    const LOOKUP_BATCH_DELAY_MS = 80;
+    const LOOKUP_BATCH_MAX = 100;
+    const lookupResolvers = new Map<string, (hit: CurationRecord | null) => void>();
+    const lookupInflight = new Map<string, Promise<CurationRecord | null>>();
+    let lookupTimer: ReturnType<typeof setTimeout> | undefined;
+
+    function scheduleLookupFlush() {
+      if (lookupTimer) return;
+      lookupTimer = setTimeout(() => {
+        lookupTimer = undefined;
+        void flushLookupBatch();
+      }, LOOKUP_BATCH_DELAY_MS);
+    }
+
+    async function flushLookupBatch() {
+      const batch = [...lookupResolvers.entries()].slice(0, LOOKUP_BATCH_MAX);
+      if (!batch.length) return;
+      for (const [id] of batch) lookupResolvers.delete(id);
+      if (lookupResolvers.size) scheduleLookupFlush();
+
+      const userIds = batch.map(([id]) => id);
+      const resp = await send<{ hits: Record<string, CurationRecord> }>({
+        type: "lookup_batch",
+        userIds,
+      }).catch(() => ({ ok: false }) as BgResponse & { data?: { hits: Record<string, CurationRecord> } });
+      const hits = resp.ok ? (resp.data?.hits ?? {}) : {};
+      for (const [id, resolve] of batch) resolve(hits[id] ?? null);
+    }
+
+    function lookupPublicHit(userId: string): Promise<CurationRecord | null> {
+      const existing = lookupInflight.get(userId);
+      if (existing) return existing;
+      const p = new Promise<CurationRecord | null>((resolve) => {
+        lookupResolvers.set(userId, resolve);
+        if (lookupResolvers.size >= LOOKUP_BATCH_MAX) {
+          if (lookupTimer) {
+            clearTimeout(lookupTimer);
+            lookupTimer = undefined;
+          }
+          void flushLookupBatch();
+        } else {
+          scheduleLookupFlush();
+        }
+      });
+      lookupInflight.set(userId, p);
+      void p.finally(() => lookupInflight.delete(userId));
+      return p;
+    }
 
     window.addEventListener("mxga:x-users", (ev) => {
       if (!(ev instanceof CustomEvent) || typeof ev.detail !== "string") return;
@@ -259,58 +404,74 @@ export default defineContentScript({
       }
     });
 
-    function pushFinding(sig: Signals, v: Verdict) {
-      if (!["spam", "porn_bot", "likely_spam"].includes(v.label)) return;
-      const id = sig.userId || sig.handle;
-      if (findings.some((f) => (f.userId || f.handle) === id)) return;
-      const snippet = sig.triggeringComment || sig.recentTweets[0] || sig.bio;
-      findings.push({
-        handle: sig.handle,
-        verdict: v,
-        ...(sig.userId ? { userId: sig.userId } : {}),
-        ...(sig.avatarUrl ? { avatarUrl: sig.avatarUrl } : {}),
-        ...(sig.displayName ? { displayName: sig.displayName } : {}),
-        ...(snippet ? { snippet } : {}),
-      });
-      if (!dismissed) bubbleApi?.update(findings);
+    function findFinding(sig: Signals) {
+      return findings.find((x) =>
+        sig.userId
+          ? x.userId === sig.userId
+          : x.handle.toLowerCase() === sig.handle.toLowerCase(),
+      );
     }
 
-    /** Returns true only if the account was REALLY blocked on X. */
-    // The ONLY reliable real block = drive X's own UI so X's JS issues the
-    // request with its per-request x-client-transaction-id (can't be forged
-    // or replayed). API call is a best-effort fallback that usually fails.
-    async function tryRealBlock(sig: Signals): Promise<boolean> {
-      let art =
-        articleOf(anchorByKey.get(sig.userId || `h:${sig.handle}`) ?? null) ??
-        findArticleFor(sig.userId, sig.handle);
-      if (art) {
-        art.scrollIntoView({ block: "center" });
-        await sleep(300);
-        art = findArticleFor(sig.userId, sig.handle) ?? art;
+    function pushFinding(
+      sig: Signals,
+      v: Verdict,
+      opts: {
+        allowAnyLabel?: boolean;
+        blockSource?: QSource;
+        blockQueued?: boolean;
+        blockActive?: boolean;
+        blockFailed?: boolean;
+        blocked?: boolean;
+      } = {},
+    ) {
+      if (!opts.allowAnyLabel && !["spam", "porn_bot", "likely_spam"].includes(v.label)) {
+        return null;
       }
-      if (art && (await nativeBlock(art))) return true;
-
-      // Profile-page fallback: when we're ON the target's profile page and
-      // no in-DOM tweet exists for them yet, drive the profile header's
-      // "..." (userActions) menu instead. The handle in `location.pathname`
-      // must match; otherwise we'd risk blocking whoever's page we're on.
-      const onProfile = location.pathname.match(/^\/([^/]+)(?:\/|$)/)?.[1]?.toLowerCase();
-      if (onProfile && sig.handle.toLowerCase() === onProfile) {
-        const userActions = document.querySelector<HTMLElement>('[data-testid="userActions"]');
-        if (userActions && (await nativeBlock(userActions))) return true;
+      let finding = findFinding(sig);
+      const snippet = sig.triggeringComment || sig.recentTweets[0] || sig.bio;
+      if (!finding) {
+        finding = {
+          handle: sig.handle,
+          verdict: v,
+          ...(sig.userId ? { userId: sig.userId } : {}),
+          ...(sig.avatarUrl ? { avatarUrl: sig.avatarUrl } : {}),
+          ...(sig.displayName ? { displayName: sig.displayName } : {}),
+          ...(snippet ? { snippet } : {}),
+        };
+        findings.push(finding);
+      } else {
+        finding.verdict = v;
+        if (sig.userId && !finding.userId) finding.userId = sig.userId;
+        if (sig.avatarUrl && !finding.avatarUrl) finding.avatarUrl = sig.avatarUrl;
+        if (sig.displayName && !finding.displayName) finding.displayName = sig.displayName;
+        if (snippet && !finding.snippet) finding.snippet = snippet;
       }
+      if (opts.blockSource) finding.blockSource = opts.blockSource;
+      if (opts.blockQueued !== undefined) finding.blockQueued = opts.blockQueued;
+      if (opts.blockActive !== undefined) finding.blockActive = opts.blockActive;
+      if (opts.blockFailed !== undefined) finding.blockFailed = opts.blockFailed;
+      if (opts.blocked !== undefined) finding.blocked = opts.blocked;
+      if (!dismissed) bubbleApi?.update(findings);
+      return finding;
+    }
 
-      return apiBlock(sig.userId, sig.handle);
+    /** Returns true only if the account was really blocked on X. */
+    // Keep this path silent: call X's own blocks/create endpoint with the
+    // user's first-party session and the page's csrf/auth headers, then pace
+    // requests globally so bulk cleanup does not stack native confirmation
+    // sheets or hammer the endpoint from multiple X tabs.
+    async function tryRealBlock(sig: Signals): Promise<BlockAttempt> {
+      return coordinatedApiBlock(sig.userId, sig.handle);
     }
 
     async function finalizeBlocked(
       key: string,
       sig: Signals,
-      source: "manual" | "list_hit" | "cache_hit" = "manual",
+      source: QSource = "manual",
     ) {
       await addBlocked(key);
       if (sig.userId) await addBlocked(sig.userId);
-      const f = findings.find((x) => (x.userId || x.handle) === (sig.userId || sig.handle));
+      const f = findFinding(sig);
       await addBlockRecord({
         id: key,
         handle: sig.handle,
@@ -335,18 +496,36 @@ export default defineContentScript({
       if (source === "manual") {
         void send({ type: "confirm_spam", signals: sig });
       }
-      const i = findings.findIndex((x) => (x.userId || x.handle) === (sig.userId || sig.handle));
-      if (i >= 0) findings.splice(i, 1);
+      if (f) {
+        f.blocked = true;
+        f.blockQueued = false;
+        f.blockActive = false;
+        f.blockFailed = false;
+        f.blockSource = source;
+      }
       if (!dismissed) bubbleApi?.update(findings);
     }
 
     async function blockAccount(key: string, sig: Signals): Promise<boolean> {
-      if (await tryRealBlock(sig)) {
+      const active = findFinding(sig);
+      if (active) {
+        active.blockQueued = false;
+        active.blockActive = true;
+        active.blockFailed = false;
+        active.blockSource = "manual";
+        if (!dismissed) bubbleApi?.update(findings);
+      }
+      const attempt = await tryRealBlock(sig);
+      if (attempt.ok) {
         await finalizeBlocked(key, sig);
         return true;
       }
-      const f0 = findings.find((x) => (x.userId || x.handle) === (sig.userId || sig.handle));
-      if (f0) f0.blockFailed = true;
+      const f0 = findFinding(sig);
+      if (f0) {
+        f0.blockQueued = false;
+        f0.blockActive = false;
+        f0.blockFailed = true;
+      }
       if (!dismissed) bubbleApi?.update(findings);
       return false;
     }
@@ -355,14 +534,18 @@ export default defineContentScript({
     // "manual"    → user clicked block / bulk-block button
     // "list_hit"  → autoBlockListHits + public-blacklist match (step 2)
     // "cache_hit" → autoBlockListHits + local cache says spam (step 1)
-    type QSource = "manual" | "list_hit" | "cache_hit";
-    type QItem = { key: string; sig: Signals; tries: number; source: QSource };
     let queue: QItem[] = [];
     let draining = false;
     const QK = "xss:blockQueue";
     const persistQ = () =>
       chrome.storage.local.set({
-        [QK]: queue.map((q) => ({ key: q.key, sig: q.sig, tries: q.tries, source: q.source })),
+        [QK]: queue.map((q) => ({
+          key: q.key,
+          sig: q.sig,
+          tries: q.tries,
+          source: q.source,
+          verdict: q.verdict,
+        })),
       });
 
     async function drain() {
@@ -371,50 +554,68 @@ export default defineContentScript({
       while (queue.length) {
         const it = queue[0];
         if (!it) break;
-        bubbleApi?.setScanning(queue.length); // progress: 拉黑中 N
-        const ok = await tryRealBlock(it.sig).catch(() => false);
-        if (ok) {
+        const activeFinding = findFinding(it.sig);
+        if (activeFinding) {
+          activeFinding.blockQueued = false;
+          activeFinding.blockActive = true;
+          activeFinding.blockFailed = false;
+          if (!dismissed) bubbleApi?.update(findings);
+        }
+        const attempt = await tryRealBlock(it.sig).catch(
+          (): BlockAttempt => ({ ok: false, retryable: true }),
+        );
+        if (attempt.ok) {
           await finalizeBlocked(it.key, it.sig, it.source);
-          // Mark the finding as done so the next card render strikes it out
-          // (gives the user feedback that progress is happening — otherwise
-          // the "处理中…" button reads as stuck on profile pages where each
-          // block takes ~2s).
-          const f = findings.find(
-            (x) => (x.userId || x.handle) === (it.sig.userId || it.sig.handle),
-          );
-          if (f) f.blocked = true;
           queue.shift();
           await persistQ();
           if (!dismissed) bubbleApi?.update(findings);
-          await sleep(1800); // pace: stay under X's block rate limit
+          await sleep(BLOCK_SUCCESS_SETTLE_MS);
         } else {
           it.tries++;
-          if (it.tries >= 6) {
-            const f = findings.find(
-              (x) => (x.userId || x.handle) === (it.sig.userId || it.sig.handle),
-            );
-            if (f) f.blockFailed = true;
+          if (!attempt.retryable || it.tries >= 6) {
+            const f = findFinding(it.sig);
+            if (f) {
+              f.blockQueued = false;
+              f.blockActive = false;
+              f.blockFailed = true;
+            }
             queue.shift();
             if (!dismissed) bubbleApi?.update(findings);
           } else {
-            // X rate-limited / not found yet → exponential backoff, keep it.
-            await sleep(Math.min(30000, 2000 * 2 ** it.tries));
+            const f = findFinding(it.sig);
+            if (f) {
+              f.blockQueued = true;
+              f.blockActive = false;
+              f.blockFailed = false;
+              if (!dismissed) bubbleApi?.update(findings);
+            }
+            // X rate-limited / transiently unavailable → adaptive backoff,
+            // but keep normal successful runs quick.
+            await sleep(retryDelayForAttempt(attempt, it.tries));
           }
           await persistQ();
         }
       }
       draining = false;
-      bubbleApi?.setScanning(0);
       // Final card refresh — re-enables the "处理中…" button or shows the
       // empty state once the queue is fully drained.
       if (!dismissed) bubbleApi?.update(findings);
     }
 
     function enqueueBlocks(
-      items: { key: string; sig: Signals }[],
+      items: { key: string; sig: Signals; verdict?: Verdict }[],
       source: QSource = "manual",
     ) {
       for (const x of items) {
+        if (x.verdict) {
+          pushFinding(x.sig, x.verdict, {
+            allowAnyLabel: source === "list_hit",
+            blockQueued: true,
+            blockActive: false,
+            blockFailed: false,
+            blockSource: source,
+          });
+        }
         if (!queue.some((q) => q.key === x.key)) queue.push({ ...x, tries: 0, source });
       }
       void persistQ();
@@ -434,7 +635,19 @@ export default defineContentScript({
             sig: q.sig,
             tries: q.tries ?? 0,
             source: q.source ?? "manual",
+            ...(q.verdict ? { verdict: q.verdict } : {}),
           }));
+        queue.forEach((q) => {
+          if (q.verdict) {
+            pushFinding(q.sig, q.verdict, {
+              allowAnyLabel: q.source === "list_hit",
+              blockQueued: true,
+              blockActive: false,
+              blockFailed: false,
+              blockSource: q.source,
+            });
+          }
+        });
         void drain();
       }
     });
@@ -520,8 +733,8 @@ export default defineContentScript({
       }
       autoBlockingKeys.add(key);
       tallyScan(key); // count it in the bubble's "已扫" total
-      enqueueBlocks([{ key, sig }], source);
-      clearMounts(anchor); // the cell collapses once the queue's finalizeBlocked runs
+      enqueueBlocks([{ key, sig, verdict }], source);
+      mountBlocking(anchor); // the cell collapses once finalizeBlocked runs
       return true;
     }
     function badgeFor(
@@ -614,7 +827,7 @@ export default defineContentScript({
       //     is still pending. Once drain succeeds, addBlocked() makes 0b
       //     short-circuit instead.
       if (autoBlockingKeys.has(key)) {
-        clearMounts(anchor);
+        mountBlocking(anchor);
         return;
       }
 
@@ -648,12 +861,9 @@ export default defineContentScript({
 
       // 2. Public/known list (no LLM).
       if (sig.userId) {
-        const r = await send<{ hit: CurationRecord | null }>({
-          type: "lookup",
-          userId: sig.userId,
-        });
-        if (r.ok && r.data?.hit) {
-          const hitVerdict = r.data.hit.verdict;
+        const hit = await lookupPublicHit(sig.userId);
+        if (hit) {
+          const hitVerdict = hit.verdict;
           // 2a. autoBlockListHits power-user opt-in: public-blacklist hits
           //     are community-confirmed spam, so block silently on every
           //     page the user visits, no card / badge / click required.
@@ -750,6 +960,7 @@ export default defineContentScript({
             enqueueBlocks(
               fs.map((f) => ({
                 key: f.userId || `h:${f.handle}`,
+                verdict: f.verdict,
                 sig: {
                   isProfile: false as const,
                   handle: f.handle,

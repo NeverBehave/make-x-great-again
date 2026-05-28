@@ -158,7 +158,7 @@ export function App() {
     // Device Flow needs the user to enter a code on github.com/login/device.
     // Popups close when the user switches tabs, which would lose the code,
     // so we hand off to the options page — it owns the full polling loop.
-    chrome.tabs.create({ url: chrome.runtime.getURL("options.html?login=1") });
+    chrome.tabs.create({ url: chrome.runtime.getURL("options.html?tab=settings&login=1") });
     window.close();
   }
 

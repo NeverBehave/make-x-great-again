@@ -24,7 +24,8 @@
   <a href="https://chromewebstore.google.com/detail/make-x-great-again/aeoldnecphbkkckeedfgfcdcekkljdea">🟦 从 Chrome 商店安装</a> ·
   <a href="https://x.zuoluo.tv">🌐 官网门户</a> ·
   <a href="https://x.zuoluo.tv/list">📋 公共名单</a> ·
-  <a href="https://github.com/foru17/make-x-great-again/releases/latest">📦 GitHub Release</a>
+  <a href="https://github.com/foru17/make-x-great-again/releases/latest">📦 GitHub Release</a> ·
+  <a href="./CHANGELOG.md">📝 Changelog</a>
 </p>
 
 ---
@@ -46,7 +47,7 @@ X 现在的问题，大家都知道：
 
 | # | 想做的事 | 状态 | 简介 |
 |---|---|:---:|---|
-| **01** | **干掉刷评论的垃圾号** | ✅ Live | AI 自动识别色情广告 / 营销 bot，给你一个一键拉黑按钮（驱动 X 自己的屏蔽 UI，是真拉黑）。维护者社区共建公开黑/白名单。 |
+| **01** | **干掉刷评论的垃圾号** | ✅ Live | AI 自动识别色情广告 / 营销 bot，给你一个一键拉黑按钮（调用 X 自己的屏蔽接口，是真拉黑）。维护者社区共建公开黑/白名单。 |
 | **02** | **看一眼就知道这个 KOL 靠谱不** | 🚧 计划 | 鼠标停在 @handle 上 → 浮卡：账号年龄、原创比、主题集中度、互动质量 |
 | **03** | **进 profile 自动出摘要** | 🚧 计划 | 「这个人主要谈 A/B/C」「最近一个月最热的 5 条」「最佳互动时段」—— 不用手动翻 |
 | **04** | **让信号穿过算法噪声** | 🚧 计划 | 在推文下提示「你关注的 3 个 KOL 转过 / 评论过」，找回算法之前的发现感 |
@@ -59,11 +60,11 @@ X 现在的问题，大家都知道：
 这是已经跑在 [x.zuoluo.tv](https://x.zuoluo.tv) 上的部分。公榜数量会持续变化，实时数据请看 [/list](https://x.zuoluo.tv/list)。
 
 - **被动 AI 扫描**：你在 X 看到的每个评论作者，扩展静默判定 → spam / 色情广告号 / 疑似垃圾 / 不确定 / 正常
-- **一键真拉黑**：点扩展气泡里的「拉黑」，调起 X 自己的屏蔽菜单完成屏蔽（不是 hide，不伪造请求）
+- **一键真拉黑**：点扩展气泡里的「拉黑」，用你的 X 登录态调用 X 自己的屏蔽接口完成屏蔽；批量时进入限速队列（不是 hide，不弹原生确认窗口）
 - **零网络命中**：本地缓存维护者白名单 + 公榜，每 6 小时增量同步；命中直接出结果，不调任何接口
 - **守门员审核台**（[/admin](https://x.zuoluo.tv/admin)，需要 ADMIN_TOKEN）：待审队列 / 黑名单 / 白名单 / 审计日志 四个 tab，全自定义弹窗
 - **公开公榜**（[/list](https://x.zuoluo.tv/list)）：所有 `human_confirmed` 账号公开可查，含理由 + 举报人数
-- **共建机制**：GitHub 登录后任何人都能举报；3 个 ≥90 天的 GH 账号 + AI 置信 ≥0.9 才能自动进公榜，否则进人工队列
+- **共建机制**：GitHub 登录后任何人都能举报；alpha 阶段所有举报先进人工队列。`3 个 ≥90 天 GH 账号 + AI 置信 ≥0.9` 是保留的自动发布治理门槛，目前默认关闭
 
 详细治理规则见 [GOVERNANCE.md](./GOVERNANCE.md)。
 
@@ -161,12 +162,18 @@ CONTRIBUTING.md       贡献指南
 
 ## 当前进度
 
-**v0.3.0**（最新，2026-05-26）
-- **身份解析硬化**：拦截 X 自家 `/i/api/graphql/*` 拿真 `rest_id`；JSON-LD / follow-button `data-testid` / React fiber 多源交叉校验；`rest_id ≠ id_str` 或 avatar-id 撞 uid 直接丢弃
-- **viewer-scoped 过滤**：自己 / 已关注 / 已 mute / 已拉黑的号一律绕过，扩展端 + 服务端双层短路
-- **公榜命中自动拉黑**（默认关）：开启后扫到已确认的垃圾号自动拉黑，无需点击；同时覆盖本地缓存确认过的号
-- **UI 重写**：浅色主题、每行可勾选的批量拉黑、异步上报状态机；防 prompt-injection 的 `escHtml` 加固
-- 管理面板左上角换成小蓝吉祥物
+**v0.4.0**（最新，2026-05-28）
+- **静默真拉黑**：调用 X 自己的 `blocks/create.json` 接口，不再模拟点击原生确认弹窗；后台队列带限速、重试、跨 tab 协调
+- **可见进度**：右上角气泡显示固定 4 格状态（命中 / 正在 / 待拉 / 已拉）、进度条和当前拉黑队列；成功后头像和名称划掉并淡出
+- **批量公榜查询**：`/v1/check?ids=...` 批量查 100 个 ID，垃圾号密集的帖子不再对服务端打出一串单账号请求
+- **登录体验**：popup 点 GitHub 会直接跳设置页并启动 Device Flow；验证码卡片支持一键复制
+- **Agent 审核侧路**：新增 `/v1/agent/*`、agent staging 状态和 admin 审核台页签；修复 stale agent 决策降级公榜的竞态
+- **Landing 趋势图**：新增 `/v1/list/trends` 与 D1 索引迁移，用于官网展示 24h / 7d 公榜增长趋势
+
+完整版本记录见 [CHANGELOG.md](./CHANGELOG.md)。
+
+**v0.3.0**（2026-05-26）
+- GraphQL 身份解析硬化、viewer-scoped 过滤、公榜命中自动拉黑（默认关）、浅色主题、批量勾选 UI、`escHtml` 加固
 
 **v0.2.0**（首发，2026-05-25）
 - 浏览器扩展（Chrome MV3）— 被动 AI 识别 + 一键真拉黑
@@ -186,7 +193,7 @@ CONTRIBUTING.md       贡献指南
 
 这是一份对真实账号的公开指控列表，所以治理比代码本身重要。完整规则在 [GOVERNANCE.md](./GOVERNANCE.md)，要点：
 
-- **AI 永远不能自动公开。** 公榜入榜必须满足两条：AI 置信度 ≥ 0.9（仅限 spam / porn_bot 标签）+ ≥3 个注册 90 天以上的 GitHub 账号独立举报。任何一条不满足都只进人工队列。
+- **AI 永远不能单独公开。** alpha 阶段公榜入榜走人工维护者确认；历史设计中的自动发布门槛（AI 置信度 ≥ 0.9 + ≥3 个注册 90 天以上的 GitHub 账号独立举报）仍保留为治理红线，但当前默认关闭。
 - **审核范围严格限定** 商业 spam 和色情广告 bot。**永远不判断观点、立场、政治、身份。**
 - **零 PII**：库里只存 X 公开数字 ID 和 GitHub reporter fingerprint（`gh:<numeric_id>`），不存任何邮箱、姓名、设备指纹、IP。
 - **所有维护者动作都进 `review_log`**：拉黑 / 驳回 / 移除 / 加白 / 移白，全部留痕，可在 /admin 审计日志 tab 翻。

@@ -3,11 +3,13 @@
 import { GH_CLIENT_ID, getGhToken, setGh } from "../lib/auth";
 import { BRAND } from "../lib/brand";
 import { getSettings } from "../lib/settings";
-import { bumpStat, getStats } from "../lib/stats";
+import { bumpStat, bumpStatBy, getStats } from "../lib/stats";
 import type { BgRequest, BgResponse, CurationRecord } from "../lib/types";
 import { refreshWhitelist, whitelistStatus } from "../lib/whitelist-cache";
 
 const DEFAULT_BASE = BRAND.edgeBase;
+
+type CheckHit = { label: string; confidence: number };
 
 async function base(): Promise<string> {
   return (await getSettings()).edgeBase || DEFAULT_BASE;
@@ -30,6 +32,20 @@ async function authedPost(signals: unknown) {
       ...(tok ? { authorization: `Bearer ${tok}` } : {}),
     },
     body: JSON.stringify(signals),
+  };
+}
+
+function curationHit(userId: string, hit: CheckHit): CurationRecord {
+  return {
+    userId,
+    handle: "",
+    verdict: {
+      label: hit.label as CurationRecord["verdict"]["label"],
+      confidence: hit.confidence,
+      reasons: [],
+    },
+    reviewStatus: "human_confirmed",
+    model: "",
   };
 }
 
@@ -90,24 +106,29 @@ export default defineBackground(() => {
             sendResponse({ ok: true, data: await refreshWhitelist(true) });
           } else if (msg.type === "lookup") {
             const r = await call(`/v1/check?ids=${encodeURIComponent(msg.userId)}`);
-            const hits = (r.hits as Record<string, { label: string; confidence: number }>) ?? {};
+            const hits = (r.hits as Record<string, CheckHit>) ?? {};
             const h = hits[msg.userId];
-            const hit: CurationRecord | null = h
-              ? {
-                  userId: msg.userId,
-                  handle: "",
-                  verdict: {
-                    label: h.label as CurationRecord["verdict"]["label"],
-                    confidence: h.confidence,
-                    reasons: [],
-                  },
-                  reviewStatus: "human_confirmed",
-                  model: "",
-                }
-              : null;
+            const hit: CurationRecord | null = h ? curationHit(msg.userId, h) : null;
             // Only count a hit (not a miss) as a public-board win.
             if (hit) void bumpStat("hitPublic");
             sendResponse({ ok: true, data: { hit } });
+          } else if (msg.type === "lookup_batch") {
+            const ids = [...new Set(msg.userIds.filter((id) => /^\d+$/.test(id)))].slice(0, 100);
+            if (!ids.length) {
+              sendResponse({ ok: true, data: { hits: {} } });
+              return;
+            }
+            const qs = ids.map(encodeURIComponent).join(",");
+            const r = await call(`/v1/check?ids=${qs}`);
+            const rawHits = (r.hits as Record<string, CheckHit>) ?? {};
+            const hits: Record<string, CurationRecord> = {};
+            for (const id of ids) {
+              const h = rawHits[id];
+              if (h) hits[id] = curationHit(id, h);
+            }
+            const hitCount = Object.keys(hits).length;
+            if (hitCount) void bumpStatBy("hitPublic", hitCount);
+            sendResponse({ ok: true, data: { hits } });
           } else if (msg.type === "classify") {
             const r = await call("/v1/classify", await authedPost(msg.signals));
             const rec = r.record as { verdict: CurationRecord["verdict"]; status: string };

@@ -1501,7 +1501,7 @@ const SCRIPT = String.raw`
     var body={handle:handle,target:target};
     if(xUserId)body.x_user_id=xUserId;
     api('/v1/admin/agent-promote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-      .then(function(r){return r.json()})
+      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
       .then(function(j){
         if(j&&j.ok){
           rowEl.style.opacity='0.4';
@@ -1515,7 +1515,14 @@ const SCRIPT = String.raw`
           },250);
         } else {
           setStatus('操作失败');
+          loadAgentList(agentBucket);refreshStats();
         }
+      })
+      .catch(function(){
+        rowEl.style.opacity='';
+        setStatus('操作失败 · 已重新加载');
+        setTimeout(function(){setStatus('')},3000);
+        loadAgentList(agentBucket);refreshStats();
       });
   }
   function agBatch(target){
@@ -1554,14 +1561,19 @@ const SCRIPT = String.raw`
           method:'POST',
           headers:{'content-type':'application/json'},
           body:JSON.stringify({target:target,items:items})
-        }).then(function(r){return r.json()}).then(function(j){
+        }).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(function(j){
           if(j&&j.ok){
             done+=slice.length;
             setStatus('批量'+label+' '+done+'/'+ks.length);
             nextChunk();
           } else {
             setStatus('批量'+label+' 失败');setTimeout(function(){setStatus('')},3000);
+            loadAgentList(agentBucket);refreshStats();
           }
+        }).catch(function(){
+          setStatus('批量'+label+' 失败 · 已重新加载');
+          setTimeout(function(){setStatus('')},3000);
+          loadAgentList(agentBucket);refreshStats();
         });
       }
       nextChunk();
