@@ -2109,9 +2109,19 @@ async function mirrorToGitHub(env: Env): Promise<void> {
   if (!token) return; // PAT not provided yet — mirror disabled.
   const repo = env.WHITELIST_SYNC_REPO ?? "foru17/make-x-great-again";
 
-  /** UTF-8 safe base64 (btoa() only handles latin-1). */
+  /** UTF-8 safe base64 (btoa() only handles latin-1). Uses TextEncoder rather
+   *  than unescape(encodeURIComponent()): the latter expands every CJK byte to
+   *  "%XX" (~3x), which blows up Worker memory on large Chinese-heavy payloads.
+   *  We walk the UTF-8 bytes in 32K chunks to stay under String.fromCharCode's
+   *  argument cap. */
   function b64utf8(s: string): string {
-    return btoa(unescape(encodeURIComponent(s)));
+    const bytes = new TextEncoder().encode(s);
+    let bin = "";
+    const CHUNK = 0x8000;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+    }
+    return btoa(bin);
   }
   /** Tiny stable hash for "content already up-to-date?" checks. */
   function contentHash(s: string): string {
@@ -2197,6 +2207,13 @@ async function mirrorToGitHub(env: Env): Promise<void> {
   // Blacklist export carries the FULL audit fields — reasons + evidence_text +
   // reporter count — so a third party reading data/blacklist/v1.json can
   // verify "why was this account flagged" without trusting our server.
+  //
+  // Export cap: a safety bound, NOT a product limit. At ~404 bytes/entry the
+  // pretty-printed file is ~20MB at this cap; base64 + the GitHub PUT body fit
+  // within the Worker's 128MB. Beyond ~50K we must paginate the file
+  // (data/blacklist/v1-partN.json) or switch to the Git Data API — see the
+  // warn below, which fires before we ever silently truncate again.
+  const BL_EXPORT_LIMIT = 50000;
   const bl = await env.DB.prepare(
     `WITH rep AS (
        SELECT handle, x_user_id, count(DISTINCT reporter_fp) AS n
@@ -2210,7 +2227,7 @@ async function mirrorToGitHub(env: Env): Promise<void> {
        LEFT JOIN rep ON rep.handle = a.handle
                     AND ifnull(rep.x_user_id,'') = ifnull(a.x_user_id,'')
       WHERE a.status='human_confirmed' AND a.published_at IS NOT NULL
-      ORDER BY a.published_at DESC LIMIT 10000`,
+      ORDER BY a.published_at DESC LIMIT ${BL_EXPORT_LIMIT}`,
   ).all<{
     x_user_id: string | null;
     handle: string;
@@ -2226,6 +2243,14 @@ async function mirrorToGitHub(env: Env): Promise<void> {
   const today = new Date(now).toISOString().slice(0, 10); // YYYY-MM-DD
   const wlCount = wl.results?.length ?? 0;
   const blCount = bl.results?.length ?? 0;
+  if (blCount >= BL_EXPORT_LIMIT) {
+    // Don't silently cap: the published `count` would understate reality, which
+    // is exactly the bug this guard prevents. Paginate or move to the Git Data
+    // API when this fires.
+    console.warn(
+      `mirror: blacklist export hit the ${BL_EXPORT_LIMIT} cap — true total is higher; file is truncated.`,
+    );
+  }
 
   await publish(
     "data/whitelist/v1.json",
