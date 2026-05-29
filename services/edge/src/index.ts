@@ -96,6 +96,7 @@ const Signals = z.object({
   recentTweets: z.array(z.string()).max(20).default([]),
   triggeringComment: z.string().optional(),
   threadTopic: z.string().optional(),
+  accountCreatedAt: z.string().max(80).optional(),
   accountAgeDays: z.number().optional(),
   followersCount: z.number().optional(),
   followingCount: z.number().optional(),
@@ -154,6 +155,7 @@ function userPrompt(s: Signals): string {
   const meta = [
     s.accountAgeDays !== undefined ? `accountAgeDays=${s.accountAgeDays}` : "",
     s.followersCount !== undefined ? `followers=${s.followersCount}` : "",
+    s.followingCount !== undefined ? `following=${s.followingCount}` : "",
     s.hasDefaultAvatar !== undefined ? `hasDefaultAvatar=${s.hasDefaultAvatar}` : "",
   ]
     .filter(Boolean)
@@ -195,6 +197,33 @@ function normalizeHandle(handle: string): string {
 
 function evidenceText(s: Signals): string | null {
   return (s.triggeringComment ?? s.recentTweets[0] ?? s.bio ?? "").trim().slice(0, 240) || null;
+}
+
+interface AccountSignalSnapshot {
+  accountCreatedAt?: string | null;
+  accountAgeDays?: number | null;
+  followersCount?: number | null;
+  followingCount?: number | null;
+}
+
+function metricInt(v: number | undefined): number | null {
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.round(v) : null;
+}
+
+function normalizedAccountCreatedAt(v: string | undefined): string | null {
+  const raw = v?.trim();
+  if (!raw) return null;
+  const t = Date.parse(raw);
+  return Number.isNaN(t) ? raw.slice(0, 80) : new Date(t).toISOString();
+}
+
+function signalSnapshot(s: Signals): AccountSignalSnapshot {
+  return {
+    accountCreatedAt: normalizedAccountCreatedAt(s.accountCreatedAt),
+    accountAgeDays: metricInt(s.accountAgeDays),
+    followersCount: metricInt(s.followersCount),
+    followingCount: metricInt(s.followingCount),
+  };
 }
 
 function viewerScopedIgnore(s: Signals): boolean {
@@ -291,6 +320,10 @@ interface AccountWrite {
   evidenceText?: string | null;
   now: number;
   publishedAt?: number | null;
+  accountCreatedAt?: string | null;
+  accountAgeDays?: number | null;
+  followersCount?: number | null;
+  followingCount?: number | null;
 }
 
 async function writeAccount(env: Env, w: AccountWrite): Promise<AccountRow | null> {
@@ -302,6 +335,10 @@ async function writeAccount(env: Env, w: AccountWrite): Promise<AccountRow | nul
          handle=?,
          display_name=?,
          avatar_url=COALESCE(?, avatar_url),
+         account_created_at=COALESCE(?, account_created_at),
+         account_age_days=COALESCE(?, account_age_days),
+         followers_count=COALESCE(?, followers_count),
+         following_count=COALESCE(?, following_count),
          verdict_label=?,
          confidence=?,
          reasons=?,
@@ -331,6 +368,10 @@ async function writeAccount(env: Env, w: AccountWrite): Promise<AccountRow | nul
         w.handle,
         w.displayName,
         w.avatarUrl ?? null,
+        w.accountCreatedAt ?? null,
+        w.accountAgeDays ?? null,
+        w.followersCount ?? null,
+        w.followingCount ?? null,
         w.verdictLabel,
         w.confidence,
         w.reasons,
@@ -357,15 +398,20 @@ async function writeAccount(env: Env, w: AccountWrite): Promise<AccountRow | nul
 
   await env.DB.prepare(
     `INSERT INTO accounts
-       (x_user_id,handle,display_name,avatar_url,verdict_label,confidence,reasons,model,
+       (x_user_id,handle,display_name,avatar_url,account_created_at,account_age_days,
+        followers_count,following_count,verdict_label,confidence,reasons,model,
         status,source,signals_hash,evidence_text,first_seen,last_scored,published_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   )
     .bind(
       w.uid,
       w.handle,
       w.displayName,
       w.avatarUrl ?? null,
+      w.accountCreatedAt ?? null,
+      w.accountAgeDays ?? null,
+      w.followersCount ?? null,
+      w.followingCount ?? null,
       w.verdictLabel,
       w.confidence,
       w.reasons,
@@ -389,6 +435,37 @@ async function writeAccount(env: Env, w: AccountWrite): Promise<AccountRow | nul
     return findAccount(env, w.handle, w.uid);
   }
   return fresh;
+}
+
+async function updateAccountSignalSnapshot(
+  env: Env,
+  rowid: number,
+  snapshot: AccountSignalSnapshot,
+): Promise<void> {
+  if (
+    snapshot.accountCreatedAt == null &&
+    snapshot.accountAgeDays == null &&
+    snapshot.followersCount == null &&
+    snapshot.followingCount == null
+  ) {
+    return;
+  }
+  await env.DB.prepare(
+    `UPDATE accounts SET
+       account_created_at=COALESCE(?, account_created_at),
+       account_age_days=COALESCE(?, account_age_days),
+       followers_count=COALESCE(?, followers_count),
+       following_count=COALESCE(?, following_count)
+     WHERE rowid=?`,
+  )
+    .bind(
+      snapshot.accountCreatedAt ?? null,
+      snapshot.accountAgeDays ?? null,
+      snapshot.followersCount ?? null,
+      snapshot.followingCount ?? null,
+      rowid,
+    )
+    .run();
 }
 
 // Called from writeAccount after a uid-bearing row is inserted or updated.
@@ -556,8 +633,7 @@ function ruleMatchesText(rule: KeywordRule, s: Signals): boolean {
       return has(s.bio);
     case "tweet":
       return s.recentTweets.some((t) => has(t)) || has(s.triggeringComment);
-    default:
-      // 'any' (and any unknown field falls back to 'any' for safety)
+    case "any":
       return (
         has(s.handle) ||
         has(s.displayName) ||
@@ -565,6 +641,10 @@ function ruleMatchesText(rule: KeywordRule, s: Signals): boolean {
         s.recentTweets.some((t) => has(t)) ||
         has(s.triggeringComment)
       );
+    default:
+      // Unknown field — do NOT silently widen to match every field. A typo'd
+      // or future field name must not turn into an everything-matcher.
+      return false;
   }
 }
 
@@ -576,11 +656,29 @@ async function matchKeywordRules(env: Env, s: Signals): Promise<KeywordRule | nu
   return null;
 }
 
-// Map a rule's `action` to the accounts table `status` the row should land in.
-function statusForRuleAction(action: string): "human_confirmed" | "whitelisted" | "rejected" {
-  if (action === "whitelist") return "whitelisted";
-  if (action === "reject") return "rejected";
-  return "human_confirmed"; // 'blacklist' default
+// Strong-position fields: a keyword match here is high-precision enough to
+// publish directly. Free-text fields (bio/tweet/any) are NOT — a bare
+// substring in free text is too false-positive-prone to auto-publish (e.g. a
+// user quoting/mocking spam, or a generic word like "主页"/"资源"/"同城"
+// embedded in a normal sentence), so those route to the review queue instead.
+function isStrongRuleField(field: string): boolean {
+  return field === "handle" || field === "display_name";
+}
+
+// Map a rule hit to the accounts-table `status` the row should land in.
+// A 'blacklist' rule publishes directly (human_confirmed) ONLY when it matched
+// a strong field AND we know the immutable uid. Without the uid a renamed
+// whitelisted/exonerated account can't be reliably re-identified (findAccount
+// would miss the protected row), so we must not auto-publish — downgrade to the
+// review queue. Free-text-field matches always go to the queue.
+function statusForRuleHit(
+  rule: { action: string; field: string },
+  hasUid: boolean,
+): "human_confirmed" | "whitelisted" | "rejected" | "auto_pending_review" {
+  if (rule.action === "whitelist") return "whitelisted";
+  if (rule.action === "reject") return "rejected";
+  // 'blacklist' (default)
+  return isStrongRuleField(rule.field) && hasUid ? "human_confirmed" : "auto_pending_review";
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -639,6 +737,7 @@ app.post("/v1/classify", async (c) => {
   // Hard short-circuit for admin-curated whitelist — skip the LLM AND ignore
   // signals_hash drift. Whitelist beats heuristics.
   if (prev && prev.status === "whitelisted") {
+    await updateAccountSignalSnapshot(c.env, prev.rowid, signalSnapshot(s));
     return c.json({
       cached: true,
       record: {
@@ -648,6 +747,7 @@ app.post("/v1/classify", async (c) => {
     });
   }
   if (prev && prev.signals_hash === h) {
+    await updateAccountSignalSnapshot(c.env, prev.rowid, signalSnapshot(s));
     return c.json({
       cached: true,
       record: {
@@ -660,14 +760,15 @@ app.post("/v1/classify", async (c) => {
       },
     });
   }
-  // Fast-path: keyword rules. Match before spending an LLM call. A hit
-  // routes the account straight to the rule's destination status (default
-  // 'blacklist' → 'human_confirmed' on the public list). The audit log
-  // records actor='rule:<id>' so any false positive is traceable.
+  // Fast-path: keyword rules. Match before spending an LLM call. A hit routes
+  // the account to the status from statusForRuleHit: strong-field blacklist
+  // hits with a known uid publish directly ('human_confirmed'); free-text or
+  // uid-less hits go to the review queue ('auto_pending_review') instead of the
+  // public list. The audit log records actor='rule:<id>' so any hit is traceable.
   const ruleHit = await matchKeywordRules(c.env, s);
   if (ruleHit) {
     const now = Date.now();
-    const status = statusForRuleAction(ruleHit.action);
+    const status = statusForRuleHit(ruleHit, uid != null);
     const reasons = [`matched keyword rule "${ruleHit.pattern}" on ${ruleHit.field}`];
     const verdict = {
       label: ruleHit.verdict_label,
@@ -689,6 +790,7 @@ app.post("/v1/classify", async (c) => {
       evidenceText: evidenceText(s),
       now,
       publishedAt: status === "human_confirmed" ? now : null,
+      ...signalSnapshot(s),
     });
     await c.env.DB.batch([
       c.env.DB.prepare(
@@ -735,6 +837,7 @@ app.post("/v1/classify", async (c) => {
     signalsHash: h,
     evidenceText: evidenceText(s),
     now,
+    ...signalSnapshot(s),
   });
   return c.json({ cached: false, record: { verdict, status: writeStatus } });
 });
@@ -761,6 +864,7 @@ async function submitReport(c: Ctx, source: string) {
   // a coordinated brigade pollute the audit trail against a trusted account.
   const cur = await findAccount(c.env, s.handle, uid);
   if (cur?.status === "whitelisted") {
+    await updateAccountSignalSnapshot(c.env, cur.rowid, signalSnapshot(s));
     return c.json({ ok: true, status: "whitelisted", reporters: 0, auto: false });
   }
 
@@ -782,6 +886,7 @@ async function submitReport(c: Ctx, source: string) {
     .first<{ n: number }>();
   const reporters = cnt?.n ?? (who.ageDays >= REPORTER_MIN_AGE_DAYS ? 1 : 0);
   if (alreadyReported && cur) {
+    await updateAccountSignalSnapshot(c.env, cur.rowid, signalSnapshot(s));
     return c.json({ ok: true, status: cur.status, reporters, auto: false, duplicate: true });
   }
 
@@ -823,6 +928,7 @@ async function submitReport(c: Ctx, source: string) {
     evidenceText: evidenceText(s),
     now,
     publishedAt: auto ? now : null,
+    ...signalSnapshot(s),
   });
   const finalStatus = written?.status ?? status;
   if (!alreadyReported) {
@@ -851,6 +957,114 @@ function admin(c: Ctx): boolean {
   const t = c.env.ADMIN_TOKEN;
   return !!t && c.req.raw.headers.get("x-admin-token") === t;
 }
+
+type AdminSort =
+  | "time_desc"
+  | "created_desc"
+  | "created_asc"
+  | "followers_desc"
+  | "followers_asc"
+  | "following_desc"
+  | "following_asc";
+
+const ADMIN_SORTS = new Set<AdminSort>([
+  "time_desc",
+  "created_desc",
+  "created_asc",
+  "followers_desc",
+  "followers_asc",
+  "following_desc",
+  "following_asc",
+]);
+
+function adminSort(raw: string | undefined | null): AdminSort {
+  return ADMIN_SORTS.has(raw as AdminSort) ? (raw as AdminSort) : "time_desc";
+}
+
+function createdSortExpr(alias: string, timeColumn: string): string {
+  return `CASE
+    WHEN ${alias}.account_created_at IS NOT NULL AND ${alias}.account_created_at <> ''
+      THEN ${alias}.account_created_at
+    WHEN ${alias}.account_age_days IS NOT NULL AND ${alias}.${timeColumn} IS NOT NULL
+      THEN strftime(
+        '%Y-%m-%dT%H:%M:%SZ',
+        CAST((${alias}.${timeColumn} / 1000) - (${alias}.account_age_days * 86400) AS INTEGER),
+        'unixepoch'
+      )
+    ELSE NULL
+  END`;
+}
+
+function sortValueExpr(alias: string, sort: AdminSort, timeColumn: string): string {
+  if (sort === "created_desc" || sort === "created_asc") return createdSortExpr(alias, timeColumn);
+  if (sort === "followers_desc" || sort === "followers_asc") return `${alias}.followers_count`;
+  if (sort === "following_desc" || sort === "following_asc") return `${alias}.following_count`;
+  return `${alias}.${timeColumn}`;
+}
+
+function sortDirection(sort: AdminSort): "ASC" | "DESC" {
+  return sort.endsWith("_asc") ? "ASC" : "DESC";
+}
+
+function sortOrderSql(sort: AdminSort, timeColumn: string): string {
+  return `a.sort_value IS NULL ASC, a.sort_value ${sortDirection(sort)}, a.${timeColumn} DESC, a.rid DESC`;
+}
+
+interface SortCursor {
+  value: string | number | null;
+  tie: number;
+  rid: number;
+}
+
+function encodeSortCursor(
+  row: { sort_value: string | number | null; rid: number },
+  time: number,
+): string {
+  return btoa(JSON.stringify([row.sort_value ?? null, time, row.rid]));
+}
+
+function decodeSortCursor(raw: string | null): SortCursor | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(atob(raw));
+    if (!Array.isArray(parsed) || parsed.length < 3) return null;
+    const [value, tie, rid] = parsed;
+    if (value !== null && typeof value !== "string" && typeof value !== "number") return null;
+    if (typeof tie !== "number" || typeof rid !== "number") return null;
+    return { value, tie, rid };
+  } catch {
+    return null;
+  }
+}
+
+function sortCursorWhere(sort: AdminSort, timeColumn: string, cursor: SortCursor | null) {
+  if (!cursor) return { sql: "1=1", binds: [] as unknown[] };
+  const op = sortDirection(sort) === "DESC" ? "<" : ">";
+  return {
+    sql: `(
+      (? IS NULL AND a.sort_value IS NULL AND (a.${timeColumn} < ? OR (a.${timeColumn} = ? AND a.rid < ?)))
+      OR
+      (? IS NOT NULL AND (
+           a.sort_value IS NULL
+        OR a.sort_value ${op} ?
+        OR (a.sort_value = ? AND (a.${timeColumn} < ? OR (a.${timeColumn} = ? AND a.rid < ?)))
+      ))
+    )`,
+    binds: [
+      cursor.value,
+      cursor.tie,
+      cursor.tie,
+      cursor.rid,
+      cursor.value,
+      cursor.value,
+      cursor.value,
+      cursor.tie,
+      cursor.tie,
+      cursor.rid,
+    ] as unknown[],
+  };
+}
+
 app.get("/v1/admin/queue", async (c) => {
   if (!admin(c)) return c.json({ error: "forbidden" }, 403);
   // Keyset pagination on last_scored DESC. Same dedup-by-handle CTE as before;
@@ -876,7 +1090,9 @@ app.get("/v1/admin/queue", async (c) => {
   // SQLite LIKE is ASCII-case-insensitive by default; we explicitly lower()
   // both sides to keep the behavior consistent for handles, which may have
   // mixed case at write-time but live under idx_accounts_handle_norm.
-  const before = Number(c.req.query("before")) || null;
+  const sort = adminSort(c.req.query("sort"));
+  const cursor = decodeSortCursor(c.req.query("before") || null);
+  const cursorWhere = sortCursorWhere(sort, "last_scored", cursor);
   const limit = Math.min(200, Math.max(1, Number(c.req.query("limit")) || 100));
   const rawQ = (c.req.query("q") || "").trim() || null;
   let q: string | null = rawQ;
@@ -894,9 +1110,12 @@ app.get("/v1/admin/queue", async (c) => {
   const displayName = (c.req.query("display_name") || "").trim() || null;
   const reasons = (c.req.query("reasons") || "").trim() || null;
 
+  const sortExpr = sortValueExpr("a", sort, "last_scored");
   const rows = await c.env.DB.prepare(
     `WITH ranked AS (
-       SELECT a.*,
+       SELECT a.rowid AS rid,
+              a.*,
+              ${sortExpr} AS sort_value,
               row_number() OVER (
                 PARTITION BY lower(a.handle)
                 ORDER BY CASE WHEN a.x_user_id IS NOT NULL THEN 0 ELSE 1 END,
@@ -904,19 +1123,21 @@ app.get("/v1/admin/queue", async (c) => {
               ) AS rn
          FROM accounts a
         WHERE a.status='auto_pending_review'
-          AND (?3 IS NULL OR (
-                 lower(a.handle) LIKE '%' || lower(?3) || '%'
-              OR lower(coalesce(a.display_name,'')) LIKE '%' || lower(?3) || '%'
-              OR lower(coalesce(a.evidence_text,'')) LIKE '%' || lower(?3) || '%'
-              OR lower(coalesce(a.reasons,'')) LIKE '%' || lower(?3) || '%'
+          AND (? IS NULL OR (
+                 lower(a.handle) LIKE '%' || lower(?) || '%'
+              OR lower(coalesce(a.display_name,'')) LIKE '%' || lower(?) || '%'
+              OR lower(coalesce(a.evidence_text,'')) LIKE '%' || lower(?) || '%'
+              OR lower(coalesce(a.reasons,'')) LIKE '%' || lower(?) || '%'
           ))
-          AND (?4 IS NULL OR a.x_user_id LIKE ?4 || '%')
-          AND (?5 IS NULL OR lower(a.handle) LIKE '%' || lower(?5) || '%')
-          AND (?6 IS NULL OR lower(coalesce(a.evidence_text,'')) LIKE '%' || lower(?6) || '%')
-          AND (?7 IS NULL OR lower(coalesce(a.display_name,'')) LIKE '%' || lower(?7) || '%')
-          AND (?8 IS NULL OR lower(coalesce(a.reasons,'')) LIKE '%' || lower(?8) || '%')
+          AND (? IS NULL OR a.x_user_id LIKE ? || '%')
+          AND (? IS NULL OR lower(a.handle) LIKE '%' || lower(?) || '%')
+          AND (? IS NULL OR lower(coalesce(a.evidence_text,'')) LIKE '%' || lower(?) || '%')
+          AND (? IS NULL OR lower(coalesce(a.display_name,'')) LIKE '%' || lower(?) || '%')
+          AND (? IS NULL OR lower(coalesce(a.reasons,'')) LIKE '%' || lower(?) || '%')
      )
-     SELECT a.x_user_id, a.handle, a.display_name, a.avatar_url, a.verdict_label, a.confidence,
+     SELECT a.rid, a.sort_value,
+            a.x_user_id, a.handle, a.display_name, a.avatar_url, a.verdict_label, a.confidence,
+            a.account_created_at, a.account_age_days, a.followers_count, a.following_count,
             a.reasons, a.evidence_text, a.last_scored,
             (SELECT count(DISTINCT reporter_fp) FROM reports r
               WHERE lower(r.handle)=lower(a.handle)
@@ -924,18 +1145,38 @@ app.get("/v1/admin/queue", async (c) => {
             ) reporters
        FROM ranked a
       WHERE a.rn=1
-        AND (?1 IS NULL OR a.last_scored < ?1)
-      ORDER BY a.last_scored DESC LIMIT ?2`,
+        AND ${cursorWhere.sql}
+      ORDER BY ${sortOrderSql(sort, "last_scored")} LIMIT ?`,
   )
-    .bind(before, limit, q, uid, handle, evidence, displayName, reasons)
-    .all<{ last_scored: number }>();
-  const list = rows.results ?? [];
+    .bind(
+      q,
+      q,
+      q,
+      q,
+      q,
+      uid,
+      uid,
+      handle,
+      handle,
+      evidence,
+      evidence,
+      displayName,
+      displayName,
+      reasons,
+      reasons,
+      ...cursorWhere.binds,
+      limit,
+    )
+    .all<{ rid: number; sort_value: string | number | null; last_scored: number }>();
+  const rawList = rows.results ?? [];
+  const list = rawList.map(({ rid: _rid, sort_value: _sortValue, ...row }) => row);
+  const last = rawList[rawList.length - 1];
   return c.json({
     queue: list,
-    nextBefore: list.length === limit ? list[list.length - 1].last_scored : null,
+    nextBefore: rawList.length === limit && last ? encodeSortCursor(last, last.last_scored) : null,
     // Echo back the effective filter set so the UI can keep the inputs in
     // sync (especially after the smart `q` → `uid` rewrite above).
-    appliedFilters: { q, uid, handle, evidence, display_name: displayName, reasons },
+    appliedFilters: { q, uid, handle, evidence, display_name: displayName, reasons, sort },
   });
 });
 
@@ -1375,10 +1616,14 @@ app.post("/v1/admin/keyword-rules/apply-to-queue", async (c) => {
       case "bio":
       case "tweet":
         return has(row.evidence_text);
+      case "any":
+        // NB: never match row.reasons — that is the AI's own prose and would
+        // fire on negated mentions ("no 约 solicitation found"). Mirror the
+        // live ruleMatchesText field set as closely as the row layout allows.
+        return has(row.handle) || has(row.display_name) || has(row.evidence_text);
       default:
-        return (
-          has(row.handle) || has(row.display_name) || has(row.evidence_text) || has(row.reasons)
-        );
+        // Unknown field — do not silently widen to match everything.
+        return false;
     }
   }
 
@@ -1389,7 +1634,7 @@ app.post("/v1/admin/keyword-rules/apply-to-queue", async (c) => {
     if (!hit) continue;
     totalHit++;
     perRule[hit.id] = (perRule[hit.id] ?? 0) + 1;
-    const status = statusForRuleAction(hit.action);
+    const status = statusForRuleHit(hit, row.x_user_id != null);
     if (hit.action === "whitelist") {
       stmts.push(
         c.env.DB.prepare(
@@ -1538,31 +1783,59 @@ app.delete("/v1/admin/whitelist", async (c) => {
 
 app.get("/v1/admin/whitelist", async (c) => {
   if (!admin(c)) return c.json({ error: "forbidden" }, 403);
-  const before = Number(c.req.query("before")) || null;
+  const sort = adminSort(c.req.query("sort"));
+  const cursor = decodeSortCursor(c.req.query("before") || null);
+  const cursorWhere = sortCursorWhere(sort, "last_scored", cursor);
   const limit = Math.min(200, Math.max(1, Number(c.req.query("limit")) || 100));
+  const q = (c.req.query("q") || "").trim().replace(/^@+/, "") || null;
+  const sortExpr = sortValueExpr("a", sort, "last_scored");
   const rows = await c.env.DB.prepare(
-    `SELECT x_user_id, handle, display_name, avatar_url, reasons, last_scored,
+    `WITH base AS (
+       SELECT a.rowid AS rid,
+              a.*,
+              ${sortExpr} AS sort_value
+         FROM accounts a
+        WHERE a.status='whitelisted'
+          AND (? IS NULL OR (
+               lower(a.handle) LIKE '%' || lower(?) || '%'
+            OR a.x_user_id LIKE ? || '%'
+            OR lower(coalesce(a.display_name,'')) LIKE '%' || lower(?) || '%'
+            OR lower(coalesce(a.reasons,'')) LIKE '%' || lower(?) || '%'
+          ))
+     )
+     SELECT a.rid, a.sort_value,
+            a.x_user_id, a.handle, a.display_name, a.avatar_url,
+            account_created_at, account_age_days, followers_count, following_count,
+            reasons, last_scored,
             last_decided_by, last_decided_at
-       FROM accounts
-      WHERE status='whitelisted'
-        AND (?1 IS NULL OR last_scored < ?1)
-      ORDER BY last_scored DESC LIMIT ?2`,
+       FROM base a
+      WHERE ${cursorWhere.sql}
+      ORDER BY ${sortOrderSql(sort, "last_scored")} LIMIT ?`,
   )
-    .bind(before, limit)
+    .bind(q, q, q, q, q, ...cursorWhere.binds, limit)
     .all<{
+      rid: number;
+      sort_value: string | number | null;
       x_user_id: string | null;
       handle: string;
       display_name: string | null;
       avatar_url: string | null;
+      account_created_at: string | null;
+      account_age_days: number | null;
+      followers_count: number | null;
+      following_count: number | null;
       reasons: string;
       last_scored: number;
       last_decided_by: string | null;
       last_decided_at: number | null;
     }>();
-  const list = rows.results ?? [];
+  const rawList = rows.results ?? [];
+  const list = rawList.map(({ rid: _rid, sort_value: _sortValue, ...row }) => row);
+  const last = rawList[rawList.length - 1];
   return c.json({
     list,
-    nextBefore: list.length === limit ? list[list.length - 1].last_scored : null,
+    nextBefore: rawList.length === limit && last ? encodeSortCursor(last, last.last_scored) : null,
+    appliedFilters: { q, sort },
   });
 });
 
@@ -1571,38 +1844,68 @@ app.get("/v1/admin/whitelist", async (c) => {
 // /admin panel can iterate it for "moved here by mistake" cleanup.
 app.get("/v1/admin/blacklist", async (c) => {
   if (!admin(c)) return c.json({ error: "forbidden" }, 403);
-  const before = Number(c.req.query("before")) || null;
+  const sort = adminSort(c.req.query("sort"));
+  const cursor = decodeSortCursor(c.req.query("before") || null);
+  const cursorWhere = sortCursorWhere(sort, "published_at", cursor);
   const limit = Math.min(200, Math.max(1, Number(c.req.query("limit")) || 100));
+  const q = (c.req.query("q") || "").trim().replace(/^@+/, "") || null;
+  const sortExpr = sortValueExpr("a", sort, "published_at");
   const rows = await c.env.DB.prepare(
-    `SELECT a.x_user_id, a.handle, a.display_name, a.avatar_url,
-            a.verdict_label, a.confidence, a.reasons, a.evidence_text, a.published_at,
+    `WITH base AS (
+       SELECT a.rowid AS rid,
+              a.*,
+              ${sortExpr} AS sort_value
+         FROM accounts a
+        WHERE a.status='human_confirmed'
+          AND (? IS NULL OR (
+               lower(a.handle) LIKE '%' || lower(?) || '%'
+            OR a.x_user_id LIKE ? || '%'
+            OR lower(coalesce(a.display_name,'')) LIKE '%' || lower(?) || '%'
+            OR lower(coalesce(a.evidence_text,'')) LIKE '%' || lower(?) || '%'
+            OR lower(coalesce(a.reasons,'')) LIKE '%' || lower(?) || '%'
+          ))
+     )
+     SELECT a.rid, a.sort_value,
+            a.x_user_id, a.handle, a.display_name, a.avatar_url,
+            a.account_created_at, a.account_age_days, a.followers_count, a.following_count,
+            a.verdict_label, a.confidence, a.reasons, a.evidence_text, a.last_scored,
+            a.published_at,
             a.last_decided_by, a.last_decided_at,
             (SELECT count(DISTINCT r.reporter_fp) FROM reports r
               WHERE r.handle=a.handle
                 AND ifnull(r.x_user_id,'')=ifnull(a.x_user_id,'')) reporters
-       FROM accounts a
-      WHERE a.status='human_confirmed'
-        AND (?1 IS NULL OR a.published_at < ?1)
-      ORDER BY a.published_at DESC LIMIT ?2`,
+       FROM base a
+      WHERE ${cursorWhere.sql}
+      ORDER BY ${sortOrderSql(sort, "published_at")} LIMIT ?`,
   )
-    .bind(before, limit)
+    .bind(q, q, q, q, q, q, ...cursorWhere.binds, limit)
     .all<{
+      rid: number;
+      sort_value: string | number | null;
       x_user_id: string | null;
       handle: string;
       display_name: string | null;
       avatar_url: string | null;
+      account_created_at: string | null;
+      account_age_days: number | null;
+      followers_count: number | null;
+      following_count: number | null;
       verdict_label: string;
       confidence: number;
       reasons: string;
+      last_scored: number;
       published_at: number;
       last_decided_by: string | null;
       last_decided_at: number | null;
       reporters: number;
     }>();
-  const list = rows.results ?? [];
+  const rawList = rows.results ?? [];
+  const list = rawList.map(({ rid: _rid, sort_value: _sortValue, ...row }) => row);
+  const last = rawList[rawList.length - 1];
   return c.json({
     list,
-    nextBefore: list.length === limit ? list[list.length - 1].published_at : null,
+    nextBefore: rawList.length === limit && last ? encodeSortCursor(last, last.published_at) : null,
+    appliedFilters: { q, sort },
   });
 });
 
@@ -2011,6 +2314,7 @@ app.get("/v1/agent/queue", async (c) => {
   const limit = Math.min(100, Math.max(1, Number(c.req.query("limit")) || 30));
   const rows = await c.env.DB.prepare(
     `SELECT x_user_id, handle, display_name, avatar_url, verdict_label, confidence,
+            account_created_at, account_age_days, followers_count, following_count,
             reasons, evidence_text, last_scored, signals_hash,
             agent_id, agent_at, agent_signals_hash, agent_attempts
        FROM accounts
@@ -2097,9 +2401,7 @@ app.post("/v1/agent/decide", async (c) => {
     : failedAttempt
       ? (body.notes || body.reasons.join(" · ") || "agent_failed").slice(0, 1000)
       : null;
-  const signalGuard = body.signals_hash
-    ? " AND (signals_hash IS NULL OR signals_hash=?)"
-    : "";
+  const signalGuard = body.signals_hash ? " AND (signals_hash IS NULL OR signals_hash=?)" : "";
 
   // Write annotation columns. Update statement targets the canonical row;
   // matches by uid when present (preferred), else by normalized handle.
@@ -2145,7 +2447,9 @@ app.post("/v1/agent/decide", async (c) => {
   if (uid) annotateBinds.push(uid);
   if (body.signals_hash) annotateBinds.push(body.signals_hash);
 
-  const updated = await c.env.DB.prepare(annotateSql).bind(...annotateBinds).run();
+  const updated = await c.env.DB.prepare(annotateSql)
+    .bind(...annotateBinds)
+    .run();
   const changes = Number(updated.meta?.changes ?? 0);
   if (changes === 0) {
     return c.json(
@@ -2230,6 +2534,7 @@ app.get("/v1/admin/agent-list", async (c) => {
   const limit = Math.min(200, Math.max(1, Number(c.req.query("limit")) || 100));
   const rows = await c.env.DB.prepare(
     `SELECT x_user_id, handle, display_name, avatar_url,
+            account_created_at, account_age_days, followers_count, following_count,
             verdict_label, confidence, reasons, evidence_text,
             agent_id, agent_label, agent_confidence, agent_reasons,
             agent_signals, agent_evidence, agent_action, agent_model,

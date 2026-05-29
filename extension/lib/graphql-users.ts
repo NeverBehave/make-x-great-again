@@ -18,6 +18,7 @@ export interface KnownUser {
   userId?: string;
   followersCount?: number;
   followingCount?: number;
+  accountCreatedAt?: string;
   accountAgeDays?: number;
   displayName?: string;
   avatarUrl?: string;
@@ -45,6 +46,7 @@ export function ingestGraphqlUsers(users: GraphqlUserSnapshot[]): boolean {
     const userId = numericId(user.userId);
     if (!handle || !userId) continue;
     const created = user.createdAt ? Date.parse(user.createdAt) : NaN;
+    const accountCreatedAt = Number.isNaN(created) ? undefined : new Date(created).toISOString();
     const next: KnownUser = {
       userId,
       ...(user.bio !== undefined ? { bio: user.bio } : {}),
@@ -56,6 +58,7 @@ export function ingestGraphqlUsers(users: GraphqlUserSnapshot[]): boolean {
       ...(user.viewerBlocking ? { viewerBlocking: true as const } : {}),
       ...(user.viewerMuting ? { viewerMuting: true as const } : {}),
       ...(user.viewerFollowRequestSent ? { viewerFollowRequestSent: true as const } : {}),
+      ...(accountCreatedAt ? { accountCreatedAt } : {}),
       ...(Number.isNaN(created)
         ? {}
         : { accountAgeDays: Math.max(0, Math.round((Date.now() - created) / 86_400_000)) }),

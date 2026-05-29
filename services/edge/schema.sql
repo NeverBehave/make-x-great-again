@@ -7,6 +7,10 @@ CREATE TABLE IF NOT EXISTS accounts (
   handle        TEXT,
   display_name  TEXT,
   avatar_url    TEXT,
+  account_created_at TEXT,                 -- X account created_at string/ISO when observed
+  account_age_days INTEGER,                 -- age at last observed signal snapshot
+  followers_count INTEGER,
+  following_count INTEGER,
   verdict_label TEXT NOT NULL,              -- spam|porn_bot|likely_spam|uncertain|legit
   confidence    REAL NOT NULL,
   reasons       TEXT,                       -- json array
@@ -31,6 +35,9 @@ CREATE INDEX IF NOT EXISTS idx_accounts_status ON accounts(status);
 CREATE INDEX IF NOT EXISTS idx_accounts_uid ON accounts(x_user_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_handle_norm ON accounts(lower(handle));
 CREATE INDEX IF NOT EXISTS idx_accounts_status_published_at ON accounts(status, published_at);
+CREATE INDEX IF NOT EXISTS idx_accounts_status_created_at ON accounts(status, account_created_at);
+CREATE INDEX IF NOT EXISTS idx_accounts_status_followers ON accounts(status, followers_count);
+CREATE INDEX IF NOT EXISTS idx_accounts_status_following ON accounts(status, following_count);
 -- Partial UNIQUE: prevent the same X numeric uid from ever splitting across
 -- two rows. NULL is excluded so handle-only rows still coexist while we
 -- wait for the fiber walk to land a uid. Paired with findAccount's by-uid

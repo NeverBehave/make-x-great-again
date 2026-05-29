@@ -201,9 +201,16 @@ input::placeholder{color:var(--fg-4)}
 /* Search + advanced filter bar — lives above the chip row in the queue tab. */
 .search-bar{margin-bottom:12px;display:flex;flex-direction:column;gap:8px}
 .search-bar .search-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.filter-form{display:grid;grid-template-columns:minmax(260px,1fr) minmax(160px,220px) auto;
+  align-items:end;gap:8px;width:100%}
+.filter-form.queue{grid-template-columns:minmax(260px,1fr) auto}
+.filter-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.filter-field > span{color:var(--fg-3);font-size:11.5px;letter-spacing:.02em}
+.filter-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .search-bar .search-input{flex:1;min-width:240px;padding:8px 12px;border-radius:var(--r);
   border:1px solid var(--border-strong);background:var(--bg-2);color:var(--fg);
   font-size:13px;font-family:inherit}
+.search-bar select{width:100%;background-color:var(--bg-2)}
 .search-bar .search-input:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
 .search-bar .search-input::placeholder{color:var(--fg-4)}
 .adv-panel{background:var(--card);border:1px solid var(--border);border-radius:var(--r);
@@ -411,6 +418,9 @@ input::placeholder{color:var(--fg-4)}
   .batch{align-items:stretch;flex-direction:column;padding:10px;margin-bottom:10px}
   .batch .actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
   .batch .actions .btn{min-height:38px;padding:0 8px}
+  .filter-form,.filter-form.queue{grid-template-columns:1fr}
+  .filter-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
+  .filter-actions .btn{min-height:38px}
   .qrow{grid-template-columns:22px 34px minmax(0,1fr) 58px;
     grid-template-areas:"check av who conf" ". . acts acts";
     align-items:start;gap:8px 10px;padding:12px 10px 12px 13px}
@@ -466,9 +476,11 @@ const SCRIPT = String.raw`
   var whitelist=[];
   var wlCursor=null;
   var wlSearch='';
+  var wlSort='time_desc';
   var blacklist=[];
   var blCursor=null;
   var blSearch='';
+  var blSort='time_desc';
   var filter='all';
   var sort='severity';
   var sel=new Set();         // queue tab selection
@@ -510,22 +522,46 @@ const SCRIPT = String.raw`
     if(following!=null)chips.push('<span class="acct-chip" title="关注人数">关注 '+fmtN(following)+'</span>');
     return chips.length?'<div class="acct-meta">'+chips.join('')+'</div>':'';
   }
+  function opt(value,label,current){return '<option value="'+E(value)+'"'+(current===value?' selected':'')+'>'+E(label)+'</option>'}
+  function queueSortOptions(current){
+    return opt('severity','风险等级 ↓',current)
+      +opt('conf_desc','AI 置信 ↓',current)
+      +opt('time_desc','时间 ↓',current)
+      +opt('created_desc','注册时间 新→旧',current)
+      +opt('created_asc','注册时间 旧→新',current)
+      +opt('followers_desc','粉丝数 多→少',current)
+      +opt('followers_asc','粉丝数 少→多',current)
+      +opt('following_desc','关注数 多→少',current)
+      +opt('following_asc','关注数 少→多',current)
+      +opt('rep_desc','举报人数 ↓',current);
+  }
+  function metricSortOptions(current){
+    return opt('time_desc','更新时间 ↓',current)
+      +opt('created_desc','注册时间 新→旧',current)
+      +opt('created_asc','注册时间 旧→新',current)
+      +opt('followers_desc','粉丝数 多→少',current)
+      +opt('followers_asc','粉丝数 少→多',current)
+      +opt('following_desc','关注数 多→少',current)
+      +opt('following_asc','关注数 少→多',current);
+  }
   // Build the query string for /v1/admin/queue from the current filter state.
   // Empty values are omitted entirely so the URL stays compact and the backend
   // treats them as "no filter on this dimension".
   function queueQs(){
     var parts=['limit=100'];
     if(queueCursor)parts.push('before='+encodeURIComponent(queueCursor));
+    if(sort)parts.push('sort='+encodeURIComponent(sort));
     Object.keys(qFilters).forEach(function(k){
       var v=qFilters[k];
       if(v)parts.push(k+'='+encodeURIComponent(v));
     });
     return '?'+parts.join('&');
   }
-  function listQs(cursor,q){
+  function listQs(cursor,q,listSort){
     var parts=['limit=100'];
     if(cursor)parts.push('before='+encodeURIComponent(cursor));
     if(q&&String(q).trim())parts.push('q='+encodeURIComponent(String(q).trim()));
+    if(listSort)parts.push('sort='+encodeURIComponent(listSort));
     return '?'+parts.join('&');
   }
   function activeFilterCount(){
@@ -713,6 +749,7 @@ const SCRIPT = String.raw`
       // Sync filter inputs back from the server-echoed appliedFilters — this
       // catches the "user typed a numeric q, server rewrote it to uid" case.
       if(j.appliedFilters){
+        if(j.appliedFilters.sort)sort=j.appliedFilters.sort;
         Object.keys(qFilters).forEach(function(k){
           if(k in j.appliedFilters)qFilters[k]=j.appliedFilters[k]||'';
         });
@@ -756,14 +793,16 @@ const SCRIPT = String.raw`
     var nActive=activeFilterCount();
     v.innerHTML=
       '<div class="search-bar">'
-        +'<div class="search-row">'
-          +'<input id="qSearch" class="search-input" type="search" autocomplete="off" placeholder="搜 handle / uid / 推文内容 / 理由 …（回车搜索）" value="'+E(qFilters.q||'')+'">'
-          +'<button class="btn sm" id="qSearchBtn" type="button">搜索</button>'
-          +'<button class="btn sm muted" id="qAdvToggle" type="button" aria-expanded="'+(advOpen?'true':'false')+'">'
-            +'更多筛选'+(nActive?' · <b>'+nActive+'</b>':'')
-          +'</button>'
-          +(nActive?'<button class="btn sm" id="qClearAll" type="button">清空全部</button>':'')
-        +'</div>'
+        +'<form class="filter-form queue" id="qForm">'
+          +'<label class="filter-field"><span>搜索</span><input id="qSearch" class="search-input" type="search" autocomplete="off" placeholder="handle / uid / 推文内容 / 理由" value="'+E(qFilters.q||'')+'"></label>'
+          +'<div class="filter-actions">'
+            +'<button class="btn sm" id="qSearchBtn" type="submit">搜索</button>'
+            +'<button class="btn sm muted" id="qAdvToggle" type="button" aria-expanded="'+(advOpen?'true':'false')+'">'
+              +'更多筛选'+(nActive?' · <b>'+nActive+'</b>':'')
+            +'</button>'
+            +(nActive?'<button class="btn sm" id="qClearAll" type="button">清空全部</button>':'')
+          +'</div>'
+        +'</form>'
         +'<details class="adv-panel" id="qAdv"'+(advOpen?' open':'')+'>'
           +'<summary style="display:none"></summary>'
           +'<div class="adv-grid">'
@@ -786,12 +825,7 @@ const SCRIPT = String.raw`
           +chip('legit','正常账号')
         +'</div>'
         +'<div class="r"><label class="status">排序</label>'
-          +'<select id="sort">'
-            +'<option value="severity"'+(sort==='severity'?' selected':'')+'>风险等级 ↓</option>'
-            +'<option value="conf_desc"'+(sort==='conf_desc'?' selected':'')+'>AI 置信 ↓</option>'
-            +'<option value="time_desc"'+(sort==='time_desc'?' selected':'')+'>时间 ↓</option>'
-            +'<option value="rep_desc"'+(sort==='rep_desc'?' selected':'')+'>举报人数 ↓</option>'
-          +'</select>'
+          +'<select id="sort">'+queueSortOptions(sort)+'</select>'
         +'</div>'
       +'</div>'
       +'<div class="batch" id="batch">'
@@ -811,7 +845,7 @@ const SCRIPT = String.raw`
     Array.prototype.forEach.call(v.querySelectorAll('.chip'),function(b){
       b.addEventListener('click',function(){filter=b.dataset.f;lastSelIdxQ=-1;renderRows()})
     });
-    $('sort').addEventListener('change',function(e){sort=e.target.value;lastSelIdxQ=-1;renderRows()});
+    $('sort').addEventListener('change',function(e){sort=e.target.value;lastSelIdxQ=-1;loadQueue(false)});
     $('selAllQ').addEventListener('change',function(){
       var rows=filteredQueue();
       if(this.checked)rows.forEach(function(a){sel.add(key(a))})
@@ -821,8 +855,7 @@ const SCRIPT = String.raw`
     // Search wiring — Enter or button click commits the fuzzy q filter.
     var qInput=$('qSearch');
     function commitQ(){qFilters.q=qInput.value.trim();loadQueue(false)}
-    qInput.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();commitQ()}});
-    $('qSearchBtn').addEventListener('click',commitQ);
+    $('qForm').addEventListener('submit',function(e){e.preventDefault();commitQ()});
     // Advanced field inputs — Enter commits the value of that single field.
     Array.prototype.forEach.call(v.querySelectorAll('.adv-input'),function(inp){
       inp.addEventListener('keydown',function(e){
@@ -1655,13 +1688,14 @@ const SCRIPT = String.raw`
   function loadWhitelist(more){
     if(!more){whitelist=[];wlCursor=null;wlSel.clear();lastSelIdxW=-1}
     setStatus('加载中…');
-    api('/v1/admin/whitelist'+listQs(wlCursor,wlSearch)).then(function(r){
+    api('/v1/admin/whitelist'+listQs(wlCursor,wlSearch,wlSort)).then(function(r){
       if(r.status===403){TOK='';localStorage.removeItem('xss_admin');renderLocked();return null}
       return r.json();
     }).then(function(j){
       if(!j)return;
       whitelist=whitelist.concat(j.list||[]);
       wlCursor=j.nextBefore;
+      if(j.appliedFilters&&j.appliedFilters.sort)wlSort=j.appliedFilters.sort;
       setStatus('');
       // Truth lives in stats; this is just a quick fallback before /v1/admin/stats arrives.
       var c=$('cW');if(c&&stats.whitelist==null)c.textContent=whitelist.length+(wlCursor?'+':'');
@@ -1681,11 +1715,14 @@ const SCRIPT = String.raw`
         +'</div>'
       +'</div>'
       +'<div class="search-bar">'
-        +'<div class="search-row">'
-          +'<input id="wlSearch" class="search-input" value="'+E(wlSearch)+'" placeholder="搜索白名单 handle / uid / 显示名 / 备注 …">'
-          +'<button class="btn sm" id="wlSearchBtn">搜索</button>'
-          +(wlSearch?'<button class="btn sm muted" id="wlSearchClear">清除</button>':'')
-        +'</div>'
+        +'<form class="filter-form" id="wlForm">'
+          +'<label class="filter-field"><span>搜索</span><input id="wlSearch" class="search-input" type="search" value="'+E(wlSearch)+'" placeholder="handle / uid / 显示名 / 备注"></label>'
+          +'<label class="filter-field"><span>排序</span><select id="wlSort">'+metricSortOptions(wlSort)+'</select></label>'
+          +'<div class="filter-actions">'
+            +'<button class="btn sm" id="wlSearchBtn" type="submit">搜索</button>'
+            +(wlSearch?'<button class="btn sm muted" id="wlSearchClear" type="button">清除</button>':'')
+          +'</div>'
+        +'</form>'
       +'</div>'
       +'<div class="batch" id="wlbatch">'
         +'<label class="meta" title="全选已加载范围。Shift+点 可在两次勾选间一次性勾选范围">'
@@ -1706,8 +1743,8 @@ const SCRIPT = String.raw`
     var box=$('wlrows');
     var wli=$('wlSearch');
     function commitWlSearch(){wlSearch=(wli&&wli.value||'').trim();loadWhitelist(false)}
-    if(wli)wli.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();commitWlSearch()}});
-    var wlb=$('wlSearchBtn');if(wlb)wlb.addEventListener('click',commitWlSearch);
+    var wlf=$('wlForm');if(wlf)wlf.addEventListener('submit',function(e){e.preventDefault();commitWlSearch()});
+    var wls=$('wlSort');if(wls)wls.addEventListener('change',function(e){wlSort=e.target.value;loadWhitelist(false)});
     var wlc=$('wlSearchClear');if(wlc)wlc.addEventListener('click',function(){wlSearch='';loadWhitelist(false)});
     if(!whitelist.length){box.innerHTML='<div class="empty">'+(searching?'没有匹配的白名单账号。':'还没有白名单账号。<br><br>点击右上角 <b>+ 加入白名单</b>，或在「待审队列」对某行点 <b>白名单</b> 按钮把它直接挪过来。')+'</div>';wlRefreshBatch();return}
     box.innerHTML=whitelist.map(function(a,i){
@@ -1826,13 +1863,14 @@ const SCRIPT = String.raw`
   function loadBlacklist(more){
     if(!more){blacklist=[];blCursor=null;blSel.clear()}
     setStatus('加载中…');
-    api('/v1/admin/blacklist'+listQs(blCursor,blSearch)).then(function(r){
+    api('/v1/admin/blacklist'+listQs(blCursor,blSearch,blSort)).then(function(r){
       if(r.status===403){TOK='';localStorage.removeItem('xss_admin');renderLocked();return null}
       return r.json();
     }).then(function(j){
       if(!j)return;
       blacklist=blacklist.concat(j.list||[]);
       blCursor=j.nextBefore;
+      if(j.appliedFilters&&j.appliedFilters.sort)blSort=j.appliedFilters.sort;
       setStatus('');
       // Truth lives in stats; this is just a quick fallback before /v1/admin/stats arrives.
       var c=$('cB');if(c&&stats.blacklist==null)c.textContent=blacklist.length+(blCursor?'+':'');
@@ -1849,11 +1887,14 @@ const SCRIPT = String.raw`
           +(searching?' · 当前搜索 <b style="color:var(--fg)">'+E(blSearch)+'</b>':'')+'</div>'
       +'</div>'
       +'<div class="search-bar">'
-        +'<div class="search-row">'
-          +'<input id="blSearch" class="search-input" value="'+E(blSearch)+'" placeholder="搜索黑名单 handle / uid / 显示名 / 证据 / 理由 …">'
-          +'<button class="btn sm" id="blSearchBtn">搜索</button>'
-          +(blSearch?'<button class="btn sm muted" id="blSearchClear">清除</button>':'')
-        +'</div>'
+        +'<form class="filter-form" id="blForm">'
+          +'<label class="filter-field"><span>搜索</span><input id="blSearch" class="search-input" type="search" value="'+E(blSearch)+'" placeholder="handle / uid / 显示名 / 证据 / 理由"></label>'
+          +'<label class="filter-field"><span>排序</span><select id="blSort">'+metricSortOptions(blSort)+'</select></label>'
+          +'<div class="filter-actions">'
+            +'<button class="btn sm" id="blSearchBtn" type="submit">搜索</button>'
+            +(blSearch?'<button class="btn sm muted" id="blSearchClear" type="button">清除</button>':'')
+          +'</div>'
+        +'</form>'
       +'</div>'
       +'<div class="batch" id="blbatch">'
         +'<label class="meta" title="全选已加载范围。Shift+点 可在两次勾选间一次性勾选范围">'
@@ -1876,8 +1917,8 @@ const SCRIPT = String.raw`
     var box=$('blrows');
     var bli=$('blSearch');
     function commitBlSearch(){blSearch=(bli&&bli.value||'').trim();loadBlacklist(false)}
-    if(bli)bli.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();commitBlSearch()}});
-    var blb=$('blSearchBtn');if(blb)blb.addEventListener('click',commitBlSearch);
+    var blf=$('blForm');if(blf)blf.addEventListener('submit',function(e){e.preventDefault();commitBlSearch()});
+    var bls=$('blSort');if(bls)bls.addEventListener('change',function(e){blSort=e.target.value;loadBlacklist(false)});
     var blc=$('blSearchClear');if(blc)blc.addEventListener('click',function(){blSearch='';loadBlacklist(false)});
     if(!blacklist.length){box.innerHTML='<div class="empty">'+(searching?'没有匹配的黑名单账号。':'公榜还没有账号。<br><br>在「待审队列」点 <b style="color:var(--danger)">拉黑</b> 把判定结果送进公榜。')+'</div>';blRefreshBatch();return}
     box.innerHTML=blacklist.map(function(a,i){

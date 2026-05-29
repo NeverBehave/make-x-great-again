@@ -26,6 +26,7 @@ export interface Signals {
   recentTweets: string[];
   triggeringComment?: string;
   threadTopic?: string;
+  accountCreatedAt?: string;
   accountAgeDays?: number;
   followersCount?: number;
   followingCount?: number;

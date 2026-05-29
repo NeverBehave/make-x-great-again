@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const { ingestGraphqlUsers } = await import("../extension/lib/graphql-users.ts");
+const { ingestGraphqlUsers, readGraphqlUser } = await import("../extension/lib/graphql-users.ts");
 
 // All tests below use unique handles per assertion so the module-level
 // graphqlUserCache (Map) does not leak state between tests.
@@ -105,6 +105,7 @@ test("ingestGraphqlUsers: createdAt is parsed into accountAgeDays internally wit
     ingestGraphqlUsers([{ handle, userId: "1010", createdAt: "Tue Jun 02 20:12:29 +0000 2009" }]),
     true,
   );
+  assert.equal(readGraphqlUser(handle).accountCreatedAt, "2009-06-02T20:12:29.000Z");
   // Garbage createdAt must not throw — it is just dropped.
   const handle2 = uniqueHandle("createdbad");
   assert.doesNotThrow(() =>

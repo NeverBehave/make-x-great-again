@@ -140,6 +140,7 @@ export interface FiberUser {
   userId?: string;
   followersCount?: number;
   followingCount?: number;
+  accountCreatedAt?: string;
   accountAgeDays?: number;
   viewerFollowing?: true;
   viewerBlocking?: true;
@@ -243,11 +244,15 @@ function readFiberUserUncached(el: Element, expectedHandle?: string): FiberUser 
           const accountAgeDays = Number.isNaN(created)
             ? undefined
             : Math.max(0, Math.round((Date.now() - created) / 86_400_000));
+          const accountCreatedAt = Number.isNaN(created)
+            ? undefined
+            : new Date(created).toISOString();
           return {
             bio: typeof legacy.description === "string" ? legacy.description : "",
             ...(userId ? { userId } : {}),
             followersCount: legacy.followers_count,
             followingCount: legacy.friends_count,
+            ...(accountCreatedAt ? { accountCreatedAt } : {}),
             ...(accountAgeDays !== undefined ? { accountAgeDays } : {}),
             ...(trueFlag(legacy.following) ? { viewerFollowing: true as const } : {}),
             ...(trueFlag(legacy.blocking) ? { viewerBlocking: true as const } : {}),
@@ -397,6 +402,7 @@ export function extractProfile(): Signals | null {
     ...(fu.viewerMuting ? { viewerMuting: true as const } : {}),
     ...(fu.viewerFollowRequestSent ? { viewerFollowRequestSent: true as const } : {}),
     ...(fu.viewerIsSelf ? { viewerIsSelf: true as const } : {}),
+    ...(fu.accountCreatedAt ? { accountCreatedAt: fu.accountCreatedAt } : {}),
     ...(parseJoinDate(joinEl?.innerText) !== undefined
       ? { accountAgeDays: parseJoinDate(joinEl?.innerText) }
       : {}),
@@ -462,6 +468,7 @@ export function extractFromArticle(article: HTMLElement): Signals | null {
     ...(networkUser.avatarUrl ?? avatarUrl ? { avatarUrl: networkUser.avatarUrl ?? avatarUrl } : {}),
     ...(fu.userId ? { userId: fu.userId } : {}),
     ...(tweetText ? { triggeringComment: tweetText } : {}),
+    ...(fu.accountCreatedAt ? { accountCreatedAt: fu.accountCreatedAt } : {}),
     ...(fu.accountAgeDays !== undefined ? { accountAgeDays: fu.accountAgeDays } : {}),
     ...(fu.followersCount !== undefined ? { followersCount: fu.followersCount } : {}),
     ...(fu.followingCount !== undefined ? { followingCount: fu.followingCount } : {}),
