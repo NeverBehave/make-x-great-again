@@ -270,7 +270,11 @@ function clearMounts(anchor: HTMLElement) {
 
 /** Lightweight "queued" marker — NOT a final mount, so scan() revisits it
  *  once the token bucket refills (newly loaded comments never get stuck). */
-function mountStatus(anchor: HTMLElement, kind: "analyzing" | "pending" | "blocking") {
+function mountStatus(
+  anchor: HTMLElement,
+  kind: "analyzing" | "pending" | "blocking",
+  actions?: Parameters<typeof createStatusBadge>[1],
+) {
   const cls = kind === "pending" ? "xss-pending" : "xss-mount";
   if (anchor.querySelector(`:scope > .${cls}`)) return;
   const host = document.createElement("span");
@@ -284,7 +288,7 @@ function mountStatus(anchor: HTMLElement, kind: "analyzing" | "pending" | "block
   const sr = host.attachShadow({ mode: "open" });
   const st = document.createElement("style");
   st.textContent = STYLE;
-  sr.append(st, createStatusBadge(kind));
+  sr.append(st, createStatusBadge(kind, actions));
   anchor.appendChild(host);
 }
 const mountPending = (a: HTMLElement) => mountStatus(a, "pending");
@@ -300,7 +304,8 @@ export default defineContentScript({
     let bubbleApi: ReturnType<typeof createBubble> | null = null;
     let dismissed = false;
     let canReport = false;
-    const inflight = new Map<string, Promise<void>>(); // L0 in-flight de-dup
+    type InflightClassify = { promise: Promise<void>; requestId: string; canceled: boolean };
+    const inflight = new Map<string, InflightClassify>(); // L0 in-flight de-dup
     const anchorByKey = new Map<string, HTMLElement>();
     const nodeKey = new WeakMap<HTMLElement, string>(); // virtualization-safe
     const findings: Finding[] = [];
@@ -507,6 +512,7 @@ export default defineContentScript({
     }
 
     async function blockAccount(key: string, sig: Signals): Promise<boolean> {
+      cancelClassify(key);
       const active = findFinding(sig);
       if (active) {
         active.blockQueued = false;
@@ -685,7 +691,15 @@ export default defineContentScript({
         if (!dismissed) bubbleApi?.update(findings);
       }
     }
-    async function reportAccount(sig: Signals) {
+    function cancelClassify(key: string) {
+      const running = inflight.get(key);
+      if (!running || running.canceled) return;
+      running.canceled = true;
+      void send({ type: "cancel_classify", requestId: running.requestId });
+    }
+
+    async function reportAccount(key: string, sig: Signals) {
+      cancelClassify(key);
       const resp = await send({ type: "report_spam", signals: sig });
       if (!resp.ok) throw new Error(resp.error || "上报失败");
     }
@@ -737,6 +751,17 @@ export default defineContentScript({
       mountBlocking(anchor); // the cell collapses once finalizeBlocked runs
       return true;
     }
+    function badgeActions(anchor: HTMLElement, key: string, sig: Signals) {
+      return {
+        onBlock: () => void blockAccount(key, sig),
+        onHide: () => hideTweet(anchor),
+        onReport: () => reportAccount(key, sig),
+        onAppeal: () => window.open(APPEAL_URL, "_blank", "noopener"),
+        onCheck: () => void classify(anchor, key, sig),
+        canReport,
+      };
+    }
+
     function badgeFor(
       anchor: HTMLElement,
       key: string,
@@ -747,21 +772,7 @@ export default defineContentScript({
     ) {
       tallyScan(key);
       clearMounts(anchor);
-      mountBadge(anchor, () =>
-        createBadge(
-          v,
-          {
-            onBlock: () => void blockAccount(key, sig),
-            onHide: () => hideTweet(anchor),
-            onReport: () => reportAccount(sig),
-            onAppeal: () => window.open(APPEAL_URL, "_blank", "noopener"),
-            onCheck: () => void classify(anchor, key, sig),
-            canReport,
-          },
-          note,
-          source,
-        ),
-      );
+      mountBadge(anchor, () => createBadge(v, badgeActions(anchor, key, sig), note, source));
     }
 
     function renderCached(anchor: HTMLElement, key: string, sig: Signals, c: Cached) {
@@ -771,15 +782,24 @@ export default defineContentScript({
 
     async function classify(anchor: HTMLElement, key: string, sig: Signals) {
       const running = inflight.get(key);
-      if (running) return running;
-      mountStatus(anchor, "analyzing"); // animated shimmer while AI works
+      if (running) return running.promise;
+      mountStatus(anchor, "analyzing", badgeActions(anchor, key, sig)); // animated shimmer while AI works
+      const requestId = crypto.randomUUID();
+      const state: InflightClassify = {
+        requestId,
+        canceled: false,
+        promise: Promise.resolve(),
+      };
       const p = (async () => {
         const { isProfile: _p, ...rest } = sig;
         const resp = await send<{ record: CurationRecord; idResolved: boolean }>({
           type: "classify",
+          requestId,
           signals: rest,
         });
-        if (!resp.ok || !resp.data) return;
+        if (state.canceled || !resp.ok || !resp.data) return;
+        const current = inflight.get(key);
+        if (!current || current.requestId !== requestId || current.canceled) return;
         const { record, idResolved } = resp.data;
         badgeFor(anchor, key, sig, record.verdict, idResolved ? undefined : "数字ID未解析，handle 兜底", "fresh");
         pushFinding(sig, record.verdict);
@@ -794,11 +814,13 @@ export default defineContentScript({
           ...(sig.avatarUrl ? { avatarUrl: sig.avatarUrl } : {}),
         });
       })();
-      inflight.set(key, p);
+      state.promise = p;
+      inflight.set(key, state);
       try {
         await p;
       } finally {
-        inflight.delete(key);
+        const current = inflight.get(key);
+        if (current?.requestId === requestId) inflight.delete(key);
       }
     }
 
