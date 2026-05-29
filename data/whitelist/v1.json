@@ -1,8 +1,23 @@
 {
   "schema": 1,
-  "generatedAt": 1779991251104,
-  "count": 103,
+  "generatedAt": 1780034451217,
+  "count": 106,
   "list": [
+    {
+      "handle": "russell3402",
+      "x_user_id": "1991045969371361280",
+      "last_scored": 1780034230846
+    },
+    {
+      "handle": "bqnanqiao",
+      "x_user_id": "1414146868049715202",
+      "last_scored": 1780030649657
+    },
+    {
+      "handle": "jiaweishen2568",
+      "x_user_id": "1635476041438461952",
+      "last_scored": 1780027352341
+    },
     {
       "handle": "nicole_yang88",
       "x_user_id": "1758831860954902528",
@@ -454,16 +469,6 @@
       "last_scored": 1779723855166
     },
     {
-      "handle": "dingyi",
-      "x_user_id": null,
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "realNyarime",
-      "x_user_id": null,
-      "last_scored": 1779723855166
-    },
-    {
       "handle": "ArthurUnde55893",
       "x_user_id": null,
       "last_scored": 1779723855166
@@ -506,6 +511,16 @@
     {
       "handle": "miantiao_me",
       "x_user_id": "1648180024464539648",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "realNyarime",
+      "x_user_id": null,
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "dingyi",
+      "x_user_id": null,
       "last_scored": 1779723855166
     },
     {
