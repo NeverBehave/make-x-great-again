@@ -1,8 +1,33 @@
 {
   "schema": 1,
-  "generatedAt": 1780120843915,
-  "count": 118,
+  "generatedAt": 1780164043860,
+  "count": 123,
   "list": [
+    {
+      "handle": "brucexu_eth",
+      "x_user_id": null,
+      "last_scored": 1780148303151
+    },
+    {
+      "handle": "turingou",
+      "x_user_id": null,
+      "last_scored": 1780148279848
+    },
+    {
+      "handle": "CyberKanjousen",
+      "x_user_id": null,
+      "last_scored": 1780148197204
+    },
+    {
+      "handle": "mybigbearboy",
+      "x_user_id": null,
+      "last_scored": 1780148109583
+    },
+    {
+      "handle": "__fanqie__",
+      "x_user_id": "1756909109788753920",
+      "last_scored": 1780147761140
+    },
     {
       "handle": "berkeleyhaas",
       "x_user_id": "24714450",
