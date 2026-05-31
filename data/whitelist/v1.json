@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generatedAt": 1780164043860,
+  "generatedAt": 1780250448639,
   "count": 123,
   "list": [
     {
@@ -589,17 +589,17 @@
       "last_scored": 1779723855166
     },
     {
-      "handle": "laurencemister",
-      "x_user_id": null,
-      "last_scored": 1779723855166
-    },
-    {
       "handle": "miantiao_me",
       "x_user_id": "1648180024464539648",
       "last_scored": 1779723855166
     },
     {
       "handle": "realNyarime",
+      "x_user_id": null,
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "laurencemister",
       "x_user_id": null,
       "last_scored": 1779723855166
     },
