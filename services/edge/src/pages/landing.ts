@@ -51,6 +51,13 @@ const CSS = `
 .hero .meta{font-size:12.5px;color:var(--fg-4);display:flex;flex-wrap:wrap;
   gap:6px 14px;align-items:center}
 .hero .meta .dot{width:3px;height:3px;border-radius:50%;background:var(--fg-4);opacity:.5}
+.risk-note{max-width:600px;margin:18px 0 0;padding:13px 15px;border:1px solid color-mix(in srgb,var(--warn) 42%,var(--border));
+  border-radius:var(--r);background:color-mix(in srgb,var(--warn) 9%,var(--card));box-shadow:var(--shadow-card)}
+.risk-note strong{display:block;margin-bottom:4px;font-size:13px;color:var(--fg);font-weight:650}
+.risk-note p{margin:0;font-size:12.5px;line-height:1.65;color:var(--fg-2)}
+.risk-note a{color:var(--fg);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--warn) 54%,var(--border-strong));
+  text-underline-offset:2px}
+.risk-note a:hover{color:var(--accent)}
 
 /* Section */
 section.block{padding:64px 0;border-top:1px solid var(--border)}
@@ -366,6 +373,10 @@ const HERO = `
     <span>不存身份</span><span class="dot" aria-hidden="true"></span>
     <span>开源</span>
   </p>
+  <div class="risk-note" role="note" aria-label="账号风控提醒">
+    <strong>账号风控提醒</strong>
+    <p>短时间内连续拉黑大量账号，可能被 X 判定为异常自动化行为并触发 Ghost Ban、功能限制或账号冻结。请分批处理，并避免开启任何高频批量操作。</p>
+  </div>
   <details class="install-alt">
     <summary>用 Edge / Brave / Arc，或想跑开发版？</summary>
     <ol>
