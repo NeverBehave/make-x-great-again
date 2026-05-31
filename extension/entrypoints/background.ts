@@ -22,6 +22,17 @@ async function call(path: string, init?: RequestInit): Promise<Record<string, un
   return body as Record<string, unknown>;
 }
 
+async function callCancelable(
+  path: string,
+  init?: RequestInit,
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>> {
+  const res = await fetch((await base()) + path, { ...init, signal });
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+  return body as Record<string, unknown>;
+}
+
 /** POST JSON, attaching the GitHub token when present (gates write endpoints). */
 async function authedPost(signals: unknown) {
   const tok = await getGhToken();
@@ -89,6 +100,8 @@ async function ghPoll(deviceCode: string) {
 }
 
 export default defineBackground(() => {
+  const classifyControllers = new Map<string, AbortController>();
+
   chrome.runtime.onMessage.addListener(
     (msg: BgRequest, _s: chrome.runtime.MessageSender, sendResponse: (r: BgResponse) => void) => {
       (async () => {
@@ -130,24 +143,46 @@ export default defineBackground(() => {
             if (hitCount) void bumpStatBy("hitPublic", hitCount);
             sendResponse({ ok: true, data: { hits } });
           } else if (msg.type === "classify") {
-            const r = await call("/v1/classify", await authedPost(msg.signals));
-            const rec = r.record as { verdict: CurationRecord["verdict"]; status: string };
-            const s = msg.signals as { userId?: string; handle: string };
-            // Only count fresh LLM work, not cache returns (server tells us via `cached`).
-            if (!r.cached) void bumpStat("scanned");
-            sendResponse({
-              ok: true,
-              data: {
-                record: {
-                  userId: s.userId ?? "",
-                  handle: s.handle,
-                  verdict: rec.verdict,
-                  reviewStatus: rec.status,
-                  model: "edge",
-                } satisfies CurationRecord,
-                idResolved: !!s.userId,
-              },
-            });
+            const controller = new AbortController();
+            classifyControllers.set(msg.requestId, controller);
+            try {
+              const r = await callCancelable(
+                "/v1/classify",
+                await authedPost(msg.signals),
+                controller.signal,
+              );
+              const rec = r.record as { verdict: CurationRecord["verdict"]; status: string };
+              const s = msg.signals as { userId?: string; handle: string };
+              // Only count fresh LLM work, not cache returns (server tells us via `cached`).
+              if (!r.cached) void bumpStat("scanned");
+              sendResponse({
+                ok: true,
+                data: {
+                  record: {
+                    userId: s.userId ?? "",
+                    handle: s.handle,
+                    verdict: rec.verdict,
+                    reviewStatus: rec.status,
+                    model: "edge",
+                  } satisfies CurationRecord,
+                  idResolved: !!s.userId,
+                },
+              });
+            } catch (e) {
+              if (controller.signal.aborted) {
+                sendResponse({ ok: false, error: "classify_canceled" });
+              } else {
+                throw e;
+              }
+            } finally {
+              if (classifyControllers.get(msg.requestId) === controller) {
+                classifyControllers.delete(msg.requestId);
+              }
+            }
+          } else if (msg.type === "cancel_classify") {
+            classifyControllers.get(msg.requestId)?.abort();
+            classifyControllers.delete(msg.requestId);
+            sendResponse({ ok: true, data: { canceled: true } });
           } else if (msg.type === "confirm_spam") {
             await call("/v1/confirm", await authedPost(msg.signals));
             void bumpStat("blocked");

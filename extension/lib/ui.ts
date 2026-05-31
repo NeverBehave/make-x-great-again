@@ -1080,6 +1080,11 @@ export interface BadgeActions {
   canReport?: boolean;
 }
 
+interface ManualPopoverOptions {
+  hideCheck?: boolean;
+  description?: string;
+}
+
 /** Inline pill on the author row; hover/focus → popover with reasons. */
 /** Where a verdict came from. Drives badge color + tag so the user can tell
  *  「公榜确认 / 本地缓存 / AI 现场判定 / 维护者白名单」apart at a glance.
@@ -1160,13 +1165,96 @@ async function runReportButton(btn: HTMLButtonElement, action: () => void | Prom
   }
 }
 
+function attachManualPopover(
+  el: HTMLElement,
+  a: BadgeActions,
+  opts: ManualPopoverOptions = {},
+): void {
+  const hideCheck = !!opts.hideCheck;
+  if (!a.canReport) {
+    if (!hideCheck) el.addEventListener("click", () => a.onCheck?.());
+    return;
+  }
+  el.tabIndex = 0;
+  let manualPop: HTMLElement | null = null;
+  let manualHideTimer: number | undefined;
+  const hideManual = () => {
+    if (manualHideTimer) window.clearTimeout(manualHideTimer);
+    manualHideTimer = undefined;
+    manualPop?.remove();
+    manualPop = null;
+  };
+  const cancelManualHide = () => {
+    if (manualHideTimer) window.clearTimeout(manualHideTimer);
+    manualHideTimer = undefined;
+  };
+  const scheduleManualHide = () => {
+    cancelManualHide();
+    manualHideTimer = window.setTimeout(hideManual, 180);
+  };
+  const showManual = (ev?: Event) => {
+    cancelManualHide();
+    if (!manualPop) {
+      manualPop = document.createElement("div");
+      manualPop.className = "xss pop card";
+      manualPop.style.display = "block";
+      manualPop.innerHTML = `
+        <h4>手动处理</h4>
+        <div style="color:var(--muted);line-height:1.55">${escHtml(
+          opts.description ??
+            (hideCheck
+              ? "AI 正在分析中；如已确认可疑，可直接上报或拉黑并上报。"
+              : "未命中公榜时，可主动检查；确认可疑后再上报或拉黑并上报。"),
+        )}</div>
+        <div class="acts">
+          ${hideCheck ? "" : '<button data-c>检查</button>'}
+          <button data-r>上报</button>
+          <button data-b>拉黑并上报</button>
+        </div>`;
+      if (!hideCheck) {
+        manualPop.querySelector("[data-c]")?.addEventListener("click", () => {
+          a.onCheck?.();
+          hideManual();
+        });
+      }
+      manualPop.querySelector<HTMLButtonElement>("[data-r]")?.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const btn = ev.currentTarget as HTMLButtonElement;
+        void runReportButton(btn, a.onReport).then(() => {
+          if (btn.classList.contains("done")) window.setTimeout(hideManual, 600);
+        });
+      });
+      manualPop.querySelector("[data-b]")?.addEventListener("click", () => {
+        a.onBlock();
+        hideManual();
+      });
+      manualPop.addEventListener("mouseenter", cancelManualHide);
+      manualPop.addEventListener("mouseleave", scheduleManualHide);
+      getPopoverRoot().appendChild(manualPop);
+    }
+    placePopover(manualPop, popPoint(ev, el));
+  };
+  el.addEventListener("click", showManual);
+  el.addEventListener("mouseenter", showManual);
+  el.addEventListener("focus", showManual);
+  el.addEventListener("mouseleave", scheduleManualHide);
+  el.addEventListener("blur", scheduleManualHide);
+}
+
 /** Animated transient states for newly-found and queued accounts. */
-export function createStatusBadge(kind: "analyzing" | "pending" | "blocking"): HTMLElement {
+export function createStatusBadge(
+  kind: "analyzing" | "pending" | "blocking",
+  a?: BadgeActions,
+): HTMLElement {
   const el = document.createElement("span");
   if (kind === "analyzing") {
     el.className = "xss-badge analyzing labeled";
-    el.setAttribute("aria-label", "MXGA 正在分析");
+    el.setAttribute(
+      "aria-label",
+      a?.canReport ? "MXGA 正在分析，可手动上报或拉黑并上报" : "MXGA 正在分析",
+    );
     el.innerHTML = `<span class="xss-ico">${icon("shield", "currentColor", 12)}</span><span class="xss-label">分析</span>`;
+    if (a) attachManualPopover(el, a, { hideCheck: true });
   } else if (kind === "pending") {
     el.className = "xss-badge pending labeled";
     el.setAttribute("aria-label", "MXGA 排队检测");
@@ -1200,66 +1288,7 @@ export function createBadge(
     el.className = "xss-badge ghost labeled";
     el.setAttribute("aria-label", a.canReport ? "MXGA：检查、上报或拉黑并上报" : "MXGA 手动检查");
     el.innerHTML = `<span class="xss-ico">${icon("shield", "currentColor", 12)}</span><span class="xss-label">检查</span>`;
-    if (!a.canReport) {
-      el.addEventListener("click", () => a.onCheck?.());
-      return el;
-    }
-    let manualPop: HTMLElement | null = null;
-    let manualHideTimer: number | undefined;
-    const hideManual = () => {
-      if (manualHideTimer) window.clearTimeout(manualHideTimer);
-      manualHideTimer = undefined;
-      manualPop?.remove();
-      manualPop = null;
-    };
-    const cancelManualHide = () => {
-      if (manualHideTimer) window.clearTimeout(manualHideTimer);
-      manualHideTimer = undefined;
-    };
-    const scheduleManualHide = () => {
-      cancelManualHide();
-      manualHideTimer = window.setTimeout(hideManual, 180);
-    };
-    const showManual = (ev?: Event) => {
-      cancelManualHide();
-      if (!manualPop) {
-        manualPop = document.createElement("div");
-        manualPop.className = "xss pop card";
-        manualPop.style.display = "block";
-        manualPop.innerHTML = `
-          <h4>手动处理</h4>
-          <div style="color:var(--muted);line-height:1.55">未命中公榜时，可主动检查；确认可疑后再上报或拉黑并上报。</div>
-          <div class="acts">
-            <button data-c>检查</button>
-            <button data-r>上报</button>
-            <button data-b>拉黑并上报</button>
-          </div>`;
-        manualPop.querySelector("[data-c]")?.addEventListener("click", () => {
-          a.onCheck?.();
-          hideManual();
-        });
-        manualPop.querySelector<HTMLButtonElement>("[data-r]")?.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          const btn = ev.currentTarget as HTMLButtonElement;
-          void runReportButton(btn, a.onReport).then(() => {
-            if (btn.classList.contains("done")) window.setTimeout(hideManual, 600);
-          });
-        });
-        manualPop.querySelector("[data-b]")?.addEventListener("click", () => {
-          a.onBlock();
-          hideManual();
-        });
-        manualPop.addEventListener("mouseenter", cancelManualHide);
-        manualPop.addEventListener("mouseleave", scheduleManualHide);
-        getPopoverRoot().appendChild(manualPop);
-      }
-      placePopover(manualPop, popPoint(ev, el));
-    };
-    el.addEventListener("click", showManual);
-    el.addEventListener("mouseenter", showManual);
-    el.addEventListener("focus", showManual);
-    el.addEventListener("mouseleave", scheduleManualHide);
-    el.addEventListener("blur", scheduleManualHide);
+    attachManualPopover(el, a);
     return el;
   }
   const meta = LABEL[v.label];

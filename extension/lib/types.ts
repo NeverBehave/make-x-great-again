@@ -45,7 +45,8 @@ export type BgRequest =
   | { type: "whitelist_refresh" }
   | { type: "lookup"; userId: string }
   | { type: "lookup_batch"; userIds: string[] }
-  | { type: "classify"; signals: Omit<Signals, "isProfile"> }
+  | { type: "classify"; requestId: string; signals: Omit<Signals, "isProfile"> }
+  | { type: "cancel_classify"; requestId: string }
   | { type: "report_spam"; signals: Omit<Signals, "isProfile"> }
   | { type: "confirm_spam"; signals: Omit<Signals, "isProfile"> }
   | { type: "gh_start" }
