@@ -1,8 +1,13 @@
 {
   "schema": 1,
-  "generatedAt": 1780250448639,
-  "count": 123,
+  "generatedAt": 1780315247404,
+  "count": 124,
   "list": [
+    {
+      "handle": "gosailglobal",
+      "x_user_id": "1928711169419956224",
+      "last_scored": 1780294295124
+    },
     {
       "handle": "brucexu_eth",
       "x_user_id": null,
