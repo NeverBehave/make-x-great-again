@@ -688,7 +688,7 @@ const SCRIPT = String.raw`
     $('app').innerHTML=
       '<div class="bar">'
       +'<div><h1>'+ ${JSON.stringify(LOGO_SVG)} +'<span>'+ ${JSON.stringify(BRAND.acronym)} +' · 审核台 · 守门员</span></h1>'
-      +'<div class="sub">守门员才能进 · <b style="color:var(--danger)">拉黑</b>=进公榜 · <b style="color:var(--ok)">白名单</b>=永不扫 · 驳回/移除=不公开 · 规则见 <a href="'+GH+'/blob/main/docs/GOVERNANCE.md" target="_blank">GOVERNANCE</a></div></div>'
+      +'<div class="sub">守门员才能进 · <b style="color:var(--danger)">拉黑</b>=进公榜 · <b style="color:var(--ok)">白名单</b>=永不扫 · 驳回/移除=不公开 · 规则见 <a href="${BRAND.governance}" target="_blank">GOVERNANCE</a></div></div>'
       +'<div class="right"><span class="ok">已认证</span><button class="btn sm" onclick="window.__xss.logout()">退出</button>'+themeBtnHtml()+'</div>'
       +'</div>'
       +'<div class="tabs">'
