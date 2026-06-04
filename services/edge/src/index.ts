@@ -8,6 +8,7 @@ import { listHtml } from "./pages/list";
 
 interface Env {
   DB: D1Database;
+  ARTIFACTS: R2Bucket;
   // LLM provider config — ALL three are Worker secrets (NOT in wrangler.toml).
   // The provider URL + model name are treated as sensitive (so the project can
   // be open-sourced without doxxing the inference dependency); the API key
@@ -23,6 +24,9 @@ interface Env {
   REQUIRE_AUTH?: string;
   ADMIN_TOKEN?: string; // bearer for the admin moderation endpoints
   AGENT_TOKEN?: string; // bearer for the side-channel agent endpoints (/v1/agent/*)
+  // HMAC salt for reporter anti-abuse fingerprints. Keep as a Worker secret;
+  // raw reporter identities must never be persisted in reports/review_log.
+  REPORT_SALT?: string;
   // Fine-grained GitHub PAT scoped to Contents:Write on the upstream repo,
   // used by the scheduled handler to mirror the curated whitelist /
   // blacklist to data/*.json. Unset = mirror is disabled and the cron is a
@@ -40,6 +44,19 @@ const AUTO_REPORTERS = 3; // distinct GitHub reporters required for auto-publish
 // future re-evaluation), but a fresh throwaway account can't help flip
 // status to human_confirmed. 90d is a common drive-by abuse cutoff.
 const REPORTER_MIN_AGE_DAYS = 90;
+const REPORT_WINDOW_MS = 60 * 60_000;
+const REPORT_MAX_PER_WINDOW = 10;
+const BLOOM_SIZE = 65_536; // 8 KB bit array
+const BLOOM_HASHES = 7;
+const BLOOM_SHARD_SIZE = 500; // accounts per logical shard in the JSON artifact
+
+interface PublishedShardEntry {
+  userId: string | null;
+  handle: string;
+  label: string;
+  confidence: number;
+  published_at: number;
+}
 
 interface Reporter {
   /** Stable id, namespaced. `gh:<numeric>` for GitHub, `anon` when enforcement off. */
@@ -80,6 +97,25 @@ async function requireReporter(c: Ctx): Promise<Reporter | null> {
   const ident = await ghIdentity(c.req.raw);
   if (ident) return ident;
   return c.env.REQUIRE_AUTH === "1" ? null : { id: "anon", ageDays: 0 };
+}
+
+async function reporterFingerprint(env: Env, reporterId: string): Promise<string | null> {
+  const salt = env.REPORT_SALT?.trim();
+  if (!salt) return null;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(salt),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const digest = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(reporterId));
+  const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+  return `rpt:${hex.slice(0, 32)}`;
+}
+
+function reporterActor(fp: string): string {
+  return `reporter:${fp.slice(4, 16)}`;
 }
 
 const Signals = z.object({
@@ -151,6 +187,34 @@ const sigHash = (s: Signals) =>
     ]),
   );
 
+/** MurmurHash3-like 32-bit hash (deterministic, fast). */
+function murmur32(key: string, seed: number): number {
+  let h = seed;
+  for (let i = 0; i < key.length; i++) {
+    h = Math.imul(h ^ key.charCodeAt(i), 0x5bd1e995);
+    h ^= h >>> 13;
+    h = Math.imul(h, 0x5bd1e995);
+  }
+  return h >>> 0;
+}
+
+function buildBloom(items: string[]): Uint8Array {
+  const bits = new Uint8Array(BLOOM_SIZE);
+  for (const item of items) {
+    for (let h = 0; h < BLOOM_HASHES; h++) {
+      const pos = murmur32(item, h * 0x9e3779b9) % (BLOOM_SIZE * 8);
+      bits[pos >>> 3] |= 1 << (pos & 7);
+    }
+  }
+  return bits;
+}
+
+function bloomToBase64(bits: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bits.length; i++) binary += String.fromCharCode(bits[i] ?? 0);
+  return btoa(binary);
+}
+
 function userPrompt(s: Signals): string {
   const meta = [
     s.accountAgeDays !== undefined ? `accountAgeDays=${s.accountAgeDays}` : "",
@@ -197,6 +261,40 @@ function normalizeHandle(handle: string): string {
 
 function evidenceText(s: Signals): string | null {
   return (s.triggeringComment ?? s.recentTweets[0] ?? s.bio ?? "").trim().slice(0, 240) || null;
+}
+
+function reportEvidence(s: Signals): string {
+  return JSON.stringify({
+    signalsHash: sigHash(s),
+    snippet: evidenceText(s),
+    accountAgeDays: metricInt(s.accountAgeDays),
+    followersCount: metricInt(s.followersCount),
+    followingCount: metricInt(s.followingCount),
+    hasDefaultAvatar: s.hasDefaultAvatar ?? null,
+  }).slice(0, 1000);
+}
+
+async function reportRate(
+  env: Env,
+  fp: string,
+  now: number,
+): Promise<{ ok: boolean; remaining: number }> {
+  const windowStart = now - REPORT_WINDOW_MS;
+  const row = await env.DB.prepare("SELECT count(*) n FROM rate_log WHERE fp=? AND created_at>=?")
+    .bind(fp, windowStart)
+    .first<{ n: number }>();
+  const count = row?.n ?? 0;
+  return {
+    ok: count < REPORT_MAX_PER_WINDOW,
+    remaining: Math.max(0, REPORT_MAX_PER_WINDOW - count),
+  };
+}
+
+async function recordReportRate(env: Env, fp: string, now: number): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO rate_log (fp, created_at) VALUES (?,?)").bind(fp, now),
+    env.DB.prepare("DELETE FROM rate_log WHERE created_at<?").bind(now - REPORT_WINDOW_MS * 2),
+  ]);
 }
 
 interface AccountSignalSnapshot {
@@ -544,6 +642,7 @@ async function insertReportIfNew(
   handle: string,
   uid: string | null,
   reporter: Reporter,
+  fp: string,
   now: number,
 ): Promise<boolean> {
   const res = await env.DB.prepare(
@@ -561,12 +660,12 @@ async function insertReportIfNew(
       crypto.randomUUID(),
       uid,
       handle,
-      reporter.id,
+      fp,
       reporter.ageDays,
-      JSON.stringify(s).slice(0, 4000),
+      reportEvidence(s),
       now,
       handle,
-      reporter.id,
+      fp,
       uid,
       uid,
     )
@@ -683,6 +782,7 @@ app.get("/v1/health", async (c) => {
 });
 
 // Public membership check — only human_confirmed (the public list).
+// Confirmatory lookup for Bloom hits; cache hot paths at the edge.
 app.get("/v1/check", async (c) => {
   const ids = (c.req.query("ids") ?? "")
     .split(",")
@@ -690,6 +790,12 @@ app.get("/v1/check", async (c) => {
     .filter(Boolean)
     .slice(0, 100);
   if (!ids.length) return c.json({ hits: {} });
+  const cacheUrl = new URL(c.req.url);
+  cacheUrl.search = new URLSearchParams({ ids: [...ids].sort().join(",") }).toString();
+  const cacheKey = cacheUrl.toString();
+  const cached = await caches.default.match(cacheKey);
+  if (cached) return cached;
+
   const ph = ids.map(() => "?").join(",");
   const rows = await c.env.DB.prepare(
     `SELECT x_user_id, verdict_label, confidence FROM accounts
@@ -700,7 +806,12 @@ app.get("/v1/check", async (c) => {
   const hits: Record<string, { label: string; confidence: number }> = {};
   for (const r of rows.results ?? [])
     hits[r.x_user_id] = { label: r.verdict_label, confidence: r.confidence };
-  return c.json({ hits });
+  const resp = Response.json(
+    { hits },
+    { headers: { "Cache-Control": "public, max-age=15, s-maxage=30" } },
+  );
+  void caches.default.put(cacheKey, resp.clone());
+  return resp;
 });
 
 app.post("/v1/classify", async (c) => {
@@ -845,6 +956,13 @@ async function submitReport(c: Ctx, source: string) {
   }
   const uid = s.userId ?? null;
   const now = Date.now();
+  const fp = await reporterFingerprint(c.env, who.id);
+  if (!fp) return c.json({ error: "report_salt_required" }, 503);
+
+  const rate = await reportRate(c.env, fp, now);
+  if (!rate.ok) {
+    return c.json({ error: "rate_limited", remaining: 0, retryAfterMs: REPORT_WINDOW_MS }, 429);
+  }
 
   // Whitelist short-circuit — if maintainer has explicitly whitelisted the
   // target, ignore the report entirely (don't even store it). Avoids letting
@@ -857,8 +975,11 @@ async function submitReport(c: Ctx, source: string) {
 
   // one report per (target, reporter); always store, even for "young" GH
   // accounts — they just don't count toward AUTO_REPORTERS.
-  const insertedReport = await insertReportIfNew(c.env, s, s.handle, uid, who, now);
+  const insertedReport = await insertReportIfNew(c.env, s, s.handle, uid, who, fp, now);
   const alreadyReported = !insertedReport;
+  if (insertedReport) {
+    await recordReportRate(c.env, fp, now);
+  }
 
   // Reporter count for auto-publish: only GH accounts older than
   // REPORTER_MIN_AGE_DAYS count. NULL age = legacy rows; treat them as
@@ -926,7 +1047,7 @@ async function submitReport(c: Ctx, source: string) {
         uid,
         s.handle,
         finalStatus === status ? "report_queued" : "report_seen",
-        who.id,
+        reporterActor(fp),
         `${source} r=${reporters} age=${who.ageDays}d${
           wouldAutoIfEnabled ? " · would auto-publish if enabled" : ""
         }`,
@@ -938,6 +1059,44 @@ async function submitReport(c: Ctx, source: string) {
 }
 app.post("/v1/confirm", (c) => submitReport(c, "block"));
 app.post("/v1/report", (c) => submitReport(c, "report"));
+
+const AppealBody = z.object({
+  handle: z.string().min(1),
+  userId: z.string().regex(/^\d+$/).optional(),
+  reason: z.string().max(500).optional(),
+});
+
+app.post("/v1/appeal", async (c) => {
+  let body: z.infer<typeof AppealBody>;
+  try {
+    body = AppealBody.parse(await c.req.json());
+  } catch (err) {
+    return c.json({ error: "bad_request", detail: (err as Error).message }, 400);
+  }
+  const handle = normalizeHandle(body.handle);
+  const uid = body.userId ?? null;
+  const cur = await findAccount(c.env, handle, uid);
+  if (!cur) return c.json({ error: "not_found" }, 404);
+  if (cur.status !== "human_confirmed") {
+    return c.json({ ok: true, status: "not_listed", currentStatus: cur.status });
+  }
+
+  const now = Date.now();
+  const reasonHash = body.reason?.trim() ? ` reason_hash=${hash(body.reason.trim())}` : "";
+  await c.env.DB.prepare(
+    "INSERT INTO review_log (x_user_id,handle,action,actor,note,at) VALUES (?,?,?,?,?,?)",
+  )
+    .bind(
+      cur.x_user_id,
+      cur.handle,
+      "appeal_submitted",
+      "public",
+      `queued for removal review${reasonHash}`,
+      now,
+    )
+    .run();
+  return c.json({ ok: true, status: "appeal_queued" }, 202);
+});
 
 // ---- Admin (守门员) ----
 function admin(c: Ctx): boolean {
@@ -1914,7 +2073,26 @@ app.get("/v1/whitelist", async (c) => {
   return c.json({ list, latestAt, count: list.length });
 });
 
+app.get("/v1/artifacts/:key", async (c) => {
+  const key = c.req.param("key");
+  if (!key || key.includes("..") || key.includes("/")) return c.json({ error: "invalid_key" }, 400);
+
+  const obj = await c.env.ARTIFACTS.get(key);
+  if (!obj) return c.json({ error: "not_found" }, 404);
+
+  return new Response(obj.body, {
+    headers: {
+      "Content-Type": key.endsWith(".json") ? "application/json" : "application/octet-stream",
+      "Cache-Control": "public, max-age=300, s-maxage=600",
+    },
+  });
+});
+
 app.get("/v1/list/meta", async (c) => {
+  const cacheKey = "https://x.zuoluo.tv/v1/list/meta";
+  const cached = await caches.default.match(cacheKey);
+  if (cached) return cached;
+
   const now = Date.now();
   const r = await c.env.DB.prepare(
     `SELECT count(*) n,
@@ -1926,15 +2104,40 @@ app.get("/v1/list/meta", async (c) => {
   )
     .bind(now - DAY_MS, now - 7 * DAY_MS)
     .first<{ n: number; latest: number | null; day: number; week: number; pending: number }>();
-  c.header("Cache-Control", "public, max-age=30, s-maxage=60");
-  return c.json({
+
+  const pub = await c.env.DB.prepare(
+    "SELECT version, bloom_key, json_key, meta_key, count, published_at FROM publications ORDER BY published_at DESC LIMIT 1",
+  ).first<{
+    version: string;
+    bloom_key: string;
+    json_key: string;
+    meta_key: string;
+    count: number;
+    published_at: number;
+  }>();
+
+  const payload = {
     count: r?.n ?? 0,
     day: r?.day ?? 0,
     week: r?.week ?? 0,
     pending: r?.pending ?? 0,
-    generatedAt: r?.latest ?? null,
-    version: `d1-${r?.n ?? 0}`,
+    generatedAt: pub?.published_at ?? r?.latest ?? null,
+    version: pub?.version ?? `d1-${r?.n ?? 0}`,
+    artifacts: pub
+      ? {
+          bloom: `/v1/artifacts/${pub.bloom_key}`,
+          shards: `/v1/artifacts/${pub.json_key}`,
+          meta: `/v1/artifacts/${pub.meta_key}`,
+        }
+      : null,
+  };
+  const resp = Response.json(payload, {
+    headers: {
+      "Cache-Control": "public, max-age=30, s-maxage=60",
+    },
   });
+  void caches.default.put(cacheKey, resp.clone());
+  return resp;
 });
 
 // Public trend data for the landing page. The server returns 48 hourly buckets
@@ -2734,9 +2937,105 @@ app.post("/v1/admin/sync-mirror", async (c) => {
   return c.json({ ok: true });
 });
 
+async function publishArtifacts(env: Env): Promise<void> {
+  const rows = await env.DB.prepare(
+    "SELECT x_user_id, handle, verdict_label, confidence, published_at FROM accounts WHERE status='human_confirmed' ORDER BY published_at DESC",
+  ).all<{
+    x_user_id: string | null;
+    handle: string;
+    verdict_label: string;
+    confidence: number;
+    published_at: number;
+  }>();
+
+  const accounts = rows.results ?? [];
+  if (!accounts.length) return;
+
+  const bloomItems = accounts.flatMap((a) =>
+    [a.handle, a.x_user_id].filter((v): v is string => !!v),
+  );
+  const bloomB64 = bloomToBase64(buildBloom(bloomItems));
+  const entries: Record<string, PublishedShardEntry> = {};
+  const shards: Record<string, string[]> = {};
+
+  for (let i = 0; i < accounts.length; i += BLOOM_SHARD_SIZE) {
+    const shardKey = `shard-${Math.floor(i / BLOOM_SHARD_SIZE)}.json`;
+    shards[shardKey] = [];
+    for (const a of accounts.slice(i, i + BLOOM_SHARD_SIZE)) {
+      const entry: PublishedShardEntry = {
+        userId: a.x_user_id,
+        handle: a.handle,
+        label: a.verdict_label,
+        confidence: a.confidence,
+        published_at: a.published_at,
+      };
+      const primaryKey = a.x_user_id ?? `handle:${a.handle.toLowerCase()}`;
+      entries[primaryKey] = entry;
+      if (a.handle) entries[`handle:${a.handle.toLowerCase()}`] = entry;
+      shards[shardKey].push(primaryKey);
+    }
+  }
+
+  const version = `v${bloomB64.slice(0, 16)}-${accounts.length}`;
+  const now = Date.now();
+  const bloomKey = `bloom-${version}.b64`;
+  const metaKey = `meta-${version}.json`;
+  const jsonKey = `shards-${version}.json`;
+
+  await env.ARTIFACTS.put(bloomKey, bloomB64, {
+    httpMetadata: {
+      contentType: "text/plain",
+      cacheControl: "public, max-age=300, s-maxage=600",
+    },
+  });
+  await env.ARTIFACTS.put(
+    metaKey,
+    JSON.stringify({
+      version,
+      count: accounts.length,
+      generatedAt: now,
+      bloomKey,
+      shardsKey: jsonKey,
+      shardCount: Object.keys(shards).length,
+      bloomSize: BLOOM_SIZE,
+      bloomHashes: BLOOM_HASHES,
+    }),
+    {
+      httpMetadata: {
+        contentType: "application/json",
+        cacheControl: "public, max-age=300, s-maxage=600",
+      },
+    },
+  );
+  await env.ARTIFACTS.put(
+    jsonKey,
+    JSON.stringify({
+      version,
+      generatedAt: now,
+      count: accounts.length,
+      shardSize: BLOOM_SHARD_SIZE,
+      shards,
+      entries,
+    }),
+    {
+      httpMetadata: {
+        contentType: "application/json",
+        cacheControl: "public, max-age=300, s-maxage=600",
+      },
+    },
+  );
+
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO publications (version, bloom_key, json_key, meta_key, count, published_at) VALUES (?,?,?,?,?,?)",
+  )
+    .bind(version, bloomKey, jsonKey, metaKey, accounts.length, now)
+    .run();
+}
+
 export default {
   fetch: app.fetch,
   scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): void {
     ctx.waitUntil(mirrorToGitHub(env).catch((e) => console.warn("mirror error", e)));
+    ctx.waitUntil(publishArtifacts(env).catch((e) => console.warn("artifact publish error", e)));
   },
 };
