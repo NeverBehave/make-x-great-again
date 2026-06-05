@@ -51,13 +51,79 @@ const CSS = `
 .hero .meta{font-size:12.5px;color:var(--fg-4);display:flex;flex-wrap:wrap;
   gap:6px 14px;align-items:center}
 .hero .meta .dot{width:3px;height:3px;border-radius:50%;background:var(--fg-4);opacity:.5}
-.risk-note{max-width:600px;margin:18px 0 0;padding:13px 15px;border:1px solid color-mix(in srgb,var(--warn) 42%,var(--border));
-  border-radius:var(--r);background:color-mix(in srgb,var(--warn) 9%,var(--card));box-shadow:var(--shadow-card)}
-.risk-note strong{display:block;margin-bottom:4px;font-size:13px;color:var(--fg);font-weight:650}
-.risk-note p{margin:0;font-size:12.5px;line-height:1.65;color:var(--fg-2)}
-.risk-note a{color:var(--fg);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--warn) 54%,var(--border-strong));
-  text-underline-offset:2px}
-.risk-note a:hover{color:var(--accent)}
+/* Prominent risk notice — full-width banner directly under the hero. The
+   single most important safety message on the site, so it earns its own band:
+   warm warn accent, warning glyph, unmissable but not alarmist. */
+.notice{margin:6px 0 2px;padding:18px 20px;display:grid;grid-template-columns:auto 1fr;gap:16px;
+  align-items:start;border:1px solid color-mix(in srgb,var(--warn) 40%,var(--border));
+  border-radius:var(--r-lg);box-shadow:var(--shadow-card);position:relative;overflow:hidden;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--warn) 11%,var(--card)),
+    color-mix(in srgb,var(--warn) 4%,var(--card)))}
+.notice::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--warn);opacity:.85}
+.notice-ic{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:var(--r);color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--warn) 32%,transparent);flex-shrink:0}
+.notice-ic svg{width:19px;height:19px}
+.notice-body{min-width:0}
+.notice-body strong{display:block;font-size:14px;font-weight:650;color:var(--fg);
+  letter-spacing:-.01em;margin-bottom:5px}
+.notice-body p{margin:0;font-size:13px;line-height:1.65;color:var(--fg-2)}
+.notice-body .more{display:inline-flex;align-items:center;gap:5px;margin-top:9px;font-size:12.5px;
+  font-weight:550;color:var(--fg);text-decoration:underline;
+  text-decoration-color:color-mix(in srgb,var(--warn) 55%,var(--border-strong));text-underline-offset:3px}
+.notice-body .more:hover{color:var(--accent)}
+@media (max-width:560px){.notice{padding:15px 16px;gap:12px}.notice-ic{width:32px;height:32px}
+  .notice-ic svg{width:17px;height:17px}}
+
+/* Risk modal — interstitial shown once before the first jump to the Chrome
+   Web Store. Backdrop blur + a centered card; reuses the .btn / shadow system. */
+.risk-modal{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px}
+.risk-modal[hidden]{display:none}
+.risk-modal-backdrop{position:absolute;inset:0;background:color-mix(in srgb,#000 55%,transparent);
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);opacity:0;transition:opacity .2s ease}
+.risk-modal.show .risk-modal-backdrop{opacity:1}
+.risk-modal-card{position:relative;width:100%;max-width:460px;background:var(--bg-2);
+  border:1px solid var(--border-strong);border-radius:var(--r-xl);box-shadow:var(--shadow-elev);
+  padding:26px 26px 22px;transform:translateY(10px) scale(.98);opacity:0;
+  transition:transform .24s cubic-bezier(.22,1.1,.36,1),opacity .24s ease}
+.risk-modal.show .risk-modal-card{transform:none;opacity:1}
+.risk-modal-icon{width:46px;height:46px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:var(--r-lg);color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--warn) 32%,transparent);margin-bottom:16px}
+.risk-modal-icon svg{width:24px;height:24px}
+.risk-modal-card h2{font-family:var(--font-serif);font-size:23px;font-weight:500;letter-spacing:-.02em;
+  line-height:1.2;color:var(--fg);margin-bottom:12px}
+.risk-modal-body p{font-size:13.5px;line-height:1.7;color:var(--fg-2);margin-bottom:13px}
+.risk-modal-body p strong{color:var(--fg);font-weight:600}
+.risk-modal-body ul{list-style:none;display:flex;flex-direction:column;gap:9px;margin:0}
+.risk-modal-body li{position:relative;padding-left:22px;font-size:13px;line-height:1.6;color:var(--fg-2)}
+.risk-modal-body li::before{content:"";position:absolute;left:3px;top:7px;width:6px;height:6px;
+  border-radius:50%;background:var(--warn)}
+.risk-modal-body li strong{color:var(--fg);font-weight:600}
+.risk-modal-actions{display:flex;gap:10px;margin-top:22px}
+.risk-modal-actions .btn{flex:1;min-height:44px}
+@media (max-width:480px){
+  .risk-modal{padding:0;align-items:flex-end}
+  .risk-modal-card{max-width:none;border-radius:var(--r-xl) var(--r-xl) 0 0;padding:24px 20px 22px}
+  .risk-modal-actions{flex-direction:column-reverse}
+}
+@media (prefers-reduced-motion:reduce){
+  .risk-modal-backdrop,.risk-modal-card{transition:none}
+}
+
+/* Polish — landing-only refinements. Emphasize the primary install CTA so it
+   reads as THE action among the three buttons, and give the data cards a
+   gentle tactile hover lift. Scoped to .hero/.trend so admin/list are untouched. */
+.hero .ctas .btn.primary{box-shadow:0 1px 2px rgba(0,0,0,.16),
+  0 10px 26px -12px color-mix(in srgb,var(--fg) 55%,transparent);transition:background .12s,
+  border-color .12s,color .12s,transform .1s,box-shadow .18s}
+.hero .ctas .btn.primary:hover{transform:translateY(-1px);
+  box-shadow:0 1px 2px rgba(0,0,0,.2),0 14px 30px -12px color-mix(in srgb,var(--fg) 62%,transparent)}
+.trend-card{transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease}
+.trend-card:hover{border-color:var(--border-strong);box-shadow:var(--shadow-elev);transform:translateY(-2px)}
+@media (prefers-reduced-motion:reduce){
+  .hero .ctas .btn.primary:hover,.trend-card:hover{transform:none}
+}
 
 /* Section */
 section.block{padding:64px 0;border-top:1px solid var(--border)}
@@ -337,6 +403,9 @@ const ICON_SHIELD = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
 const ICON_LOCK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
 const ICON_DB = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>`;
 const ICON_USER = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+// Lucide "triangle-alert" — used by the prominent risk banner and the
+// pre-install interstitial. Stroke at currentColor so it tints with --warn.
+const ICON_WARN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>`;
 
 const HERO_STATS = `
 <div class="hero-stats" aria-label="当前运行数据">
@@ -363,7 +432,7 @@ const HERO = `
   <h1>Make <span class="xmark">${ICONS.X}</span> Great Again<br><span class="sub">少看垃圾，多看人话。</span></h1>
   <p class="lede">广告号、色情引流先标出；拉黑由你确认。</p>
   <div class="ctas">
-    <a class="btn primary" href="${BRAND.chromeWebStore}" target="_blank" rel="noopener" aria-label="从 Chrome Web Store 安装扩展">${ICON_CHROME}<span>从 Chrome 商店安装</span></a>
+    <a class="btn primary" data-install href="${BRAND.chromeWebStore}" target="_blank" rel="noopener" aria-label="从 Chrome Web Store 安装扩展">${ICON_CHROME}<span>从 Chrome 商店安装</span></a>
     <a class="btn" href="/list" aria-label="看公开名单">${ICON_LIST}<span>看公开名单</span></a>
     <a class="btn" href="${BRAND.repo}" aria-label="在 GitHub 上查看源码">${ICON_GH}<span>看源码</span></a>
   </div>
@@ -373,10 +442,6 @@ const HERO = `
     <span>不存身份</span><span class="dot" aria-hidden="true"></span>
     <span>开源</span>
   </p>
-  <div class="risk-note" role="note" aria-label="账号风控提醒">
-    <strong>账号风控提醒</strong>
-    <p>短时间内连续拉黑大量账号，可能被 X 判定为异常自动化行为并触发 Ghost Ban、功能限制或账号冻结。请分批处理，并避免开启任何高频批量操作。</p>
-  </div>
   <details class="install-alt">
     <summary>用 Edge / Brave / Arc，或想跑开发版？</summary>
     <ol>
@@ -394,6 +459,44 @@ const HERO = `
   ${HERO_STATS}
 </div>
 </section>
+`;
+
+// Prominent, full-width safety banner — sits between the hero and the live
+// feed so it's impossible to miss on first scroll, yet doesn't crowd the H1.
+const NOTICE = `
+<aside class="notice" role="note" aria-label="账号风控提醒">
+  <span class="notice-ic" aria-hidden="true">${ICON_WARN}</span>
+  <div class="notice-body">
+    <strong>账号风控提醒 · 请克制、分批拉黑</strong>
+    <p>X 会对短时间内连续、大量拉黑账号的行为触发风控，可能导致 Ghost Ban（限流）、功能受限，甚至账号冻结。MXGA 默认只「标注」可疑账号，拉黑动作始终由你手动确认 —— 请量力而行，分批处理，不要追求一次清空，也不要叠加其他高频批量操作。</p>
+    <a class="more" href="${BRAND.governance}" target="_blank" rel="noopener">了解我们如何降低误伤与风险 →</a>
+  </div>
+</aside>
+`;
+
+// One-time pre-install interstitial. Intercepts the first jump to the Chrome
+// Web Store; after the user acknowledges, the flag in localStorage lets later
+// clicks pass straight through (see RISK_MODAL_JS).
+const MODAL = `
+<div class="risk-modal" id="riskModal" role="dialog" aria-modal="true" aria-labelledby="riskModalTitle" aria-describedby="riskModalBody" hidden>
+  <div class="risk-modal-backdrop" data-risk-dismiss></div>
+  <div class="risk-modal-card" role="document">
+    <span class="risk-modal-icon" aria-hidden="true">${ICON_WARN}</span>
+    <h2 id="riskModalTitle">安装前，请先了解风控风险</h2>
+    <div class="risk-modal-body" id="riskModalBody">
+      <p>MXGA 帮你识别广告号和色情引流号，但<strong>拉黑动作发生在你自己的 X 账号上</strong>。安装前请知悉：</p>
+      <ul>
+        <li>短时间内<strong>连续、大量拉黑</strong>可能被 X 判定为异常自动化，触发 Ghost Ban、功能限制甚至账号冻结。</li>
+        <li>请<strong>分批、克制</strong>地处理，不要追求一次清空，也不要叠加其他高频批量操作。</li>
+        <li>是否拉黑<strong>始终由你手动确认</strong>，扩展不会替你自动执行。</li>
+      </ul>
+    </div>
+    <div class="risk-modal-actions">
+      <button class="btn" type="button" data-risk-dismiss>再想想</button>
+      <a class="btn primary" id="riskModalGo" href="${BRAND.chromeWebStore}" target="_blank" rel="noopener">已了解，前往安装</a>
+    </div>
+  </div>
+</div>
 `;
 
 const TRENDS = `
@@ -767,13 +870,61 @@ const SCRIPT = `
 })();
 `;
 
+// Pre-install risk interstitial. Self-contained IIFE so it stays independent
+// of the live-feed boot script above. Shows the modal the first time a user
+// clicks through to the Chrome Web Store; once acknowledged (continue OR
+// dismiss), a localStorage flag lets every later click pass straight through —
+// so the dialog appears exactly once per browser.
+const RISK_MODAL_JS = `
+(function(){
+  var KEY='mxga_risk_ack';
+  var modal=document.getElementById('riskModal');
+  if(!modal)return;
+  var goBtn=document.getElementById('riskModalGo');
+  var lastFocus=null;
+  function acked(){try{return localStorage.getItem(KEY)==='1'}catch(e){return false}}
+  function ack(){try{localStorage.setItem(KEY,'1')}catch(e){}}
+  function open(url){
+    lastFocus=document.activeElement;
+    if(goBtn&&url)goBtn.setAttribute('href',url);
+    modal.hidden=false;
+    document.body.style.overflow='hidden';
+    requestAnimationFrame(function(){modal.classList.add('show')});
+    setTimeout(function(){try{goBtn&&goBtn.focus()}catch(e){}},30);
+  }
+  function close(){
+    ack();
+    modal.classList.remove('show');
+    document.body.style.overflow='';
+    setTimeout(function(){modal.hidden=true},220);
+    try{lastFocus&&lastFocus.focus&&lastFocus.focus()}catch(e){}
+  }
+  // Intercept any link to the Chrome Web Store (skip the modal's own button).
+  document.addEventListener('click',function(e){
+    var a=e.target.closest&&e.target.closest('a[href*="chromewebstore"]');
+    if(!a||a.id==='riskModalGo')return;
+    if(acked())return;            // already seen — let it through
+    e.preventDefault();
+    open(a.getAttribute('href'));
+  });
+  // Continue: record ack, let the anchor's default open the store in a new tab.
+  if(goBtn)goBtn.addEventListener('click',function(){close()});
+  modal.querySelectorAll('[data-risk-dismiss]').forEach(function(el){
+    el.addEventListener('click',function(){close()});
+  });
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'&&!modal.hidden)close();
+  });
+})();
+`;
+
 export function landingHtml(): string {
   return layout({
     title: `${BRAND.name} · ${BRAND.tagline}`,
     current: "home",
     css: CSS,
     head: `<meta name="description" content="MXGA 是开源 X 扩展：标出广告号和色情引流号，拉黑由你确认。">`,
-    body: HERO + FEED + TRENDS + PILLARS + TRUST,
-    script: SCRIPT,
+    body: HERO + NOTICE + FEED + TRENDS + PILLARS + TRUST + MODAL,
+    script: SCRIPT + RISK_MODAL_JS,
   });
 }
