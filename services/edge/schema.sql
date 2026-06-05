@@ -36,6 +36,8 @@ CREATE INDEX IF NOT EXISTS idx_accounts_status ON accounts(status);
 CREATE INDEX IF NOT EXISTS idx_accounts_uid ON accounts(x_user_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_handle_norm ON accounts(lower(handle));
 CREATE INDEX IF NOT EXISTS idx_accounts_status_published_at ON accounts(status, published_at);
+CREATE INDEX IF NOT EXISTS idx_accounts_status_last_scored ON accounts(status, last_scored);
+CREATE INDEX IF NOT EXISTS idx_accounts_status_confidence ON accounts(status, confidence);
 CREATE INDEX IF NOT EXISTS idx_accounts_status_created_at ON accounts(status, account_created_at);
 CREATE INDEX IF NOT EXISTS idx_accounts_status_followers ON accounts(status, followers_count);
 CREATE INDEX IF NOT EXISTS idx_accounts_status_following ON accounts(status, following_count);

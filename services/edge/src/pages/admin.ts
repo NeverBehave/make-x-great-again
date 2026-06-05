@@ -160,6 +160,24 @@ input::placeholder{color:var(--fg-4)}
 .batch .actions{display:none;gap:8px;flex-wrap:wrap}
 .batch.on .actions{display:flex;animation:slidein .25s ease-out}
 @keyframes slidein{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+/* Queue sort header — a sticky "table head" aligned to the .qrow grid. Each
+   sortable cell is a button that flips the server-side sort (▼ desc / ▲ asc)
+   and refetches, so clicking a column re-orders the WHOLE queue, not the page. */
+.qhead{position:sticky;top:0;z-index:5;display:grid;
+  grid-template-columns:24px 40px 1fr 110px 80px auto;gap:14px;align-items:center;
+  padding:8px 14px;margin-bottom:8px;border-radius:var(--r-lg);
+  background:var(--card-hi);border:1px solid var(--border-strong)}
+.qhead .qh-who{display:flex;flex-wrap:wrap;gap:4px}
+.qhead .qh-conf,.qhead .qh-rep{justify-self:start}
+.qhead .qh-acts{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-4);
+  justify-self:end}
+.sortbtn{display:inline-flex;align-items:center;gap:3px;padding:4px 9px;border-radius:999px;
+  border:1px solid transparent;background:transparent;cursor:pointer;font:inherit;
+  font-size:11.5px;color:var(--fg-3);white-space:nowrap;transition:background .12s,color .12s}
+.sortbtn:hover{background:var(--card);color:var(--fg-2)}
+.sortbtn.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.sortbtn .ar{font-size:10px;opacity:.7}
+.sortbtn.on .ar{opacity:1}
 /* Load-more footer under paginated row lists */
 .more-foot{text-align:center;padding:16px 0 4px;color:var(--fg-3);font-size:12.5px}
 .more-foot .btn{margin-right:8px}
@@ -396,6 +414,13 @@ input::placeholder{color:var(--fg-4)}
   .qrow .conf{min-width:70px}
   .qrow .conf .bar{width:70px}
   .qrow .rep{display:none}
+  /* Column alignment is meaningless once cells collapse — fall back to a single
+     horizontally-scrollable row of sort buttons. */
+  .qhead{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;padding:8px 10px;
+    scrollbar-width:none}
+  .qhead::-webkit-scrollbar{display:none}
+  .qhead .qh-spacer,.qhead .qh-acts{display:none}
+  .qhead .qh-who{flex-wrap:nowrap}
   .lrow{grid-template-columns:1fr;gap:4px;padding:10px 12px}
   .lrow.head{display:none}
 }
@@ -473,6 +498,12 @@ const SCRIPT = String.raw`
   var VIEW='queue';
   var queue=[];
   var queueCursor=null;
+  // Monotonic token so only the most recent /v1/admin/queue response is allowed
+  // to render. Rapid sort/filter switches fire overlapping slow requests; without
+  // this, a stale response can land last and clobber the fresh one (the old
+  // "switching sort sometimes fails" bug).
+  var queueReq=0;
+  var queueLoading=false;
   var whitelist=[];
   var wlCursor=null;
   var wlSearch='';
@@ -523,17 +554,35 @@ const SCRIPT = String.raw`
     return chips.length?'<div class="acct-meta">'+chips.join('')+'</div>':'';
   }
   function opt(value,label,current){return '<option value="'+E(value)+'"'+(current===value?' selected':'')+'>'+E(label)+'</option>'}
-  function queueSortOptions(current){
-    return opt('severity','风险等级 ↓',current)
-      +opt('conf_desc','AI 置信 ↓',current)
-      +opt('time_desc','时间 ↓',current)
-      +opt('created_desc','注册时间 新→旧',current)
-      +opt('created_asc','注册时间 旧→新',current)
-      +opt('followers_desc','粉丝数 多→少',current)
-      +opt('followers_asc','粉丝数 少→多',current)
-      +opt('following_desc','关注数 多→少',current)
-      +opt('following_asc','关注数 少→多',current)
-      +opt('rep_desc','举报人数 ↓',current);
+  // Sortable queue columns. desc/asc are the server sort tokens; columns
+  // with asc:null are one-direction only (风险 / 更新). The header renders these
+  // as clickable cells aligned to the .qrow grid (see renderQueue).
+  var QSORT_WHO=[
+    {lbl:'风险',desc:'severity',asc:null,title:'按风险等级（判定+置信）排序'},
+    {lbl:'注册',desc:'created_desc',asc:'created_asc',title:'按账号注册时间排序'},
+    {lbl:'粉丝',desc:'followers_desc',asc:'followers_asc',title:'按粉丝数排序'},
+    {lbl:'关注',desc:'following_desc',asc:'following_asc',title:'按关注数排序'},
+    {lbl:'更新',desc:'time_desc',asc:null,title:'按最近判定时间排序'}
+  ];
+  var QSORT_CONF={lbl:'把握',desc:'conf_desc',asc:'conf_asc',title:'按 AI 置信排序'};
+  var QSORT_REP={lbl:'举报',desc:'rep_desc',asc:'rep_asc',title:'按举报人数排序'};
+  // One sortable header cell. Active column shows ▼ (desc) / ▲ (asc); idle shows ⇅.
+  function sortBtn(col){
+    var active=(sort===col.desc||(col.asc&&sort===col.asc));
+    var arrow=active?(sort===col.asc?'▲':'▼'):'⇅';
+    return '<button type="button" class="sortbtn'+(active?' on':'')+'" title="'+E(col.title||'')+'"'
+      +' data-desc="'+E(col.desc)+'" data-asc="'+E(col.asc||'')+'">'
+      +E(col.lbl)+'<span class="ar">'+arrow+'</span></button>';
+  }
+  function queueSortHeader(){
+    return '<div class="qhead">'
+      +'<span class="qh-spacer"></span>'
+      +'<span class="qh-spacer"></span>'
+      +'<div class="qh-who">'+QSORT_WHO.map(sortBtn).join('')+'</div>'
+      +'<div class="qh-conf">'+sortBtn(QSORT_CONF)+'</div>'
+      +'<div class="qh-rep">'+sortBtn(QSORT_REP)+'</div>'
+      +'<span class="qh-acts">操作</span>'
+    +'</div>';
   }
   function metricSortOptions(current){
     return opt('time_desc','更新时间 ↓',current)
@@ -738,12 +787,19 @@ const SCRIPT = String.raw`
   }
   function loadQueue(more){
     if(!more){queue=[];queueCursor=null;sel.clear();lastSelIdxQ=-1}
+    var req=++queueReq;          // claim this load; stale responses are dropped
+    queueLoading=true;
     setStatus('加载中…');
     api('/v1/admin/queue'+queueQs()).then(function(r){
+      if(req!==queueReq)return null;   // superseded by a newer load
       if(r.status===403){TOK='';localStorage.removeItem('xss_admin');renderLocked();return null}
       return r.json();
     }).then(function(j){
-      if(!j)return;
+      // Drop late responses from a sort/filter the user already moved past, so
+      // the rendered rows always match the active sort header.
+      if(req!==queueReq)return;
+      queueLoading=false;
+      if(!j){setStatus('');return}
       queue=queue.concat(j.queue||[]);
       queueCursor=j.nextBefore;
       // Sync filter inputs back from the server-echoed appliedFilters — this
@@ -760,21 +816,17 @@ const SCRIPT = String.raw`
       if(cQ&&stats.queue==null)cQ.textContent=queue.length+(queueCursor?'+':'');
       setStatus('');
       if(more)renderRows();else renderQueue();
+    }).catch(function(){
+      if(req!==queueReq)return;
+      queueLoading=false;setStatus('加载失败，请重试');
     });
   }
+  // Sorting is now done server-side (see queueSortCols / the sort header), so the
+  // queue arrives already ordered. This only applies the verdict-label chip
+  // filter to the loaded rows; it no longer re-sorts (which used to only reorder
+  // the loaded page and hid the true top-of-queue items).
   function filteredQueue(){
-    var rows=filter==='all'?queue.slice():queue.filter(function(a){return a.verdict_label===filter});
-    if(sort==='severity'){
-      var sev={spam:4,porn_bot:4,likely_spam:3,uncertain:1,legit:0};
-      rows.sort(function(a,b){
-        var sa=sev[a.verdict_label]||0,sb=sev[b.verdict_label]||0;
-        if(sa!==sb)return sb-sa;
-        return (b.confidence||0)-(a.confidence||0);
-      });
-    } else if(sort==='conf_desc')rows.sort(function(a,b){return (b.confidence||0)-(a.confidence||0)});
-    else if(sort==='time_desc')rows.sort(function(a,b){return (b.last_scored||0)-(a.last_scored||0)});
-    else if(sort==='rep_desc')rows.sort(function(a,b){return (b.reporters||0)-(a.reporters||0)});
-    return rows;
+    return filter==='all'?queue.slice():queue.filter(function(a){return a.verdict_label===filter});
   }
   function counts(){
     var c={all:queue.length,spam:0,porn_bot:0,likely_spam:0,uncertain:0,legit:0};
@@ -824,9 +876,7 @@ const SCRIPT = String.raw`
           +chip('uncertain','不确定')
           +chip('legit','正常账号')
         +'</div>'
-        +'<div class="r"><label class="status">排序</label>'
-          +'<select id="sort">'+queueSortOptions(sort)+'</select>'
-        +'</div>'
+        +'<div class="r"><label class="status">点击列头排序 ↕</label></div>'
       +'</div>'
       +'<div class="batch" id="batch">'
         +'<label class="meta" title="全选当前过滤范围。Shift+点 可在两次勾选间一次性勾选范围">'
@@ -840,12 +890,22 @@ const SCRIPT = String.raw`
           +'<button class="btn sm" onclick="window.__xss.clearSel()">清空选择</button>'
         +'</div>'
       +'</div>'
+      +queueSortHeader()
       +'<div class="rows" id="rows"></div>'
       +'<div class="more-foot" id="qmoreFoot"></div>';
     Array.prototype.forEach.call(v.querySelectorAll('.chip'),function(b){
       b.addEventListener('click',function(){filter=b.dataset.f;lastSelIdxQ=-1;renderRows()})
     });
-    $('sort').addEventListener('change',function(e){sort=e.target.value;lastSelIdxQ=-1;loadQueue(false)});
+    // Sort header — click flips the server-side sort. First click on a column =
+    // desc; click the active column again = asc (for two-way columns); refetch.
+    Array.prototype.forEach.call(v.querySelectorAll('.qhead .sortbtn'),function(b){
+      b.addEventListener('click',function(){
+        var desc=b.dataset.desc,asc=b.dataset.asc||'';
+        var next=(sort===desc&&asc)?asc:(sort===asc&&asc)?desc:desc;
+        if(next===sort&&!asc)return;   // one-way column already active — no-op
+        sort=next;lastSelIdxQ=-1;loadQueue(false);
+      });
+    });
     $('selAllQ').addEventListener('change',function(){
       var rows=filteredQueue();
       if(this.checked)rows.forEach(function(a){sel.add(key(a))})

@@ -1233,6 +1233,11 @@ app.post("/v1/admin/reporter-fingerprints/backfill", async (c) => {
 
 type AdminSort =
   | "time_desc"
+  | "severity"
+  | "conf_desc"
+  | "conf_asc"
+  | "rep_desc"
+  | "rep_asc"
   | "created_desc"
   | "created_asc"
   | "followers_desc"
@@ -1242,6 +1247,11 @@ type AdminSort =
 
 const ADMIN_SORTS = new Set<AdminSort>([
   "time_desc",
+  "severity",
+  "conf_desc",
+  "conf_asc",
+  "rep_desc",
+  "rep_asc",
   "created_desc",
   "created_asc",
   "followers_desc",
@@ -1249,6 +1259,26 @@ const ADMIN_SORTS = new Set<AdminSort>([
   "following_desc",
   "following_asc",
 ]);
+
+// Whether a sort needs the per-handle reporter aggregate joined into the dedup
+// CTE so it can ORDER BY reporter count across the *whole* queue (not just the
+// loaded page). Only rep_* pays for the extra reports scan.
+function needsReportAgg(sort: AdminSort): boolean {
+  return sort === "rep_desc" || sort === "rep_asc";
+}
+
+// Maps verdict_label → a coarse risk rank (mirrors the admin UI's `sev` map).
+// Combined with confidence into a single monotonic sort_value so the keyset
+// cursor (one value + tie-breakers) keeps working for the "风险等级" sort.
+function severityRankExpr(alias: string): string {
+  return `(CASE ${alias}.verdict_label
+      WHEN 'spam' THEN 4
+      WHEN 'porn_bot' THEN 4
+      WHEN 'likely_spam' THEN 3
+      WHEN 'uncertain' THEN 1
+      WHEN 'legit' THEN 0
+      ELSE 0 END) * 1000 + CAST(${alias}.confidence * 100 AS INTEGER)`;
+}
 
 function adminSort(raw: string | undefined | null): AdminSort {
   return ADMIN_SORTS.has(raw as AdminSort) ? (raw as AdminSort) : "time_desc";
@@ -1269,6 +1299,11 @@ function createdSortExpr(alias: string, timeColumn: string): string {
 }
 
 function sortValueExpr(alias: string, sort: AdminSort, timeColumn: string): string {
+  if (sort === "severity") return severityRankExpr(alias);
+  if (sort === "conf_desc" || sort === "conf_asc") return `${alias}.confidence`;
+  // rep_* sorts read the joined per-handle aggregate (rc.cnt); see the queue
+  // handler where the LEFT JOIN is conditionally added.
+  if (sort === "rep_desc" || sort === "rep_asc") return `coalesce(rc.cnt, 0)`;
   if (sort === "created_desc" || sort === "created_asc") return createdSortExpr(alias, timeColumn);
   if (sort === "followers_desc" || sort === "followers_asc") return `${alias}.followers_count`;
   if (sort === "following_desc" || sort === "following_asc") return `${alias}.following_count`;
@@ -1384,6 +1419,18 @@ app.get("/v1/admin/queue", async (c) => {
   const reasons = (c.req.query("reasons") || "").trim() || null;
 
   const sortExpr = sortValueExpr("a", sort, "last_scored");
+  // For the "举报人数" sort we need the reporter count for *every* pending row
+  // (so ORDER BY can rank the whole queue, not just the page). One indexed
+  // GROUP BY scan of reports — joined in by normalized handle — backs the
+  // sort_value. The displayed `reporters` column below stays the exact,
+  // uid-aware correlated count; this aggregate is the (handle-level) ordering
+  // key only, so it's cheap and added only when actually sorting by it.
+  const repJoin = needsReportAgg(sort)
+    ? `LEFT JOIN (
+         SELECT lower(handle) AS h, count(DISTINCT reporter_fp) AS cnt
+           FROM reports GROUP BY lower(handle)
+       ) rc ON rc.h = lower(a.handle)`
+    : "";
   const rows = await c.env.DB.prepare(
     `WITH ranked AS (
        SELECT a.rowid AS rid,
@@ -1395,6 +1442,7 @@ app.get("/v1/admin/queue", async (c) => {
                          a.last_scored DESC
               ) AS rn
          FROM accounts a
+         ${repJoin}
         WHERE a.status='auto_pending_review'
           AND (? IS NULL OR (
                  lower(a.handle) LIKE '%' || lower(?) || '%'
