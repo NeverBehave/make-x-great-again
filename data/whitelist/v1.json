@@ -1,8 +1,13 @@
 {
   "schema": 1,
-  "generatedAt": 1780639212766,
-  "count": 126,
+  "generatedAt": 1780669810786,
+  "count": 127,
   "list": [
+    {
+      "handle": "laihu397915",
+      "x_user_id": "1859215176656175104",
+      "last_scored": 1780664864470
+    },
     {
       "handle": "brucexu_eth",
       "x_user_id": "1466675689554202624",
@@ -444,173 +449,8 @@
       "last_scored": 1779749793584
     },
     {
-      "handle": "AI_Jasonyu",
-      "x_user_id": "1877193368725581824",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "Xingularity00",
-      "x_user_id": "1646807586652696577",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "JasyLee4",
-      "x_user_id": "1991394940887375872",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "CuiMao",
-      "x_user_id": "2055000159990501376",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "vix8b",
-      "x_user_id": "2003513399552905216",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "yanbo2004",
-      "x_user_id": "1721865807926538240",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "hylarucoder",
-      "x_user_id": "1725593465",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "cxjwin",
-      "x_user_id": "2048618362197135360",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "ReyJudgementOS",
-      "x_user_id": "2038635309794197504",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "Xuegaogx",
-      "x_user_id": "2005277769236889600",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "xdannycloud",
-      "x_user_id": "2052672455672815617",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "nvidia",
-      "x_user_id": "1828904711124078593",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "ixiaowenz",
-      "x_user_id": "1182459197788545024",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "ZhanweiC",
-      "x_user_id": "2031280774197178368",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "ashashash79",
-      "x_user_id": "1986956722414776320",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "csf1349",
-      "x_user_id": "2042600918974369796",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "isadora288881",
-      "x_user_id": "1974769851584675840",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "aronhouyu",
-      "x_user_id": "2018025040416231424",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "codeo4",
-      "x_user_id": "1972958879672848384",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "SjLwrO14y68R3Dw",
-      "x_user_id": "1941323178271440896",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "jyrnan",
-      "x_user_id": "1933655349514649600",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "Justinaxu33",
-      "x_user_id": null,
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "eason_no",
-      "x_user_id": null,
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "aboutstudy",
-      "x_user_id": "1904159090508771329",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "gitlawb",
-      "x_user_id": "2031578838845841408",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "ArthurUnde55893",
-      "x_user_id": null,
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "amiaoapp",
-      "x_user_id": "1636188090942517249",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "CxxVen",
-      "x_user_id": "2039425171312791552",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "wangdefou",
-      "x_user_id": "1893575129038282753",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "huoshan007",
-      "x_user_id": "1624007127521198081",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "minghao0618",
-      "x_user_id": "2054957964272992256",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "flmdongtianfudi",
-      "x_user_id": "1868482286121058305",
-      "last_scored": 1779723855166
-    },
-    {
       "handle": "miantiao_me",
       "x_user_id": "1648180024464539648",
-      "last_scored": 1779723855166
-    },
-    {
-      "handle": "realNyarime",
-      "x_user_id": null,
       "last_scored": 1779723855166
     },
     {
@@ -619,8 +459,173 @@
       "last_scored": 1779723855166
     },
     {
+      "handle": "flmdongtianfudi",
+      "x_user_id": "1868482286121058305",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "minghao0618",
+      "x_user_id": "2054957964272992256",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "huoshan007",
+      "x_user_id": "1624007127521198081",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "wangdefou",
+      "x_user_id": "1893575129038282753",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "CxxVen",
+      "x_user_id": "2039425171312791552",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "amiaoapp",
+      "x_user_id": "1636188090942517249",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "ArthurUnde55893",
+      "x_user_id": null,
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "realNyarime",
+      "x_user_id": null,
+      "last_scored": 1779723855166
+    },
+    {
       "handle": "dingyi",
       "x_user_id": null,
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "gitlawb",
+      "x_user_id": "2031578838845841408",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "aboutstudy",
+      "x_user_id": "1904159090508771329",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "eason_no",
+      "x_user_id": null,
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "Justinaxu33",
+      "x_user_id": null,
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "jyrnan",
+      "x_user_id": "1933655349514649600",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "SjLwrO14y68R3Dw",
+      "x_user_id": "1941323178271440896",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "codeo4",
+      "x_user_id": "1972958879672848384",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "aronhouyu",
+      "x_user_id": "2018025040416231424",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "isadora288881",
+      "x_user_id": "1974769851584675840",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "csf1349",
+      "x_user_id": "2042600918974369796",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "ashashash79",
+      "x_user_id": "1986956722414776320",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "ZhanweiC",
+      "x_user_id": "2031280774197178368",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "ixiaowenz",
+      "x_user_id": "1182459197788545024",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "nvidia",
+      "x_user_id": "1828904711124078593",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "xdannycloud",
+      "x_user_id": "2052672455672815617",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "Xuegaogx",
+      "x_user_id": "2005277769236889600",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "ReyJudgementOS",
+      "x_user_id": "2038635309794197504",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "cxjwin",
+      "x_user_id": "2048618362197135360",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "hylarucoder",
+      "x_user_id": "1725593465",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "yanbo2004",
+      "x_user_id": "1721865807926538240",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "vix8b",
+      "x_user_id": "2003513399552905216",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "CuiMao",
+      "x_user_id": "2055000159990501376",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "JasyLee4",
+      "x_user_id": "1991394940887375872",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "Xingularity00",
+      "x_user_id": "1646807586652696577",
+      "last_scored": 1779723855166
+    },
+    {
+      "handle": "AI_Jasonyu",
+      "x_user_id": "1877193368725581824",
       "last_scored": 1779723855166
     },
     {
