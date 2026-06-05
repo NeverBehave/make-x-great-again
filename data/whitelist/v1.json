@@ -1,8 +1,13 @@
 {
   "schema": 1,
-  "generatedAt": 1780574448166,
+  "generatedAt": 1780639212766,
   "count": 126,
   "list": [
+    {
+      "handle": "brucexu_eth",
+      "x_user_id": "1466675689554202624",
+      "last_scored": 1780627159170
+    },
     {
       "handle": "chenzeze777",
       "x_user_id": "1370029053479063558",
@@ -22,11 +27,6 @@
       "handle": "gosailglobal",
       "x_user_id": "1928711169419956224",
       "last_scored": 1780294295124
-    },
-    {
-      "handle": "brucexu_eth",
-      "x_user_id": null,
-      "last_scored": 1780148303151
     },
     {
       "handle": "turingou",
