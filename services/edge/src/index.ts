@@ -1303,7 +1303,7 @@ function sortValueExpr(alias: string, sort: AdminSort, timeColumn: string): stri
   if (sort === "conf_desc" || sort === "conf_asc") return `${alias}.confidence`;
   // rep_* sorts read the joined per-handle aggregate (rc.cnt); see the queue
   // handler where the LEFT JOIN is conditionally added.
-  if (sort === "rep_desc" || sort === "rep_asc") return `coalesce(rc.cnt, 0)`;
+  if (sort === "rep_desc" || sort === "rep_asc") return "coalesce(rc.cnt, 0)";
   if (sort === "created_desc" || sort === "created_asc") return createdSortExpr(alias, timeColumn);
   if (sort === "followers_desc" || sort === "followers_asc") return `${alias}.followers_count`;
   if (sort === "following_desc" || sort === "following_asc") return `${alias}.following_count`;
