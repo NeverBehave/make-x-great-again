@@ -1,8 +1,13 @@
 {
   "schema": 1,
-  "generatedAt": 1780669810786,
-  "count": 127,
+  "generatedAt": 1780800014780,
+  "count": 128,
   "list": [
+    {
+      "handle": "realNyarime",
+      "x_user_id": null,
+      "last_scored": 1780799668883
+    },
     {
       "handle": "laihu397915",
       "x_user_id": "1859215176656175104",
