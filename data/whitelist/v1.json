@@ -1,8 +1,18 @@
 {
   "schema": 1,
-  "generatedAt": 1780800014780,
-  "count": 128,
+  "generatedAt": 1780829415558,
+  "count": 130,
   "list": [
+    {
+      "handle": "luvletter_moe",
+      "x_user_id": "1256377778192084992",
+      "last_scored": 1780828987084
+    },
+    {
+      "handle": "zstmfhy",
+      "x_user_id": "1806661208642355200",
+      "last_scored": 1780828914642
+    },
     {
       "handle": "realNyarime",
       "x_user_id": null,
