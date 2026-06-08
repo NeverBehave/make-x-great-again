@@ -41,5 +41,10 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: npm install --no-audit --no-fund
+      # Regenerate the inlined Tailwind stylesheet and fail if the committed
+      # src/_generated-css.ts is stale (someone edited styles.css without
+      # running `npm run build:css`).
+      - run: npm run build:css
+      - run: git diff --exit-code src/_generated-css.ts
       - run: npx tsc --noEmit
       - run: npm test

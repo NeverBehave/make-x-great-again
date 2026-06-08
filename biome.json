@@ -6,5 +6,16 @@
     "enabled": true,
     "rules": { "recommended": true }
   },
-  "files": { "ignore": ["node_modules", "dist", ".curation-db", "fixtures", "extension", "data"] }
+  "files": {
+    "ignore": [
+      "node_modules",
+      "dist",
+      ".curation-db",
+      "fixtures",
+      "extension",
+      "data",
+      "services/edge/src/_generated-css.ts",
+      "services/edge/src/styles.css"
+    ]
+  }
 }

@@ -7,124 +7,6 @@
 import { BRAND } from "../brand";
 import { layout } from "./_layout";
 
-const CSS = `
-.head{padding:64px 0 32px;max-width:760px}
-.head h1{font-size:42px;line-height:1.05;letter-spacing:-.03em;font-weight:600;margin-bottom:18px}
-.head .lede{font-size:15px;color:var(--fg-2);line-height:1.6}
-.head .lede + .lede{margin-top:8px}
-.head .pulse{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg-3);
-  margin-top:22px;padding:6px 12px;border-radius:999px;background:var(--card);border:1px solid var(--border)}
-.head .pulse .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);
-  box-shadow:0 0 0 0 rgba(16,185,129,.5);animation:pulse 2.4s ease-out infinite}
-.head .pulse strong{color:var(--fg);font-weight:600}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.5)}100%{box-shadow:0 0 0 7px rgba(16,185,129,0)}}
-
-/* Aggregate strip — 4 uniform cells, type-led */
-.aggr{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);
-  border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;margin:8px 0 32px}
-.aggr .c{padding:18px 20px;background:var(--bg)}
-.aggr .n{font-size:24px;font-weight:600;letter-spacing:-.015em;
-  font-variant-numeric:tabular-nums;line-height:1.05;color:var(--fg)}
-.aggr .l{font-size:11.5px;color:var(--fg-3);margin-top:8px;letter-spacing:.01em}
-
-/* Public board — each row behaves like a compact audit record:
-   account identity, evidence, then model confidence as a stable right rail. */
-.list{display:flex;flex-direction:column;gap:0;background:var(--border);
-  border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;
-  box-shadow:var(--shadow-card)}
-.row{position:relative;display:grid;grid-template-columns:42px minmax(0,1fr) 104px;
-  column-gap:14px;align-items:center;padding:14px 16px 14px 18px;background:var(--bg);
-  border-bottom:1px solid var(--border);transition:background .15s,transform .25s ease,opacity .25s ease}
-.row:last-child{border-bottom:0}
-.row::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
-  background:var(--ec,transparent)}
-.row.spam,.row.likely_spam{--ec:var(--danger)}
-.row.porn_bot{--ec:var(--violet)}
-.row.uncertain{--ec:var(--fg-4)}
-.row.legit{--ec:var(--ok)}
-.row:hover{background:var(--card)}
-.row.new{animation:slidein .3s ease-out both}
-@keyframes slidein{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
-.row .av{width:42px;height:42px;border-radius:50%;background:var(--card-hi);overflow:hidden;
-  display:flex;align-items:center;justify-content:center;color:var(--fg-4);
-  font-size:13px;font-weight:600;flex-shrink:0;border:1px solid var(--border)}
-.row .av img{width:100%;height:100%;object-fit:cover;display:block}
-.row .meta{min-width:0;display:grid;gap:6px}
-.row .top{display:flex;align-items:center;gap:8px;min-width:0}
-.row .display{font-weight:650;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap;letter-spacing:-.005em;min-width:0;max-width:min(32ch,44vw)}
-.row .display a{color:var(--fg)}
-.row .display a:hover{color:var(--accent)}
-.row .handle{font-size:12.5px;color:var(--fg-3);overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap;font-weight:400;min-width:0;max-width:28ch}
-.row .fresh{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:650;
-  color:var(--accent);padding:1px 6px;border-radius:var(--r-sm);background:var(--accent-soft);
-  letter-spacing:.02em;white-space:nowrap}
-.row .fresh::before{content:"";width:4px;height:4px;border-radius:50%;background:var(--accent)}
-.row .sub{font-size:11.5px;color:var(--fg-3);display:flex;
-  align-items:center;gap:7px;flex-wrap:wrap}
-.row .sub .sep{color:var(--fg-4);opacity:.5}
-.row .sub .tag{padding:2px 8px;font-size:10.5px;letter-spacing:.01em;background:var(--bg)}
-/* Reporter count chip — visible trust signal. ≥3 = bold green (auto-publish
-   threshold met) so casual readers can spot the strongest evidence at a glance. */
-.row .sub .rep-chip{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;
-  border-radius:var(--r-sm);font-size:10.5px;font-weight:600;letter-spacing:.02em;
-  color:var(--fg-2);border:1px solid var(--border-strong);background:var(--card)}
-.row .sub .rep-chip.strong{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 38%,transparent);
-  background:color-mix(in srgb,var(--ok) 10%,transparent)}
-/* Evidence text — the public X content that triggered the verdict.
-   Kept as a single quiet line on desktop so long spam copy stops deforming rows. */
-.row .ev{font-size:12.5px;color:var(--fg-2);line-height:1.45;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:72ch;
-  padding-left:10px;border-left:2px solid color-mix(in srgb,var(--ec,var(--fg-4)) 36%,transparent)}
-.row .ev-label{font-size:10px;font-weight:650;color:var(--fg-4);letter-spacing:.06em;
-  text-transform:uppercase;margin-right:8px;font-style:normal}
-.row .ev-text{font-style:italic}
-.row .right{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-shrink:0}
-.row .conf{display:flex;flex-direction:column;align-items:flex-end;gap:5px;min-width:58px}
-.row .conf .pct{font-size:12.5px;color:var(--fg);font-variant-numeric:tabular-nums;
-  font-weight:650;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1}
-.row .conf .bar{width:58px;height:3px;background:var(--card-hi);border-radius:999px;overflow:hidden}
-.row .conf .bar i{display:block;height:100%;background:var(--ec,var(--fg-3));border-radius:999px;
-  transition:width .3s ease}
-.row .ext{color:var(--fg-4);display:inline-flex;align-items:center;justify-content:center;
-  width:32px;height:32px;border-radius:var(--r-sm);transition:background .15s,color .15s}
-.row .ext:hover{background:var(--card-hi);color:var(--fg)}
-.row .ext svg{width:14px;height:14px}
-
-.more{margin-top:20px;text-align:center}
-.empty{padding:60px 20px;text-align:center;color:var(--fg-3);border:1px dashed var(--border);
-  border-radius:var(--r-lg)}
-.note{font-size:12.5px;color:var(--fg-3);margin-top:28px;line-height:1.7;
-  padding:14px 16px;border-radius:var(--r);border:1px solid var(--border);background:var(--card)}
-.note code{background:var(--card-hi);padding:1px 6px;border-radius:var(--r-sm);
-  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--fg)}
-.note a{color:var(--fg)}.note a:hover{color:var(--accent)}
-
-@media (max-width:760px){
-  .head h1{font-size:30px}
-  .aggr{grid-template-columns:1fr 1fr}
-  .aggr .c.daily{display:none}
-  .aggr .c:last-child{grid-column:1/-1}
-  .row{grid-template-columns:38px minmax(0,1fr) 70px;column-gap:12px;padding:12px 12px 12px 15px}
-  .row .av{width:38px;height:38px}
-  .row .display{max-width:42vw}
-  .row .handle{max-width:24vw}
-  .row .ev{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;max-width:none}
-  .row .ext{display:none}
-  .row .conf .bar{width:48px}
-}
-@media (max-width:480px){
-  .row{grid-template-columns:34px minmax(0,1fr);gap:10px;padding:11px 12px 11px 14px}
-  .row .av{width:34px;height:34px}
-  .row .right{grid-column:2;justify-content:flex-start}
-  .row .conf{align-items:flex-start;min-width:48px}
-  .row .conf .bar{width:50px}
-  .row .display{max-width:58vw;font-size:13.5px}
-  .row .handle{max-width:42vw;font-size:11.5px}
-}
-`;
-
 const ICON_EXT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>`;
 
 const SHELL = `
@@ -284,7 +166,6 @@ export function listHtml(): string {
   return layout({
     title: `公开名单 · ${BRAND.acronym}`,
     current: "list",
-    css: CSS,
     head: `<meta name="robots" content="noindex,follow">`,
     body: SHELL,
     script: SCRIPT,
