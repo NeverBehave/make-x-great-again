@@ -2280,16 +2280,25 @@ app.get("/v1/list/meta", async (c) => {
     .bind(now - DAY_MS, now - 7 * DAY_MS)
     .first<{ n: number; latest: number | null; day: number; week: number; pending: number }>();
 
+  // The publication row is OPTIONAL — the payload already degrades to
+  // `artifacts: null` when there isn't one. Treat any failure here (e.g. a
+  // freshly-migrated DB that is missing the table) as "no publication yet"
+  // rather than letting it 500 the whole public endpoint.
   const pub = await c.env.DB.prepare(
     "SELECT version, bloom_key, json_key, meta_key, count, published_at FROM publications ORDER BY published_at DESC LIMIT 1",
-  ).first<{
-    version: string;
-    bloom_key: string;
-    json_key: string;
-    meta_key: string;
-    count: number;
-    published_at: number;
-  }>();
+  )
+    .first<{
+      version: string;
+      bloom_key: string;
+      json_key: string;
+      meta_key: string;
+      count: number;
+      published_at: number;
+    }>()
+    .catch((err) => {
+      console.error("list/meta: publications lookup failed:", err);
+      return null;
+    });
 
   const payload = {
     count: r?.n ?? 0,
