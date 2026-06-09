@@ -3160,7 +3160,14 @@ async function publishArtifacts(env: Env): Promise<void> {
     }
   }
 
-  const version = `v${bloomB64.slice(0, 16)}-${accounts.length}`;
+  // base64 includes '+' and '/', which would land in the artifact object
+  // keys (bloom-<version>.b64 etc.) and the /v1/artifacts/<key> URLs that
+  // /v1/list/meta advertises. The artifacts route rejects any key with a
+  // '/' (path-traversal guard), so a slash in the version made every
+  // published artifact URL 404. Use the URL-safe base64 alphabet for the
+  // version prefix so keys are always single path segments.
+  const versionPrefix = bloomB64.slice(0, 16).replace(/\+/g, "-").replace(/\//g, "_");
+  const version = `v${versionPrefix}-${accounts.length}`;
   const now = Date.now();
   const bloomKey = `bloom-${version}.b64`;
   const metaKey = `meta-${version}.json`;
