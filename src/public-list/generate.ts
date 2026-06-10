@@ -1,7 +1,15 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
-import type { CurationRecord } from "../schema.ts";
-import { add, createBloomFilter, serialize } from "./bloom.ts";
+import { CurationRecord, type ReviewStatus } from "../schema.ts";
+import { add, bloomParams, createBloomFilter, serialize } from "./bloom.ts";
 import { BloomIndex, Meta, type PublicEntry, ShardManifest } from "./schema.ts";
 
 export interface GenerateOptions {
@@ -17,8 +25,14 @@ export interface GenerateOptions {
   shardCount?: number;
   /** Verdict labels eligible for public list (default ["spam","porn_bot"]). */
   eligibleLabels?: ReadonlyArray<"spam" | "porn_bot" | "likely_spam" | "uncertain" | "legit">;
-  /** Minimum review status required (default "human_confirmed"). */
-  minReviewStatus?: "auto_pending_review" | "human_confirmed" | "human_rejected";
+  /** Review status required for publication (default "human_confirmed"). */
+  reviewStatus?: ReviewStatus;
+  /**
+   * Entries removed since the previous release. When omitted it is computed
+   * by diffing the previous data/shards/ output (if present) against the new
+   * entry set.
+   */
+  removedCount?: number;
 }
 
 export interface GenerateResult {
@@ -31,10 +45,17 @@ export interface GenerateResult {
   metaSizeBytes: number;
 }
 
+/** Target false-positive rate for the published bloom index. */
+const BLOOM_TARGET_FPR = 0.01;
+
 /**
  * Read the private curation DB, filter to human-confirmed entries,
  * dedupe by userId (latest createdAt wins), hash-shard, and write
  * public list artefacts.
+ *
+ * Output is written atomically: artefacts are built and validated in a temp
+ * dir next to data/ and only then swapped into place, so a crash mid-write
+ * never leaves a half-built live directory.
  *
  * Returns paths and sizes so the caller can validate or commit.
  */
@@ -46,15 +67,21 @@ export function generatePublicList(opts: GenerateOptions): GenerateResult {
     sourceCommit,
     shardCount = 256,
     eligibleLabels = ["spam", "porn_bot"],
-    minReviewStatus = "human_confirmed",
+    reviewStatus = "human_confirmed",
   } = opts;
 
   // 1. Read & parse
   const records = readCurationDb(sourcePath);
 
-  // 2. Filter to eligible, confirmed entries
+  // 2. Filter to eligible, confirmed entries. Records whose userId is not a
+  // real numeric X id are excluded: src/mvp.ts synthesizes a leading-zero
+  // placeholder for handle-only records (idResolved=false) and those must
+  // never be published as if they carried a real id.
   const eligible = records.filter(
-    (r) => r.reviewStatus === minReviewStatus && eligibleLabels.includes(r.verdict.label),
+    (r) =>
+      r.reviewStatus === reviewStatus &&
+      eligibleLabels.includes(r.verdict.label) &&
+      /^[1-9]\d*$/.test(r.userId),
   );
 
   // 3. Deduplicate by userId — latest createdAt wins
@@ -78,20 +105,33 @@ export function generatePublicList(opts: GenerateOptions): GenerateResult {
     }))
     .sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
 
-  // 5. Build bloom filter
-  const filter = createBloomFilter();
+  // 5. Build bloom filter, sized for the actual entry count at the target
+  // false-positive rate. m/k are published in index.json so consumers stay
+  // compatible whatever sizing this release used.
+  const { m, k } = bloomParams(entries.length, BLOOM_TARGET_FPR);
+  const filter = createBloomFilter(m, k);
   for (const e of entries) add(filter, e.id);
   const index = BloomIndex.parse({
     schema: 1,
     ...serialize(filter),
   });
 
-  // 6. Shard by hash bucket. Rebuild data/ from scratch so removed or
-  // successfully appealed accounts cannot survive as stale shard files.
+  // 6. Compute removedCount against the previous release (if any) before the
+  // live dir is replaced.
   const dataDir = join(outDir, "data");
-  rmSync(dataDir, { recursive: true, force: true });
-  const shardDir = join(dataDir, "shards");
-  mkdirSync(shardDir, { recursive: true });
+  const removedCount =
+    opts.removedCount ?? computeRemovedCount(dataDir, new Set(entries.map((e) => e.id)));
+
+  // 7. Build everything into a temp dir. Rebuilding from scratch means removed
+  // or successfully appealed accounts cannot survive as stale shard files.
+  mkdirSync(outDir, { recursive: true });
+  const tmpDir = join(outDir, ".data-tmp");
+  const oldDir = join(outDir, ".data-old");
+  rmSync(tmpDir, { recursive: true, force: true });
+  rmSync(oldDir, { recursive: true, force: true });
+  const tmpShardDir = join(tmpDir, "shards");
+  mkdirSync(tmpShardDir, { recursive: true });
+
   const shards = new Map<string, PublicEntry[]>();
   for (const e of entries) {
     const bucket = hashBucket(e.id, shardCount);
@@ -101,14 +141,11 @@ export function generatePublicList(opts: GenerateOptions): GenerateResult {
   }
   for (const [bucket, list] of shards) {
     const manifest = ShardManifest.parse({ schema: 1, bucket, count: list.length, list });
-    writeFileSync(join(shardDir, `${bucket}.json`), JSON.stringify(manifest, null, 2), "utf8");
+    writeFileSync(join(tmpShardDir, `${bucket}.json`), JSON.stringify(manifest, null, 2), "utf8");
   }
 
-  // 7. Write index.json
-  const indexPath = join(dataDir, "index.json");
-  writeFileSync(indexPath, JSON.stringify(index, null, 2), "utf8");
+  writeFileSync(join(tmpDir, "index.json"), JSON.stringify(index, null, 2), "utf8");
 
-  // 8. Write meta.json
   const meta = Meta.parse({
     schema: 1,
     version,
@@ -116,15 +153,19 @@ export function generatePublicList(opts: GenerateOptions): GenerateResult {
     sourceCommit,
     count: entries.length,
     shardCount,
-    removedCount: (opts["removedCount" as keyof GenerateOptions] as number | undefined) ?? 0,
+    removedCount,
   });
-  const metaPath = join(dataDir, "meta.json");
-  writeFileSync(metaPath, JSON.stringify(meta, null, 2), "utf8");
+  writeFileSync(join(tmpDir, "meta.json"), JSON.stringify(meta, null, 2), "utf8");
+
+  // 8. Swap the validated build into place atomically (rename, not rebuild).
+  if (existsSync(dataDir)) renameSync(dataDir, oldDir);
+  renameSync(tmpDir, dataDir);
+  rmSync(oldDir, { recursive: true, force: true });
 
   return {
-    metaPath,
-    indexPath,
-    shardDir,
+    metaPath: join(dataDir, "meta.json"),
+    indexPath: join(dataDir, "index.json"),
+    shardDir: join(dataDir, "shards"),
     totalEntries: entries.length,
     removedCount: meta.removedCount,
     indexSizeBytes: Buffer.byteLength(JSON.stringify(index), "utf8"),
@@ -140,15 +181,54 @@ function readCurationDb(path: string): CurationRecord[] {
     return [];
   }
   const out: CurationRecord[] = [];
-  for (const line of raw.split("\n")) {
-    if (!line.trim()) continue;
+  const lines = raw.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line || !line.trim()) continue;
+    let json: unknown;
     try {
-      out.push(JSON.parse(line) as CurationRecord);
+      json = JSON.parse(line);
     } catch {
-      // Skip malformed lines; the caller can warn if needed.
+      console.warn(`WARN: skipping malformed JSON at ${path}:${i + 1}`);
+      continue;
     }
+    const parsed = CurationRecord.safeParse(json);
+    if (!parsed.success) {
+      console.warn(`WARN: skipping invalid CurationRecord at ${path}:${i + 1}`);
+      continue;
+    }
+    out.push(parsed.data);
   }
   return out;
+}
+
+/**
+ * Count ids that were in the previous release's shards but are absent from
+ * the new entry set. Best-effort: a missing or unreadable previous release
+ * counts as zero removals.
+ */
+function computeRemovedCount(prevDataDir: string, currentIds: ReadonlySet<string>): number {
+  let files: string[];
+  try {
+    files = readdirSync(join(prevDataDir, "shards"));
+  } catch {
+    return 0;
+  }
+  let removed = 0;
+  for (const file of files) {
+    if (!file.endsWith(".json")) continue;
+    try {
+      const manifest = JSON.parse(readFileSync(join(prevDataDir, "shards", file), "utf8")) as {
+        list?: { id?: unknown }[];
+      };
+      for (const e of manifest.list ?? []) {
+        if (typeof e.id === "string" && !currentIds.has(e.id)) removed += 1;
+      }
+    } catch {
+      // Unreadable previous shard — skip; removedCount stays best-effort.
+    }
+  }
+  return removed;
 }
 
 /**

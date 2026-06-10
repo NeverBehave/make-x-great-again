@@ -5,25 +5,31 @@ import { latestByUserId } from "./store.ts";
 
 /**
  * Local-only MVP service. The browser extension's background worker calls
- * this on localhost. Not for public exposure — CORS is dev-permissive on
- * purpose so the extension (and curl) can reach it.
+ * this on localhost (extension background fetches are not subject to page
+ * CORS). No CORS headers are sent on purpose: with them, any web page could
+ * read the private curation DB via GET /records or burn LLM tokens via
+ * POST /classify.
  */
 const PORT = Number(process.env.PORT ?? 8787);
-const CORS = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-headers": "content-type",
-  "access-control-allow-methods": "GET,POST,OPTIONS",
-};
+const MAX_BODY_BYTES = 256 * 1024;
 
 function send(res: import("node:http").ServerResponse, code: number, body: unknown): void {
   const json = JSON.stringify(body);
-  res.writeHead(code, { "content-type": "application/json", ...CORS });
+  res.writeHead(code, { "content-type": "application/json" });
   res.end(json);
 }
 
 async function readBody(req: import("node:http").IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(c as Buffer);
+  let total = 0;
+  for await (const c of req) {
+    const buf = c as Buffer;
+    total += buf.length;
+    if (total > MAX_BODY_BYTES) {
+      throw new Error(`request body too large (max ${MAX_BODY_BYTES} bytes)`);
+    }
+    chunks.push(buf);
+  }
   const raw = Buffer.concat(chunks).toString("utf8");
   return raw ? JSON.parse(raw) : {};
 }
@@ -31,7 +37,6 @@ async function readBody(req: import("node:http").IncomingMessage): Promise<unkno
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
-    if (req.method === "OPTIONS") return send(res, 204, {});
 
     if (req.method === "GET" && url.pathname === "/health") {
       return send(res, 200, { ok: true, records: latestByUserId().size });

@@ -4,7 +4,12 @@ import { classifyWithLlm } from "./llm.ts";
 import { type AccountSignals, type CurationRecord, AccountSignals as Signals } from "./schema.ts";
 import { appendRecord, latestByUserId } from "./store.ts";
 
-/** Stable hash of the signals that actually feed the model. */
+/**
+ * Stable hash of the signals that actually feed the model — every field
+ * buildUserPrompt (src/llm.ts) uses, canonicalized in a fixed key order with
+ * absent optionals pinned to null. userId is deliberately excluded so the
+ * same profile content hashes identically regardless of id.
+ */
 export function signalsHash(s: AccountSignals): string {
   const canonical = JSON.stringify({
     handle: s.handle,
@@ -12,6 +17,11 @@ export function signalsHash(s: AccountSignals): string {
     bio: s.bio,
     recentTweets: s.recentTweets,
     triggeringComment: s.triggeringComment ?? null,
+    threadTopic: s.threadTopic ?? null,
+    accountAgeDays: s.accountAgeDays ?? null,
+    followersCount: s.followersCount ?? null,
+    followingCount: s.followingCount ?? null,
+    hasDefaultAvatar: s.hasDefaultAvatar ?? null,
   });
   return createHash("sha256").update(canonical).digest("hex").slice(0, 16);
 }

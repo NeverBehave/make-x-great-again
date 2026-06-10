@@ -1,3 +1,9 @@
+# NOTE: publishing has moved to the edge worker, which writes versioned
+# artifacts to R2 (see services/edge/src publishArtifacts) with a git mirror
+# under data/. This workflow is kept manual-only for ad-hoc releases: the
+# scheduled trigger was removed because `.curation-db/` is gitignored, so a
+# scheduled run could never see curation data and would always fail its
+# "Validate curation source" step.
 name: Publish Public List
 
 on:
@@ -7,9 +13,6 @@ on:
         description: "SemVer tag for this release (e.g. v1.0.0)"
         required: true
         type: string
-  schedule:
-    # Daily at 06:00 UTC — low-traffic, gives time for human review if needed.
-    - cron: "0 6 * * *"
 
 jobs:
   generate:

@@ -27,6 +27,18 @@ test("signalsHash is stable and ignores userId", () => {
   assert.notEqual(signalsHash(a), signalsHash(c));
 });
 
+test("signalsHash covers every model-visible field, not just the text ones", () => {
+  const base = { userId: "1", handle: "h", bio: "x", recentTweets: ["t"] };
+  const plain = signalsHash(AccountSignals.parse(base));
+  const withFollowers = signalsHash(AccountSignals.parse({ ...base, followersCount: 5 }));
+  const withTopic = signalsHash(AccountSignals.parse({ ...base, threadTopic: "ai" }));
+  const withAge = signalsHash(AccountSignals.parse({ ...base, accountAgeDays: 3 }));
+  const withAvatar = signalsHash(AccountSignals.parse({ ...base, hasDefaultAvatar: true }));
+  const withFollowing = signalsHash(AccountSignals.parse({ ...base, followingCount: 9 }));
+  const hashes = [plain, withFollowers, withTopic, withAge, withAvatar, withFollowing];
+  assert.equal(new Set(hashes).size, hashes.length, "each signal change must change the hash");
+});
+
 test("store append/read roundtrip, last write wins per userId", () => {
   const base = {
     userId: "42",

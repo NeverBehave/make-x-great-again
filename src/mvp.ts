@@ -40,7 +40,11 @@ export function adaptMvpSignals(input: unknown): AdaptedSignals {
   const m = MvpSignals.parse(input);
   const idResolved = m.userId !== undefined;
   // Strict schema requires a numeric-looking id; for handle-only records we
-  // derive a deterministic numeric placeholder from the handle.
+  // derive a deterministic numeric placeholder from the handle. The leading
+  // "0" marks the id as synthetic — real X ids never start with 0 — and the
+  // public-list generator (src/public-list/generate.ts) relies on that to
+  // exclude idResolved=false records from publication, so a fake "numeric id"
+  // can never end up in the public list.
   const userId =
     m.userId ?? `0${Array.from(m.handle).reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 1e15, 7)}`;
   const opt: Record<string, unknown> = {};
