@@ -13,15 +13,19 @@ toolchain** for the classifier.
 ## 2. Architecture
 
 ```
- ┌── Consumer extension (WXT/MV3, public) ──────────────┐
+ ┌── Consumer extension (WXT/MV3, public, v0.5.0) ──────┐
  │ passive scan X DOM → fiber bio → local heuristic →   │
- │ L2 cache / blocklist short-circuit → (miss) edge     │
- │ /v1/classify → inline badge + bubble + 1-click block │
- │ (X block API + paced queue) + durable block queue +  │
- │ mgmt panel (overview/blocklist/cache/settings) +     │
- │ GitHub Device-Flow login                             │
- └──────────────┬───────────────────────────────────────┘
-        /v1/check (anon) · /v1/classify·report·confirm (gh)
+ │ bundled compiled blacklist (shipped in the package,  │
+ │ ~46.3k numeric ids) → local hide (display:none +     │
+ │ chrome.storage record, un-hide in options) + badge   │
+ │ bubble + 误判申诉 via GitHub issue template          │
+ │ ZERO network requests · permissions: ["storage"]     │
+ └──────────────────────────────────────────────────────┘
+   (the extension calls no edge/X APIs; list updates ship
+    with each release)
+
+   website / third-party consumers
+        /v1/check·list (anon) · /v1/classify·report·confirm (gh)
                 ▼
  ┌── Cloudflare Worker (Hono) — DEPLOYED ───────────────┐
  │ x.zuoluo.tv  (custom domain; *.workers.dev fallback) │
@@ -39,12 +43,28 @@ toolchain** for the classifier.
 
 | 组件 | 作用 | 栈 | 状态 |
 |---|---|---|---|
-| `extension/` | 消费端 MV3 扩展（检测/拉黑/面板/登录） | WXT, React, Shadow DOM | 可用（v0.4.0：静默真拉黑 + 稳定队列进度 + 批量公榜查询 + GitHub 登录深链） |
+| `extension/` | 消费端 MV3 扩展（检测/本地隐藏/面板） | WXT, React, Shadow DOM | 可用（v0.5.0：纯被动消费版 — 名单随包分发 + 本地隐藏，零网络请求，无 GitHub 登录） |
 | `services/edge/` | 边缘 API + D1 + /admin + agent staging | Hono, Zod, Wrangler | **已部署**线上 |
 | `src/` | 本地分类器/CLI/旧 localhost 服务 | tsx, Zod, node:test | 早期，部分被 edge 取代 |
 | `docs/` | ARCHITECTURE/UX/FLOW/PRODUCT/MODERATION/MVP/RUNNING/STATUS | — | 较全 |
 
-### 3.1 v0.4.0 增量（2026-05-28）
+### 3.1 v0.5.0 变更（2026-06：纯被动消费版）
+
+| 模块 | 改动 | 说明 |
+|---|---|---|
+| 网络层 | 扩展归零网络请求 | 移除 `/v1/check` 批量查询、`/v1/classify` 调用与 X `blocks/create.json` 静默拉黑；扩展不再调用任何 edge / X 接口。 |
+| 名单分发 | 编译进包 | `extension/public/blacklist-data.json`（约 4.63 万条，仅收录有数字 ID 的条目）随扩展打包，构建时由 `scripts/compile-blacklist.js` 生成；检测全部本地完成，名单更新随发版。 |
+| 拉黑 → 隐藏 | 本地 `display:none` | 命中账号本地隐藏并记入 `chrome.storage`，options 页可取消隐藏；UI 文案统一为「隐藏」。 |
+| GitHub 登录 | 移除 | Device Flow 深链整体下线（后台对 `gh_start`/`gh_poll` 返回 disabled）；上报/共建改由官网（GitHub token 校验）承担。 |
+| MAIN-world 脚本 | 删除 | `entrypoints/x-graphql-main.content.ts` 已删除；`lib/graphql-users.ts` 保留为 `detect.ts` 的解析库（当前无注入数据源）。 |
+| 误判申诉 | GitHub issue 模板 | 「误判?」在新标签页打开 GitHub appeal issue 模板，扩展自身不发请求。 |
+| 权限 | 收敛到 `["storage"]` | 无 host permissions。 |
+| 服务端配套 | 限流 + 定时任务拆分 | `/v1/classify` 限 20 次/小时；`/v1/appeal` 限 5 次/小时/IP + 按 handle 每日去重；定时任务拆为 publishArtifacts 每 10 分钟、mirrorToGitHub 每 6 小时。 |
+
+### 3.2 v0.4.0 增量（2026-05-28，历史）
+
+> 历史记录。其中扩展侧条目（静默拉黑、批量公榜查询、GitHub 登录深链）
+> 已在 v0.5.0 全部移除；服务端条目（Agent 管线、`/v1/list/trends`）仍有效。
 
 | 模块 | 改动 | 说明 |
 |---|---|---|
@@ -56,7 +76,10 @@ toolchain** for the classifier.
 | Agent 安全修复 | stale guard + failure attempts | `/v1/agent/decide` 只允许更新仍在 `auto_pending_review` 的新鲜行；`agent_attempts` 改为失败计数，`requeue` 会清空 agent 注解并重入队列。 |
 | Landing 趋势 | `/v1/list/trends` | 返回 48h 小时桶 + 7d 日桶；新增 `idx_accounts_status_published_at` 迁移，供官网趋势图使用。 |
 
-### 3.2 扩展 v0.3.0 增量（2026-05-26）
+### 3.3 扩展 v0.3.0 增量（2026-05-26，历史）
+
+> 历史记录。MAIN-world 脚本、GitHub 上报、自动拉黑等条目已在 v0.5.0 移除；
+> `lib/graphql-users.ts` 与 `test/uid-detection.test.ts` 仍在仓库中。
 
 | 模块 | 改动 | 说明 |
 |---|---|---|
@@ -79,8 +102,8 @@ Wrangler 4 · @cloudflare/workers-types · @types/chrome。
 |---|---|---|
 | **LLM 推理（外部 OpenAI 兼容供应商）** | 服务端分类 | 第三方、单点、经常性成本；`LLM_API_BASE` / `LLM_API_MODEL` / `LLM_API_KEY` 全部 Worker secret，**不入仓** |
 | **Cloudflare**（Workers + D1） | 边缘服务 / 数据库 | 平台依赖，需要备份和交接预案 |
-| **GitHub OAuth App** | 上报 / 分类鉴权 | client_id 公开常量；REQUIRE_AUTH 开启后强依赖 |
-| **X 内部接口/DOM** | 真·拉黑 + 页面解析 | `blocks/create.json` 静默屏蔽 + DOM/GraphQL 身份解析；X 改版即坏，**最脆环节** |
+| **GitHub OAuth App** | 上报 / 分类鉴权（官网/受信客户端；扩展已无登录） | client_id 公开常量；REQUIRE_AUTH 开启后强依赖 |
+| **X DOM 结构** | 页面解析 | DOM/React fiber 身份与 bio 解析；X 改版即坏，**最脆环节**（v0.5.0 起扩展不再调用 X 任何接口，风险仅剩 DOM 解析） |
 | **unavatar.io** | 审核台老数据头像兜底 | 第三方，仅维护者侧、非关键 |
 
 ## 5. 数据与存储
@@ -90,17 +113,17 @@ Wrangler 4 · @cloudflare/workers-types · @types/chrome。
   `review_log`、`publications`。状态机：auto_pending_review → human_confirmed
   / rejected / removed。`/v1/check` 只返回 human_confirmed。
 - **chrome.storage.local**：`xss:v1:*` 账号判定缓存、`xss:blocklist:v2`
-  拉黑记录、`xss:stats` 统计、`xss:blockQueue` 拉黑队列（v0.4 起带
-  `source`、队列状态和后台进度展示）、`xss:settings`（含
-  `autoBlockListHits` 开关，默认 false）、`xss:ghToken/
-  ghLogin/ghClientId`、`xss:edgeBase`。仅本机、无 PII。
+  隐藏记录（兼容旧 `xss:blocked` 迁移）、`xss:stats` 统计、
+  `xss:settings`（enabled / bubble / bubblePos / edgeBase，edgeBase
+  仅用于公榜站点链接）。v0.5.0 已移除 `xss:blockQueue` 与
+  `xss:ghToken/ghLogin/ghClientId`。仅本机、无 PII。
 
 ## 6. 部署/运行现状
 
 - Worker 已部署，对外通过自定义域 `https://x.zuoluo.tv`；
   历史 URL `*.workers.dev` 仍可用作 fallback。
   Secrets：`LLM_API_BASE` / `LLM_API_MODEL` / `LLM_API_KEY` / `ADMIN_TOKEN`。
-- GitHub 登录用于上报和防滥用计数；上线前后需要持续确认鉴权和限流配置。
+- GitHub 登录用于官网上报和防滥用计数（扩展不再内置登录）；上线前后需要持续确认鉴权和限流配置。
 - 审核台：`/admin`（ADMIN_TOKEN 进入）。
 - 扩展主分发渠道：[Chrome Web Store](https://chromewebstore.google.com/detail/make-x-great-again/aeoldnecphbkkckeedfgfcdcekkljdea)；GitHub Release zip 作为非-Chrome 浏览器和开发版的备用通道。
 
@@ -114,13 +137,15 @@ alpha 阶段所有举报默认进人工队列；`≥3` 独立 GitHub 上报人 +
 ## 8. 已知缺口 / 技术债 / 风险
 
 1. **数据契约仍需收敛** —— D1 schema、公开快照字段、申诉流程需要保持一致。
-2. **Bloom-first 模型未落地** —— v0.4 已把 `/v1/check` 改成批量查询，
-   但 [ARCHITECTURE.md](./ARCHITECTURE.md) 设计的低成本/可缓存 Bloom
-   artifact 尚未落地。
+2. **名单热更新未落地** —— v0.5.0 扩展把名单编译进包、零运行时请求，
+   服务端也已每 10 分钟发布 artifact（`/v1/artifacts/*`），但扩展尚未接入
+   [ARCHITECTURE.md](./ARCHITECTURE.md) 设计的版本门控 Bloom/artifact
+   运行时拉取——名单更新目前依赖扩展发版。
 3. **分类器逻辑双份**：`src/llm.ts` 与 `services/edge` 各一套 SYSTEM 提示，
    易漂移（已发生过需两处同改）。
 4. **测试覆盖薄**：CI 三作业绿门禁已上（`.github/workflows/ci.yml`：core / extension / edge），但运行时测试只有 `src/` 早期 node:test + v0.3 新加的 `test/uid-detection.test.ts`；扩展 DOM 流程和 edge handler 尚无 e2e/integration。
-5. **X DOM/接口脆弱**：选择器与拉黑流程随 X 改版会坏，需持续维护。
+5. **X DOM 脆弱**：选择器与 DOM/fiber 解析随 X 改版会坏，需持续维护
+   （扩展已不调用 X 接口，风险面只剩 DOM 解析）。
 6. **管理端鉴权较轻**：当前以维护者密钥保护，后续可升级到多人身份和轮换机制。
 
 ## 9. 后续杠杆

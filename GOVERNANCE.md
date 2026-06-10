@@ -13,10 +13,17 @@ published data.
 
 ## No auto-publication
 
-- An AI verdict is **never** automatically public.
+- An AI verdict is **never** automatically public. (The auto-publish gate —
+  high-confidence AI + ≥3 aged independent reporters — still exists in code
+  but is **disabled**; every entry queues for a maintainer.)
 - A crowdsourced report is a **prioritization signal, not a verdict**.
-- Only entries that pass a **human-review gate** with sufficient confidence
-  are eligible for the public list.
+- How entries actually flow: keyword rules + LLM classification produce
+  verdicts that land in a review queue as `auto_pending_review`. Maintainers
+  decide via the admin console — **individually or in rule-based batches**
+  (e.g. applying a vetted keyword rule across matching queue rows). This is
+  a human decision gate over every publication, not a per-entry forensic
+  investigation; the safety valve is that every decision is audit-logged in
+  `review_log` and appeals are honored.
 
 ## Appeal & removal
 
@@ -32,7 +39,11 @@ published data.
   evidence needed to justify the verdict (verdict, confidence, model version,
   reasons, timestamp).
 - **No PII** beyond the public identifier. Reporter identities are never
-  stored — only a salted, hashed fingerprint for anti-abuse.
+  stored — only a salted HMAC fingerprint for anti-abuse. The salt
+  (`REPORT_SALT`) is mandatory: report/confirm/classify/appeal endpoints
+  **fail closed** (503) when it is unset, so raw identities can never land
+  in the database; a one-shot admin backfill migrates any legacy raw
+  `gh:<id>` rows to fingerprints.
 - Page context in reports is reduced to a path; no query strings, no content
   beyond the reported account's own public signals.
 
@@ -44,7 +55,7 @@ published data.
 ## Transparency
 
 - The public data repo is versioned and forkable; every publication carries
-  a version tag, generation time, count, and source commit.
+  a content-derived version, generation time, and count.
 - Removals are logged. Methodology and scope are public.
 - **Audit snapshot**: the curated whitelist + blacklist are auto-mirrored
   from D1 to [`data/whitelist/v1.json`](./data/whitelist/v1.json) and
@@ -55,13 +66,13 @@ published data.
   timestamp", including the `evidence_text` (the public X content that
   triggered each verdict) and `reasons` array (LLM-stated rationale). See
   [`data/README.md`](./data/README.md) for the schema and update mechanism.
-- **Public list (sharded + bloom)**: the CDN-friendly `public-list/data/`
-  release is generated daily by CI, tagged with SemVer, and served via
-  jsDelivr / raw GitHub. Each release includes a bloom filter index
-  (~12 KB for 10k entries) and 256 hash-sharded JSONs. Removals appear
-  as missing entries in the next tag, and the git diff between tags is
-  the auditable change log. See [`DATA_USAGE.md`](./DATA_USAGE.md) and
-  [`src/public-list/`](./src/public-list/) for the full format.
+- **Published artifacts (bloom + shards)**: the Worker republishes the
+  confirmed list to R2 every 10 minutes as a bloom filter + sharded JSON +
+  meta document, discoverable via `GET /v1/list/meta` and served from
+  `/v1/artifacts/<key>` on `x.zuoluo.tv`. Artifact versions are derived from
+  content, so a new version appears only when the list actually changed.
+  Removals disappear from the next version. See
+  [`DATA_USAGE.md`](./DATA_USAGE.md) for the full format.
 
 ## Accountability
 

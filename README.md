@@ -8,7 +8,7 @@
 
 <p align="center">
   <b>少看垃圾，多看人话。</b><br>
-  你照常刷 X，AI 在后台把广告号和色情 bot 挑出来 · Chrome 扩展 · AGPL-3.0 开源
+  你照常刷 X，社区共建的公开黑名单帮你把广告号和色情 bot 标出来 · Chrome 扩展 · AGPL-3.0 开源
 </p>
 
 <p align="center">
@@ -39,7 +39,7 @@ X 现在的问题，大家都知道：
 - 算法决定你看到谁，而不是你决定
 - 看一个人聊过什么、最热几条是什么——只能手动翻几十层
 
-**Make X Great Again (MXGA)** 装上之后，AI 在后台帮你识别这些垃圾号，一键拉黑——驱动 X 自己的屏蔽接口，不是隐藏。
+**Make X Great Again (MXGA)** 装上之后，内置的社区共建公开黑名单帮你标出这些垃圾号，一键本地隐藏——不调用 X 的任何接口，扩展本身零网络请求。
 
 不收集你的信息，不要注册，源码全开。
 
@@ -47,7 +47,7 @@ X 现在的问题，大家都知道：
 
 | # | 想做的事 | 状态 | 简介 |
 |---|---|:---:|---|
-| **01** | **干掉刷评论的垃圾号** | ✅ Live | AI 自动识别色情广告 / 营销 bot，给你一个一键拉黑按钮（调用 X 自己的屏蔽接口，是真拉黑）。维护者社区共建公开黑/白名单。 |
+| **01** | **干掉刷评论的垃圾号** | ✅ Live | 扩展内置社区共建的公开黑名单，命中即出徽标，一键本地隐藏（非 X 官方拉黑，可随时取消）。名单由关键词规则 + AI 初筛、维护者人工确认后公开。 |
 | **02** | **看一眼就知道这个 KOL 靠谱不** | 🚧 计划 | 鼠标停在 @handle 上 → 浮卡：账号年龄、原创比、主题集中度、互动质量 |
 | **03** | **进 profile 自动出摘要** | 🚧 计划 | 「这个人主要谈 A/B/C」「最近一个月最热的 5 条」「最佳互动时段」—— 不用手动翻 |
 | **04** | **让信号穿过算法噪声** | 🚧 计划 | 在推文下提示「你关注的 3 个 KOL 转过 / 评论过」，找回算法之前的发现感 |
@@ -59,22 +59,24 @@ X 现在的问题，大家都知道：
 
 这是已经跑在 [x.zuoluo.tv](https://x.zuoluo.tv) 上的部分。公榜数量会持续变化，实时数据请看 [/list](https://x.zuoluo.tv/list)。
 
-- **被动 AI 扫描**：你在 X 看到的每个评论作者，扩展静默判定 → spam / 色情广告号 / 疑似垃圾 / 不确定 / 正常
-- **一键真拉黑**：点扩展气泡里的「拉黑」，用你的 X 登录态调用 X 自己的屏蔽接口完成屏蔽；批量时进入限速队列（不是 hide，不弹原生确认窗口）
-- **零网络命中**：本地缓存维护者白名单 + 公榜，每 6 小时增量同步；命中直接出结果，不调任何接口
+- **内置公开黑名单**：约 4.6 万条 `human_confirmed` 条目直接打包进扩展（仅保留有数字 X ID 的条目，去重、剥离证据文本），加载和命中全部本地完成，**扩展运行时零网络请求**
+- **本地徽标 + 一键隐藏**：命中名单的账号在推文旁出徽标，点「隐藏」本地隐藏该账号的帖子（5 秒可撤销）——**是本地隐藏，不是 X 官方拉黑**，不调用 X 的任何接口
+- **随时取消隐藏**：设置页可查看本地隐藏列表，一键取消隐藏纠正误判
+- **误判申诉**：徽标里点「申诉」会打开 GitHub 上的申诉 issue 模板，由维护者人工复核
+- **零数据收集**：权限只有 `storage`，无 host 权限、无登录、无统计上报；统计数字只存在你本机
 - **守门员审核台**（[/admin](https://x.zuoluo.tv/admin)，需要 ADMIN_TOKEN）：待审队列 / 黑名单 / 白名单 / 审计日志 四个 tab，全自定义弹窗
 - **公开公榜**（[/list](https://x.zuoluo.tv/list)）：所有 `human_confirmed` 账号公开可查，含理由 + 举报人数
-- **共建机制**：GitHub 登录后任何人都能举报；alpha 阶段所有举报先进人工队列。`3 个 ≥90 天 GH 账号 + AI 置信 ≥0.9` 是保留的自动发布治理门槛，目前默认关闭
+- **共建机制（在网站端，不在扩展里）**：举报 / 确认走 [x.zuoluo.tv](https://x.zuoluo.tv) 的 API（GitHub token 验证、加盐指纹存储）；alpha 阶段所有举报先进人工队列。`3 个 ≥90 天 GH 账号 + AI 置信 ≥0.9` 是保留的自动发布治理门槛，目前默认关闭
 
 详细治理规则见 [GOVERNANCE.md](./GOVERNANCE.md)。
 
 ## 怎么用
 
-> [!WARNING]
-> **账号风控提醒**：短时间内连续拉黑大量账号，可能被 X 判定为异常自动化行为，
-> 触发 Ghost Ban、功能限制，甚至「不真实行为」冻结。MXGA 会尽量限速，
-> 但 X 的风控规则不透明；请分批、少量处理可疑账号，避免高频批量拉黑，
-> 尤其不要在新号、刚解封账号或近期被限制过的账号上密集操作。
+> [!NOTE]
+> **关于「隐藏」与 X 官方拉黑**：当前版本的 MXGA 只做**本地隐藏**，不调用 X 的任何接口，
+> 因此扩展本身不会触发 X 的自动化风控。但如果你选择**手动**在 X 上拉黑这些账号，
+> 请注意：短时间内连续拉黑大量账号可能被 X 判定为异常行为，触发 Ghost Ban、
+> 功能限制甚至冻结——请分批、少量操作，尤其不要在新号或近期被限制过的账号上密集拉黑。
 
 ### 普通用户
 
@@ -83,9 +85,6 @@ X 现在的问题，大家都知道：
 👉 [chromewebstore.google.com/detail/make-x-great-again/aeoldnecphbkkckeedfgfcdcekkljdea](https://chromewebstore.google.com/detail/make-x-great-again/aeoldnecphbkkckeedfgfcdcekkljdea)
 
 装好后，访问 x.com 扩展会自动开始工作。
-
-> [!WARNING]
-> **账号风控提醒**：短时间内连续、大量拉黑账号，可能被 X 判定为异常自动化行为，触发 Ghost Ban（限流）、功能限制甚至账号冻结。MXGA 默认只「标注」可疑账号，拉黑动作始终由你手动确认 —— 请量力而行、分批处理，不要追求一次清空，也不要叠加其他高频批量操作。
 
 <details>
 <summary>用 Edge / Brave / Arc，或想跑开发版？</summary>
@@ -141,12 +140,13 @@ npx wrangler secret put ADMIN_TOKEN      # /admin 网关
 
 ```
 src/                  本地 LLM 分类 CLI + node:test 单测（开发用，非生产路径）
-extension/            MV3 浏览器扩展：WXT + React 19 + Tailwind v4
+extension/            MV3 浏览器扩展：WXT + React 19 + Tailwind v4（零网络请求）
   entrypoints/
-    content.ts        X DOM 的被动观察 + 气泡 UI + 一键拉黑
-    background.ts     全部 fetch / GitHub OAuth / 白名单同步发生在这
-    popup/ options/   React 弹窗 + 设置页
-  lib/                cache / blocklist / whitelist-cache / detect / stats
+    content.ts        X DOM 的被动观察 + 气泡 UI + 一键本地隐藏（5 秒可撤销）
+    background.ts     只回应本地消息（索引健康检查 / 统计），不发任何 fetch
+    popup/ options/   React 弹窗 + 设置页（含本地隐藏列表的取消隐藏）
+  public/blacklist-data.json  打包进扩展的公开黑名单（scripts/compile-blacklist.js 生成）
+  lib/                cache / blocklist / local-index / detect / stats
 services/edge/        Cloudflare Worker（Hono）+ D1（xss-db）
   src/index.ts        /v1/* API + scheduled cron + Env 类型
   src/pages/          SSR landing / list / admin（同套 base-ui design token）
@@ -171,7 +171,14 @@ CONTRIBUTING.md       贡献指南
 
 ## 当前进度
 
-**v0.4.0**（最新，2026-05-28）
+**v0.5.0**（最新，2026-06-10）—— 被动纯本地版
+- **扩展零网络请求**：公开黑名单直接打包进扩展（约 4.6 万条，仅保留有数字 X ID 的条目），命中、统计全部本地完成；移除 GitHub 登录、MAIN-world 脚本和一切 fetch
+- **「拉黑」改为「隐藏」**：不再调用 X 的 `blocks/create.json`，改为本地隐藏命中账号的帖子（display:none + 本地隐藏列表），设置页可随时取消隐藏
+- **误判申诉**：改为打开 GitHub 申诉 issue 模板，不再向服务端 POST
+- **权限收敛**：只剩 `storage`，无 host 权限；Firefox 声明 `data_collection_permissions: none`
+- **服务端加固**：admin 鉴权 timing-safe、`/v1/classify` 与 `/v1/appeal` 限流、cron 拆分（R2 工件每 10 分钟 / GitHub 镜像每 6 小时）、举报人只存加盐指纹（无盐则 fail-closed）
+
+**v0.4.0**（2026-05-28）
 - **静默真拉黑**：调用 X 自己的 `blocks/create.json` 接口，不再模拟点击原生确认弹窗；后台队列带限速、重试、跨 tab 协调
 - **可见进度**：右上角气泡显示固定 4 格状态（命中 / 正在 / 待拉 / 已拉）、进度条和当前拉黑队列；成功后头像和名称划掉并淡出
 - **批量公榜查询**：`/v1/check?ids=...` 批量查 100 个 ID，垃圾号密集的帖子不再对服务端打出一串单账号请求
@@ -204,7 +211,7 @@ CONTRIBUTING.md       贡献指南
 
 - **AI 永远不能单独公开。** alpha 阶段公榜入榜走人工维护者确认；历史设计中的自动发布门槛（AI 置信度 ≥ 0.9 + ≥3 个注册 90 天以上的 GitHub 账号独立举报）仍保留为治理红线，但当前默认关闭。
 - **审核范围严格限定** 商业 spam 和色情广告 bot。**永远不判断观点、立场、政治、身份。**
-- **零 PII**：库里只存 X 公开数字 ID 和 GitHub reporter fingerprint（`gh:<numeric_id>`），不存任何邮箱、姓名、设备指纹、IP。
+- **零 PII**：库里只存 X 公开数字 ID 和举报人的**加盐 HMAC 指纹**（原始 GitHub ID 从不落库；`REPORT_SALT` 未配置时举报端点直接拒绝服务，fail-closed），不存任何邮箱、姓名、设备指纹、IP。
 - **所有维护者动作都进 `review_log`**：拉黑 / 驳回 / 移除 / 加白 / 移白，全部留痕，可在 /admin 审计日志 tab 翻。
 - **申诉**：在 GitHub 上[新开 issue](https://github.com/foru17/make-x-great-again/issues/new) 即可，附带 X handle + 你的理由。维护者会复核，没有承诺 SLA，通常一两天内回应。
 - **维护者凭据永不进消费端构建**：审核台的 `ADMIN_TOKEN` 只在 maintainer 浏览器 localStorage，不出现在公开扩展包里。
@@ -217,11 +224,11 @@ CONTRIBUTING.md       贡献指南
 
 | 层 | 选型 | 备注 |
 |---|---|---|
-| 扩展 | WXT 0.20 · React 19 · Tailwind v4 · Shadow DOM | content-script 用 Shadow DOM 隔离样式，不污染 X |
-| 边缘 | Cloudflare Worker · Hono · D1 SQLite | 单 region，custom domain `x.zuoluo.tv` |
-| LLM | 任何 OpenAI 兼容 `/chat/completions` | 仅靠 system prompt 约束，不微调 |
-| 身份 | GitHub Device Flow OAuth | 无 client secret，无回调地址 |
-| 同步 | Workers Cron `0 */6 * * *` + chrome.alarms | 维护者列表 6h 周期增量推到扩展 + 镜像仓库 |
+| 扩展 | WXT 0.20 · React 19 · Tailwind v4 · Shadow DOM | content-script 用 Shadow DOM 隔离样式，不污染 X；零网络请求，名单随包内置 |
+| 边缘 | Cloudflare Worker · Hono · D1 SQLite · R2 | 单 region，custom domain `x.zuoluo.tv` |
+| LLM | 任何 OpenAI 兼容 `/chat/completions` | 仅靠 system prompt 约束，不微调；只在服务端策展管线使用 |
+| 身份 | GitHub token 验证（仅网站端举报/共建流程） | 扩展无任何登录；服务端只存加盐 HMAC 指纹 |
+| 同步 | Workers Cron：`*/10 * * * *` 发布 R2 工件 · `0 */6 * * *` 镜像 data/ 仓库 | 扩展端名单随扩展包内置，无运行时同步 |
 
 更细的架构与决策记录在 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)。
 

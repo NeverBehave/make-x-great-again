@@ -7,7 +7,7 @@
 > 本文档保留作为后续更新（新版本提交、字段调整、被驳回重提）的参考底稿。
 > 任何字段改动以 Chrome Web Store Developer Dashboard 的实际状态为准。
 >
-> **当前文案版本：v0.4.0**（2026-05-28 提交）。v0.2/v0.3 的历史文案见
+> **当前文案版本：v0.5.0**（2026-06-10，被动纯本地版）。v0.2–v0.4 的历史文案见
 > git history。每次新版上架前请同步更新本文档对应字段。
 
 ---
@@ -17,7 +17,7 @@
 | 字段 | 内容 |
 |---|---|
 | Name (Listing) | MXGA — X spam shield |
-| Summary / Manifest description (单行，132 字符内) | AI 驱动的 X 旁路扩展 · 你刷 X 时它在后台静默识别色情/广告 spam 机器人，给你一键真拉黑。完全开源，零数据收集。 |
+| Summary / Manifest description (单行，132 字符内) | 社区共建公开黑名单的 X 旁路扩展 · 静默标出色情/广告 spam 机器人，一键本地隐藏。完全开源，零网络请求，零数据收集。 |
 | Category | Productivity |
 | Language | 中文 (简体) — primary，可后加英语 |
 
@@ -27,25 +27,21 @@
 > Summary 原样粘到 Description，否则商店「概述」里会出现两段重复文案。
 
 ```
-MXGA 是一个开源的 X (Twitter) 旁路防 spam 扩展。你正常刷 X 时,它会在后台读取页面上已经公开显示的账号信息和推文上下文,识别色情引流号、广告推广号和明显模板化 spam bot,并把可疑账号标在评论区旁边。你可以逐个复核,也可以在气泡面板里勾选后批量拉黑。拉黑使用 X 自己的屏蔽能力,结果会同步到你的 X 账号。
+MXGA 是一个开源的 X (Twitter) 旁路防 spam 扩展。你正常刷 X 时,它把页面上已经公开显示的账号跟扩展包内置的社区共建公开黑名单做本地比对,把色情引流号、广告推广号和明显模板化 spam bot 标在评论区旁边。你可以逐个复核,点「隐藏」后该账号的帖子会在你本机被隐藏(本地隐藏,不是 X 官方拉黑,不调用 X 的任何接口),设置页可随时取消隐藏。
 
 主要功能:
 
 - 被动扫描当前 X 页面,不需要改变你的浏览习惯。
-- 结合维护者白名单、公开黑名单、本地缓存和 AI 判定,标出 spam / porn_bot / likely_spam 等风险。
-- 气泡面板集中列出本页可疑账号,支持逐个查看、勾选批量拉黑和上报。后台拉黑时会显示稳定进度、队列和每个账号的处理状态。
-- 可选自动拉黑已确认垃圾号。该开关默认关闭,只作用于社区或本机已经确认过的 spam,不会让 AI 单方面自动屏蔽新账号。
-- 支持浅色 / 深色主题,设置页可查看登录状态、检测行为和本地数据。
-
-重要提醒:
-
-短时间内连续拉黑大量账号,可能被 X 判定为异常自动化行为,并触发 Ghost Ban、功能限制或「不真实行为」冻结。MXGA 会尽量限速,但 X 的风控规则不透明。建议分批、少量处理可疑账号,避免高频批量拉黑,尤其不要在新号、刚解封账号或近期被限制过的账号上密集操作。
+- 公开黑名单直接打包在扩展里(约 4.6 万条人工确认条目),命中判定全部本地完成,扩展运行时零网络请求。
+- 一键本地隐藏命中账号的帖子,带 5 秒撤销窗口;设置页可查看隐藏列表并随时取消隐藏,纠正误判。
+- 误判申诉:一键打开 GitHub 申诉 issue 模板,由维护者人工复核。
+- 支持浅色 / 深色主题,设置页可查看检测统计和本地数据。
 
 隐私与治理:
 
-MXGA 不收集你的 X 账号、邮箱、IP、浏览历史或设备指纹,也不读取私信或隐藏数据。用于 AI 判定的内容仅限页面上已经渲染的公开字段,例如 handle、显示名、bio 和本次触发的公开文本。举报时会上传目标 X 数字 ID 和你的 GitHub 数字 ID,用于防重复和防刷票。
+MXGA 扩展不发送任何网络请求:不收集你的 X 账号、邮箱、IP、浏览历史或设备指纹,没有登录,没有统计上报。所有数据(名单、隐藏列表、统计)都只存在你的浏览器本地。
 
-公开黑名单不是 AI 单独决定。alpha 阶段账号入榜需要维护者人工确认；多个符合条件的 GitHub 账号独立举报和高置信 AI 判定会作为审核信号,不会单独公开发布。项目严格只处理商业垃圾推广和色情广告机器人,不判断观点、立场、政治或身份。
+公开黑名单不是 AI 单独决定。账号入榜需要维护者人工确认;高置信 AI 判定和社区举报只是审核信号,不会单独公开发布。项目严格只处理商业垃圾推广和色情广告机器人,不判断观点、立场、政治或身份。名单的举报与共建流程在网站端(x.zuoluo.tv)进行,与扩展无关。
 
 源码:https://github.com/foru17/make-x-great-again
 公榜:https://x.zuoluo.tv/list
@@ -56,39 +52,35 @@ MXGA 不收集你的 X 账号、邮箱、IP、浏览历史或设备指纹,也不
 
 | Permission | 用途 |
 |---|---|
-| `storage` | 本地缓存 AI 判定结果（避免重复调 LLM）、用户的隐藏列表、登录态、本地处理统计。所有内容仅存于 chrome.storage.local，不上传。 |
-| `alarms` | 每 6 小时唤醒一次 service worker 增量同步维护者白名单（从 `/v1/whitelist?since=`），避免 SW 长驻浪费内存。 |
-| host `https://x.zuoluo.tv/*` | 扩展的服务端 API：公榜命中查询、AI 判定、举报、白名单增量同步。 |
-| host `https://x-spam-sentinel-edge.zuoluotv.workers.dev/*` | 同上的 Cloudflare workers.dev 备用 URL（自定义域名故障时的兜底）。 |
-| host `https://github.com/login/*` | GitHub OAuth Device Flow 登录：申请 device code + 兑换 access token。 |
-| host `https://api.github.com/user` | 登录后读取你的 GitHub 数字 ID（防滥用计数用），**仅** 此端点。 |
-| content_scripts `https://x.com/*` / `https://twitter.com/*` | 唯一执行点 — 读取页面上 X 渲染好的公开账号信息、在每条推文旁挂载一个 shadow-DOM 徽章、显示右上角气泡。 |
+| `storage` | 本地保存判定缓存、用户的隐藏列表、设置和本地统计。所有内容仅存于 chrome.storage.local，不上传。 |
+| content_scripts `https://x.com/*` / `https://twitter.com/*` | 唯一执行点 — 读取页面上 X 渲染好的公开账号信息、跟扩展包内置的黑名单做本地比对、在每条推文旁挂载一个 shadow-DOM 徽章、显示右上角气泡。 |
+
+> v0.5.0 起扩展**没有** `alarms` 权限和任何 host 权限：黑名单随扩展包内置，
+> 无运行时同步、无服务端 API 调用、无 GitHub 登录。如旧版 Dashboard 里还留有
+> 这些权限的 justification，提交新包时一并删除。
 
 ## 4. Single Purpose 声明
 
-**v0.3 起更新（明确把 user-enabled 自动模式写进 single purpose,避免审核员
-看到自动拉黑设置时怀疑越界）**：
+**v0.5.0 起更新（扩展已是纯被动本地版,不再有任何自动拉黑/屏蔽能力,
+single purpose 收敛到「标注 + 本地隐藏」）**：
 
 英文版（提交时主用,审核员主要看这版）：
 
 > Identify commercial-spam and pornographic-advertising bot accounts on
-> X (Twitter), passively on pages the user is already viewing, and let
-> the user block them — either one-by-one or, when the user explicitly
-> enables it, automatically for accounts the community has already
-> confirmed.
+> X (Twitter), passively on pages the user is already viewing, by matching
+> against a bundled community-curated public blocklist, and let the user
+> locally hide their posts (a reversible, on-device visual hide — the
+> extension never calls X's APIs and makes zero network requests).
 
 中文版（如果商店表单是中文,粘这一版）：
 
-> 在用户已经访问的 X (Twitter) 页面上,被动识别商业垃圾推广账号和色情
-> 广告 bot 账号,并让用户屏蔽它们(手动逐个,或在用户主动开启自动模式后
-> 由扩展自动屏蔽社区已确认的账号)。
+> 在用户已经访问的 X (Twitter) 页面上,用扩展包内置的社区共建公开黑名单
+> 被动识别商业垃圾推广账号和色情广告 bot 账号,并让用户在本机隐藏它们的
+> 帖子(可随时取消的本地视觉隐藏;扩展不调用 X 的任何接口,零网络请求)。
 
-**关键设计**：把 auto-block 写进单一用途,并强调两点:
-1. *user explicitly enables* —— 默认关,需要用户主动开
-2. *community already confirmed* —— 只对公榜 / 本地缓存确认过的号生效,不是 AI 单方面
-
-这两点是 Chrome Web Store 审核员对扩展自动化最敏感的红线,先在 Single
-Purpose 里写明白,省得 v0.3 提交后被怀疑越界。
+**关键设计**：v0.4 及以前的「拉黑 / 自动拉黑」表述全部废弃 —— 当前版本
+没有任何驱动 X API 的能力,审核员最敏感的「自动化操作用户账号」风险点
+已从根上移除。
 
 ## 5. Privacy Practices 声明（表单里一栏一栏的）
 
@@ -96,16 +88,16 @@ Chrome 商店现在要求逐项勾选/解释。对应答案：
 
 | 问题 | 答案 |
 |---|---|
-| Does this item collect any user data? | **Yes**, see below. |
+| Does this item collect any user data? | **No** — the extension makes zero network requests; nothing leaves the browser. |
 | Personally identifiable information | No |
 | Health information | No |
 | Financial and payment information | No |
-| Authentication information | **Yes** — GitHub OAuth access token (stored locally; never shared with third parties; used only to call api.github.com/user for the reporter ID). |
+| Authentication information | No — there is no login of any kind. |
 | Personal communications | No |
 | Location | No |
-| Web history | No (only x.com / twitter.com pages, read-only) |
-| User activity | **Yes** — when the user actively reports / blocks an account, the target X numeric ID + the user's GitHub numeric ID is transmitted to our backend. No other behavioral data. |
-| Website content | **Yes** — public X content rendered on the page (handle, display name, bio, recent public tweet text) is transmitted to our backend for the AI classifier. No private content. |
+| Web history | No (only x.com / twitter.com pages, read-only, processed locally) |
+| User activity | No — hides and stats are recorded only in local chrome.storage; never transmitted. |
+| Website content | No — page content is matched against the bundled blocklist locally; nothing is transmitted anywhere. |
 
 ### 数据用途承诺（要勾的三个 box，都应勾上）
 
@@ -123,20 +115,19 @@ https://github.com/foru17/make-x-great-again/blob/main/docs/PRIVACY.md
 
 | # | 内容 | 来源 |
 |---|---|---|
-| 1 | X 评论区里气泡显示「本页命中 N 个账号」+ 固定 4 格状态 + 队列表（含每行 checkbox） | content-script 实际运行截图 |
-| 2 | 单个推文旁的红色公榜命中 badge + popover | content-script |
-| 3 | 后台静默拉黑 + 多色进度条 + 队列中账号「拉黑中 / 待拉」状态 | 气泡卡片 |
-| 4 | popup 主面板（成就 hero + 三栏统计 + 登录状态） | popup |
-| 5 | options 设置（GitHub 登录验证码复制 + 检测行为 含「自动拉黑」开关 + 数据与隐私 + 清除） | options |
+| 1 | X 评论区里气泡显示「本页命中 N 个账号」+ 账号列表 | content-script 实际运行截图 |
+| 2 | 单个推文旁的红色公榜命中 badge + popover（含「隐藏」「申诉」按钮） | content-script |
+| 3 | 点「隐藏」后的「5 秒后隐藏 / 撤销」pending 状态 | content-script |
+| 4 | popup 主面板（本地统计） | popup |
+| 5 | options 设置（本地隐藏列表 + 取消隐藏 + 数据与隐私 + 清除） | options |
 
 > 还没准备好？参考 https://x.zuoluo.tv/list 公榜的视觉风格做。
 
-> **v0.4 截图需要重出**：拉黑已从模拟点击改成后台静默队列，气泡顶部状态
-> 也改成固定 4 格。原 v0.3 截图如果还停留在旧按钮/旧进度，会跟当前 build
-> 不一致。新截图建议:
-> - #1 / #3：bubble 固定 4 格状态（命中 / 正在 / 待拉 / 已拉）+ 多色进度条 + 队列表
-> - #4：popup 未登录横幅 → 点 GitHub 后能跳设置页
-> - #5：设置页把 GitHub 验证码复制卡片入镜，同时保留「自动拉黑」开关（OFF 状态即可）
+> **v0.5 截图需要重出**：「拉黑」已全部改为「隐藏」,GitHub 登录 / 拉黑队列 /
+> 自动拉黑开关已移除。原 v0.4 截图里出现旧按钮、4 格拉黑进度或登录卡片的
+> 都跟当前 build 不一致。新截图建议:
+> - #2 / #3：badge popover 的「隐藏」按钮 + 5 秒撤销提示
+> - #5：设置页的隐藏列表（含「取消隐藏」）入镜
 > - 至少出 1 张浅色主题 + 1 张深色主题,展示双主题支持
 
 ## 7. 已知合规风险点
@@ -189,3 +180,19 @@ https://github.com/foru17/make-x-great-again/blob/main/docs/PRIVACY.md
 - [ ] 上传 zip + 必要时更新 Description / Screenshot 到 CWS Dashboard
 - [ ] 提交审核,等 1-3 天
 - [x] GitHub Release `v0.4.0` 与 CWS zip 对齐
+
+## 11. v0.5.0 更新 checklist（2026-06-10，被动纯本地版）
+
+- [x] `extension/package.json` 版本号 0.4.0 → 0.5.0
+- [ ] `node scripts/compile-blacklist.js` 重新生成 `extension/public/blacklist-data.json`
+- [ ] `cd extension && pnpm zip` 产出 v0.5.0 zip
+- [ ] zip 内 `manifest.json` 确认：`version: 0.5.0`、MV3、permissions 仅 `["storage"]`、**无 host_permissions、无 alarms**
+- [ ] Dashboard 同步：
+  - [ ] Summary / Description 换成本文档第 1–2 节的 v0.5.0 文案（删掉一切「拉黑」表述）
+  - [ ] Permissions justification 删除 alarms / host / GitHub 各行，只留 `storage` + content_scripts
+  - [ ] Privacy practices 全部改为 **No**（第 5 节），数据收集声明改为「不收集」
+  - [ ] Single purpose 换成第 4 节 v0.5.0 版本
+- [ ] 真机冒烟：装新 zip,确认 badge / 隐藏 / 5 秒撤销 / 取消隐藏 / 申诉跳 GitHub 全部正常,且 DevTools Network 面板里扩展无任何外发请求
+- [ ] 出 v0.5 新截图（参考第 6 节注释）
+- [ ] 提交审核
+- [ ] GitHub Release `v0.5.0` 与 CWS zip 对齐

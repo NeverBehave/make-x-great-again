@@ -6,6 +6,67 @@ This project follows a pragmatic [Keep a Changelog](https://keepachangelog.com/e
 style. Version numbers refer to the browser extension package unless noted
 otherwise.
 
+## [0.5.0] - 2026-06-10
+
+### Changed
+
+- The extension is now a **passive, zero-remote consumer build**: the public
+  blacklist (compiled by `scripts/compile-blacklist.js`, ~46k entries) ships
+  inside the package and is read locally; the extension makes **zero network
+  requests** and its only permission is `storage` (no host permissions, no
+  `alarms`). Firefox builds declare `data_collection_permissions: "none"`.
+- "拉黑" was renamed to "隐藏" across the UI: the extension no longer calls
+  X's `blocks/create.json` (or any X API). Matched accounts' posts are hidden
+  locally (`display:none` + a local hidden-list in `chrome.storage`) with a
+  5-second undo window.
+- "误判申诉" now opens the GitHub appeal issue template in a new tab instead
+  of POSTing to the edge service.
+- Scheduled jobs were split: R2 artifact publishing runs every 10 minutes
+  (content-derived versions, so nothing new is published when the list is
+  unchanged), while the GitHub `data/` mirror runs only every 6 hours.
+
+### Removed
+
+- GitHub Device Flow login and all GitHub OAuth code in the extension.
+- The MAIN-world content script (`x-graphql-main.content.ts`) and all
+  fetch/XHR patching.
+- Dead settings that never did anything: `replyAuto`, `autoBlockListHits`,
+  `autoExpandOnFinding`.
+
+### Security
+
+- Badge popover rendering escapes all model/list-derived text, hardening the
+  prompt-injection → innerHTML path.
+- Delayed hides re-verify the captured article anchor still belongs to the
+  same author before hiding (X recycles article nodes), preventing the wrong
+  row from being hidden.
+- Edge admin auth (`ADMIN_TOKEN`) comparison is now timing-safe.
+- `/v1/classify` is rate-limited (20/h per identity, or per-IP fingerprint
+  when anonymous); `/v1/appeal` is rate-limited (5/h per IP) with per-handle
+  daily dedupe. Both fail closed (503) when `REPORT_SALT` is unset.
+- Reporter identity storage is fingerprint-only: salted HMAC fingerprints,
+  mandatory salt, and an admin backfill endpoint
+  (`POST /v1/admin/reporter-fingerprints/backfill`) for legacy raw `gh:<id>`
+  rows.
+
+### Fixed
+
+- Un-hide from the options page now actually restores hidden accounts.
+- Blacklist compilation drops handle-only entries (handle reuse trap),
+  entries with unsupported labels, and duplicates by numeric id — only
+  verified numeric `x_user_id` rows ship in the bundled list, with evidence
+  text stripped.
+- Published artifact versions/keys are URL-safe, so `/v1/artifacts/*` URLs
+  advertised by `/v1/list/meta` no longer 404; `/v1/list/meta` no longer 500s
+  when the `publications` table is missing.
+- Public-list bloom filters are now sized from the actual entry count
+  (the fixed default was tuned for 10k entries and useless at 46k), and the
+  classify cache key covers every signal the model sees, so changed
+  follower counts / thread context invalidate cached verdicts.
+- Content-script memory leaks: per-page state (pending hides, anchors,
+  findings) is flushed on SPA navigation, scan loops are bound to the script
+  context, and cheap handle extraction avoids per-node fiber walks.
+
 ## [0.4.0] - 2026-05-28
 
 ### Added
@@ -100,6 +161,7 @@ otherwise.
 - GitHub Device Flow authentication for reporting and anti-abuse accounting.
 - Admin review queue, public list, whitelist, and audit log.
 
+[0.5.0]: https://github.com/foru17/make-x-great-again/releases/tag/v0.5.0
 [0.4.0]: https://github.com/foru17/make-x-great-again/releases/tag/v0.4.0
 [0.3.0]: https://github.com/foru17/make-x-great-again/releases/tag/v0.3.0
 [0.2.0]: https://github.com/foru17/make-x-great-again/releases/tag/v0.2.0

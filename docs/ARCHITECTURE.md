@@ -10,8 +10,9 @@ A public-good, semi-open, crowdsourced anti-spam system for X (Twitter):
 
 - Anyone installs the **Chrome extension**, browses X normally, and is
   passively warned about spam / porn-ad bots on the current page.
-- One-click **block** (user-initiated, never silently automatic) and one-click
-  **report**.
+- One-click **hide** (local `display:none`, user-initiated, reversible in
+  options — the extension never calls X's APIs). Reporting/共建 happens via
+  the website (GitHub-verified), not the extension.
 - A **Cloudflare-native service** curates verdicts and distributes a
   semi-public, forkable, auditable blocklist. **No self-hosted server.**
 
@@ -20,13 +21,17 @@ A public-good, semi-open, crowdsourced anti-spam system for X (Twitter):
 The extension must **not** call the online service per account while you
 scroll. Instead it is **local-first**:
 
-1. The confirmed blocklist is exported as a compact **bloom filter** artifact
-   (~1.2 MB per 1M entries; tens–hundreds of KB early on) on the CDN.
-2. The extension downloads it **once per session/day**, version-gated
-   (`304 Not Modified` ⇒ ~zero bytes), and checks every account **locally**
-   (<1 ms, no network).
-3. Only a bloom **hit** triggers one confirmatory API call; reports are
-   user-initiated and rare.
+1. The confirmed blocklist is **compiled into the extension package** at
+   build time (`extension/public/blacklist-data.json`, ~46.3k numeric ids);
+   every account is checked **locally** (<1 ms, no network).
+2. As shipped (v0.5.0) the extension makes **zero** network requests — list
+   updates ride each release. The compact **bloom filter** artifact on the
+   CDN (version-gated, `304 Not Modified` ⇒ ~zero bytes) remains the designed
+   runtime-update path; the edge already publishes artifacts
+   (`/v1/artifacts/*`, refreshed every 10 min) but the extension does not
+   pull them yet.
+3. Confirmatory `GET /v1/check` lookups serve the website and third-party
+   consumers, not the extension; reports are website-initiated and rare.
 
 Consequence: request volume to the service is ≈ constant regardless of how
 many users browse how much. 100 or 100k users scrolling generate almost no
@@ -40,12 +45,16 @@ Cloudflare R2/CDN has **zero egress fees**.
                 │  Browser extension (MV3, passive)            │
    you browse X │  • read visible accounts (no scraping)       │
   ───────────►  │  • local heuristic prefilter                 │
-                │  • LOCAL bloom check (artifact from CDN)      │
+                │  • LOCAL check vs bundled list (in package)   │
                 │  • popup: "本页发现 N 个 spam" + list         │
-                │  • [一键拉黑] (user gesture)  [一键上报]       │
-                └──────┬──────────────────┬───────────────────┘
-                       │ rare: confirm    │ POST /v1/report
-                       │ GET /v1/check    │
+                │  • [一键隐藏] (local display:none, 可撤销)     │
+                └─────────────────────────────────────────────┘
+                  (ZERO network requests — list ships in the
+                   package, updates with each release)
+
+           website / third-party consumers
+                       │ GET /v1/check    │ POST /v1/report
+                       │ (anonymous read) │ (GitHub-verified)
                        ▼                  ▼
                 ┌─────────────────────────────────────────────┐
                 │  Cloudflare Workers  (public API, edge)      │
@@ -82,10 +91,12 @@ Cloudflare R2/CDN has **zero egress fees**.
 ## Data flow
 
 1. Extension reads visible accounts → local heuristic flags candidates →
-   **local bloom** membership check (artifact cached from R2/CDN).
+   **local bundled-list** membership check (compiled into the package; no
+   network).
 2. Popup aggregates: "本页发现 N 个可疑账号" with per-account verdict.
-3. User chooses per account: **block** (extension drives X's native block on
-   the user's click — not fully automatic) and/or **report** →
+3. User chooses per account: **hide** (local `display:none` + a
+   `chrome.storage` record, reversible in options — the extension never
+   touches X's APIs). **Reports** come from the website (GitHub-verified) →
    `POST /v1/report`.
 4. Worker pipeline: dedupe → LLM classify (account-age / avatar / social
    graph / content) → confidence, written to D1.
@@ -123,8 +134,10 @@ they are kept handle-keyed with `id_resolved=false` until resolved.
 
 - `GET  /v1/health`
 - `GET  /v1/list/meta` → current version + R2/CDN artifact URL (the primary
-  path — extensions pull the artifact, not per-id queries)
-- `GET  /v1/check?ids=…` → confirmatory lookups for bloom hits only
+  path — consumers pull the artifact, not per-id queries; the shipped
+  extension instead bundles the list at build time)
+- `GET  /v1/check?ids=…` → per-id lookups for the website / third-party
+  consumers (the extension never calls it — it works from the bundled list)
 - `POST /v1/report` → `202`, deduped; **a report is a signal, not a verdict**
 - `POST /v1/appeal` → queues a removal review
 - internal/admin (authed): review & publish
@@ -166,7 +179,7 @@ light read + cron + static-artifact workload.
 | Component | Scope |
 |---|---|
 | Data contract | D1 schema + API surface + report-abuse / appeal policy |
-| Extension | CDN-first checks, per-page badge bubble, one-click block/report |
+| Extension | bundled-list local checks (zero network), per-page badge bubble, one-click local hide |
 | Classifier | LLM + human-review gate, runs on Workers |
 | Publish pipeline | Cron mirror → `data/*.json` in this repo + CDN |
 | Service plane | Workers API + D1 + Cron + SSR pages (no self-host) |

@@ -24,7 +24,7 @@ The moderation design protects three high-risk surfaces:
 
 | Tier | Who | Can do |
 |---|---|---|
-| **Anonymous** | any installed extension | **read only**: `/v1/check`, fetch public list/bloom. Cheap, cacheable, no abuse surface. Local heuristic + local cache still work. |
+| **Anonymous** | website visitors / third-party consumers | **read only**: `/v1/check`, fetch public list/bloom. Cheap, cacheable, no abuse surface. (The installed extension sits below even this tier: it works entirely from its bundled list + local heuristic and makes zero requests.) |
 | **Verified reporter** | trusted caller with a **GitHub** bearer token | `/v1/report` / `/v1/confirm`. Rate-limited & bannable per HMAC reporter fingerprint. |
 | **Admin (守门员)** | maintainer allowlist | moderation panel: approve / reject / remove. |
 
@@ -40,7 +40,8 @@ LLM classification is no longer a free anonymous endpoint.
   `reporter_fp = HMAC(REPORT_SALT, "gh:<id>")`, and rate-limits per
   fingerprint. Raw GitHub ids stay in request memory only.
 - `/v1/report` & `/v1/confirm` require a valid GitHub identity when
-  `REQUIRE_AUTH=1` → `401` otherwise. `/v1/check` stays anonymous.
+  `REQUIRE_AUTH=1` → `401` otherwise. `/v1/check` stays anonymous (for the
+  website and third-party consumers; the extension never calls it).
 - Cost: a free GitHub OAuth App.
 
 ## Report → AI → auto / queue → admin (the gatekeeper pipeline)
@@ -81,7 +82,7 @@ admin queue.
 
 | Piece | Notes |
 |---|---|
-| GitHub Device-Flow auth (ext) + Worker verify | Standard browser-extension login path |
+| GitHub auth (website / trusted tooling) + Worker verify | Token acquired outside the extension (the consumer extension ships with no login); Worker verifies the bearer token |
 | Gate `/v1/report` `/v1/confirm` by GitHub id | Prevents anonymous report abuse |
 | Protect `/v1/classify` from anonymous abuse | Keeps LLM cost bounded |
 | Report→AI re-score + review queue | Worker + D1 |
@@ -91,13 +92,16 @@ All on the existing Cloudflare stack.
 
 ## Current policy
 
-1. **`/v1/classify` = GitHub-authed when `REQUIRE_AUTH=1`.** Anonymous installs get
-   read-only public list (`/v1/check`) + local heuristic + local cache.
-   Server-side AI classification requires GitHub login. The server LLM key
-   is never an anonymous endpoint. (UX implication: not-logged-in users
-   don't get fresh AI verdicts on brand-new accounts — only known-list hits
-   + local heuristic. Logging in with GitHub unlocks AI analysis. This is
-   the accepted security trade-off.)
+1. **`/v1/classify` = GitHub-authed when `REQUIRE_AUTH=1`** (and rate-limited
+   to 20/h per caller). The anonymous read tier — website visitors and
+   third-party consumers — gets the read-only public list (`/v1/check`).
+   The installed extension works entirely from its bundled list + local
+   heuristic and makes no requests at all. Server-side AI classification
+   requires GitHub login via the website / trusted tooling; the server LLM
+   key is never an anonymous endpoint. (UX implication: extension users
+   only get known-list hits + local heuristic — fresh AI verdicts on
+   brand-new accounts happen on the website side. This is the accepted
+   security trade-off.)
 2. **Auto-publish = AI ≥ 0.9 AND ≥ 3 independent GitHub reporters.**
    Everything else → admin review queue. AI alone never auto-publishes
    (governance red line intact; the 3 real GitHub reporters are the human
@@ -134,11 +138,14 @@ code on `main`.
   `ADMIN_TOKEN` secret. Every decision writes `review_log`.
 
 ### Extension (consumer, no admin surface)
-- The shipped consumer extension is passive and local-list-only. Its background
-  script returns explicit disabled errors for `gh_start` / `gh_poll`, and there
-  is no report/confirm/classify write path in normal content scanning.
-- `误判?` posts anonymous `POST /v1/appeal` as a review signal. Appeals do not
-  unpublish rows; admin `remove` is still the human decision point.
+- The shipped consumer extension is passive and local-list-only (zero network
+  requests; the list is bundled into the package). Its background script
+  returns explicit disabled errors for `gh_start` / `gh_poll`, and there is
+  no report/confirm/classify write path in normal content scanning.
+- `误判?` opens the GitHub appeal issue template in a new tab — the extension
+  itself sends nothing. Server-side, `POST /v1/appeal` remains available as a
+  review signal (rate-limited 5/h per IP + per-handle daily dedupe). Appeals
+  do not unpublish rows; admin `remove` is still the human decision point.
 
 ### Admin console (standalone, never in the extension)
 - `GET /admin` serves a self-contained page (`services/edge/src/pages/admin.ts`);
@@ -179,8 +186,8 @@ code on `main`.
    transition.
 3. **`REQUIRE_AUTH` flip.** This is an owner-timed production operation:
    confirm trusted write clients can supply GitHub bearer tokens, then set
-   `wrangler secret put REQUIRE_AUTH` to `1`. The consumer extension remains
-   read-only and is unaffected for `/v1/check` and local-list usage.
+   `wrangler secret put REQUIRE_AUTH` to `1`. The consumer extension makes
+   no network requests at all (bundled local list), so it is unaffected.
 4. **`/v1/appeal` is implemented as a review signal.** Filing an appeal writes
    an `appeal_submitted` audit row and leaves the listing in place until a human
    admin decides `remove`, matching SPEC-T1's anti-delisting-abuse rule.
