@@ -384,6 +384,138 @@ test("legacy gh:<id> report aliases to the HMAC fingerprint and is not double-co
   assert.equal(db.reports.length, 1);
 });
 
+test("classify endpoint returns 429 once the per-reporter throttle is exhausted", async () => {
+  const db = new MockDB();
+  const fp = await reporterFp("classify|gh:42");
+  const now = Date.now();
+  for (let i = 0; i < 20; i++) db.rateLog.push({ fp, created_at: now - i * 1000 });
+  const res = await worker.fetch(
+    new Request("https://x.test/v1/classify", {
+      method: "POST",
+      headers: { authorization: "Bearer ok-token", "content-type": "application/json" },
+      body: JSON.stringify({ userId: "100", handle: "target" }),
+    }),
+    env(db),
+  );
+  assert.equal(res.status, 429);
+  assert.equal(db.rateLog.length, 20); // throttled request adds no sample
+});
+
+test("classify endpoint fails closed (503) when REPORT_SALT is unset", async () => {
+  const db = new MockDB();
+  const { REPORT_SALT: _salt, ...noSalt } = env(db);
+  const res = await worker.fetch(
+    new Request("https://x.test/v1/classify", {
+      method: "POST",
+      headers: { authorization: "Bearer ok-token", "content-type": "application/json" },
+      body: JSON.stringify({ userId: "100", handle: "target" }),
+    }),
+    noSalt,
+  );
+  assert.equal(res.status, 503);
+});
+
+test("classify endpoint returns 400 on a malformed body (invalid handle charset)", async () => {
+  const db = new MockDB();
+  const res = await worker.fetch(
+    new Request("https://x.test/v1/classify", {
+      method: "POST",
+      headers: { authorization: "Bearer ok-token", "content-type": "application/json" },
+      body: JSON.stringify({ handle: "bad|pipe" }),
+    }),
+    env(db),
+  );
+  assert.equal(res.status, 400);
+});
+
+test("report endpoint returns 400 on a malformed body instead of 500", async () => {
+  const db = new MockDB();
+  const res = await worker.fetch(
+    new Request("https://x.test/v1/report", {
+      method: "POST",
+      headers: { authorization: "Bearer ok-token", "content-type": "application/json" },
+      body: JSON.stringify({ handle: "target", recentTweets: "not-an-array" }),
+    }),
+    env(db),
+  );
+  assert.equal(res.status, 400);
+  assert.equal(db.reports.length, 0);
+});
+
+test("appeal endpoint returns 429 once the per-IP throttle is exhausted", async () => {
+  const db = new MockDB();
+  const fp = await reporterFp("appeal|ip:9.9.9.9");
+  const now = Date.now();
+  for (let i = 0; i < 5; i++) db.rateLog.push({ fp, created_at: now - i * 1000 });
+  const res = await worker.fetch(
+    new Request("https://x.test/v1/appeal", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "9.9.9.9" },
+      body: JSON.stringify({ handle: "target" }),
+    }),
+    env(db),
+  );
+  assert.equal(res.status, 429);
+});
+
+test("appeal endpoint under the throttle records a rate sample and answers", async () => {
+  const db = new MockDB();
+  const res = await worker.fetch(
+    new Request("https://x.test/v1/appeal", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "9.9.9.9" },
+      body: JSON.stringify({ handle: "target" }),
+    }),
+    env(db),
+  );
+  assert.equal(res.status, 200); // mock row is auto_pending_review → not_listed
+  assert.equal(db.rateLog.length, 1);
+  assert.equal(db.rateLog[0]?.fp, await reporterFp("appeal|ip:9.9.9.9"));
+});
+
+test("admin decide rejects an unknown action with 400 instead of mapping it to rejected", async () => {
+  const db = new MockDB();
+  const res = await worker.fetch(
+    new Request("https://x.test/v1/admin/decide", {
+      method: "POST",
+      headers: { "x-admin-token": "admin", "content-type": "application/json" },
+      body: JSON.stringify({ handle: "target", xUserId: "100", action: "nuke" }),
+    }),
+    { ...env(db), ADMIN_TOKEN: "admin" },
+  );
+  assert.equal(res.status, 400);
+  assert.equal(db.reviewLog.length, 0);
+});
+
+test("admin decide still accepts a known action (timing-safe token compare)", async () => {
+  const db = new MockDB();
+  const res = await worker.fetch(
+    new Request("https://x.test/v1/admin/decide", {
+      method: "POST",
+      headers: { "x-admin-token": "admin", "content-type": "application/json" },
+      body: JSON.stringify({ handle: "target", xUserId: "100", action: "approve" }),
+    }),
+    { ...env(db), ADMIN_TOKEN: "admin" },
+  );
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { ok: boolean; status: string };
+  assert.equal(body.ok, true);
+  assert.equal(body.status, "human_confirmed");
+});
+
+test("admin decide rejects a wrong token with 403", async () => {
+  const db = new MockDB();
+  const res = await worker.fetch(
+    new Request("https://x.test/v1/admin/decide", {
+      method: "POST",
+      headers: { "x-admin-token": "nope", "content-type": "application/json" },
+      body: JSON.stringify({ handle: "target", xUserId: "100", action: "approve" }),
+    }),
+    { ...env(db), ADMIN_TOKEN: "admin" },
+  );
+  assert.equal(res.status, 403);
+});
+
 test("admin backfill migrates legacy report, rate, and ban fingerprints", async () => {
   const db = new MockDB();
   db.reports.push({

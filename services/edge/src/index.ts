@@ -46,6 +46,11 @@ const AUTO_REPORTERS = 3; // distinct GitHub reporters required for auto-publish
 const REPORTER_MIN_AGE_DAYS = 90;
 const REPORT_WINDOW_MS = 60 * 60_000;
 const REPORT_MAX_PER_WINDOW = 10;
+// /v1/classify is the cost endpoint (paid LLM call + D1 writes) — cap it per
+// reporter fingerprint (or per IP when anonymous). /v1/appeal is fully
+// unauthenticated, so it gets a tighter per-IP cap.
+const CLASSIFY_MAX_PER_WINDOW = 20;
+const APPEAL_MAX_PER_WINDOW = 5;
 const BLOOM_SIZE = 65_536; // 8 KB bit array
 const BLOOM_HASHES = 7;
 const BLOOM_SHARD_SIZE = 500; // accounts per logical shard in the JSON artifact
@@ -131,7 +136,13 @@ const Signals = z.object({
   // present, must be the digit-only id — matches the Node-side schema in
   // `src/schema.ts` and tightens what was previously z.string().optional().
   userId: z.string().regex(/^\d+$/, "userId must be the X numeric id").optional(),
-  handle: z.string().min(1),
+  // Real X handles are 1-15 chars of [A-Za-z0-9_]. Accept one leading "@"
+  // (normalizeHandle strips it at write-time) but reject anything else — a
+  // handle containing "|" would corrupt the admin UI's "uid|handle" keys.
+  handle: z
+    .string()
+    .trim()
+    .regex(/^@?[A-Za-z0-9_]{1,15}$/, "handle must be a valid X handle"),
   displayName: z.string().default(""),
   bio: z.string().default(""),
   recentTweets: z.array(z.string()).max(20).default([]),
@@ -279,18 +290,32 @@ function reportEvidence(s: Signals): string {
   }).slice(0, 1000);
 }
 
+// Count rate_log entries for a fingerprint pair inside the window. Degrades
+// gracefully (count 0) when the rate_log table hasn't been migrated yet — a
+// partially-migrated DB must not 500 the public endpoints.
+async function rateLogCount(
+  env: Env,
+  keys: [string, string],
+  windowStart: number,
+): Promise<number> {
+  const row = await env.DB.prepare(
+    "SELECT count(*) n FROM rate_log WHERE fp IN (?,?) AND created_at>=?",
+  )
+    .bind(keys[0], keys[1], windowStart)
+    .first<{ n: number }>()
+    .catch((err) => {
+      console.error("rate_log lookup failed (treating as empty):", err);
+      return null;
+    });
+  return row?.n ?? 0;
+}
+
 async function reportRate(
   env: Env,
   aliases: [string, string],
   now: number,
 ): Promise<{ ok: boolean; remaining: number }> {
-  const windowStart = now - REPORT_WINDOW_MS;
-  const row = await env.DB.prepare(
-    "SELECT count(*) n FROM rate_log WHERE fp IN (?,?) AND created_at>=?",
-  )
-    .bind(aliases[0], aliases[1], windowStart)
-    .first<{ n: number }>();
-  const count = row?.n ?? 0;
+  const count = await rateLogCount(env, aliases, now - REPORT_WINDOW_MS);
   return {
     ok: count < REPORT_MAX_PER_WINDOW,
     remaining: Math.max(0, REPORT_MAX_PER_WINDOW - count),
@@ -301,7 +326,11 @@ async function recordReportRate(env: Env, fp: string, now: number): Promise<void
   await env.DB.batch([
     env.DB.prepare("INSERT INTO rate_log (fp, created_at) VALUES (?,?)").bind(fp, now),
     env.DB.prepare("DELETE FROM rate_log WHERE created_at<?").bind(now - REPORT_WINDOW_MS * 2),
-  ]);
+  ]).catch((err) => {
+    // Same degrade-gracefully contract as rateLogCount — losing one rate
+    // sample beats 500ing the public write path on a partially-migrated DB.
+    console.error("rate_log write failed (ignored):", err);
+  });
 }
 
 async function activeReporterBan(
@@ -319,8 +348,26 @@ async function activeReporterBan(
         LIMIT 1`,
     )
       .bind(aliases[0], aliases[1], now)
-      .first<{ id: number; reporter_fp: string; reason: string | null }>()) ?? null
+      .first<{ id: number; reporter_fp: string; reason: string | null }>()
+      .catch((err) => {
+        // reporter_bans arrived in a later migration — treat "table missing"
+        // as "no ban" instead of 500ing the public report path.
+        console.error("reporter_bans lookup failed (treating as no ban):", err);
+        return null;
+      })) ?? null
   );
+}
+
+/** Throttle key for endpoints that aren't tied to the report-alias pair.
+ *  Always salted (same fail-closed REPORT_SALT contract as reports): the
+ *  caller must 503 when this returns null rather than fall back to storing
+ *  a raw identity/IP in rate_log. */
+async function throttleFingerprint(env: Env, scope: string, id: string): Promise<string | null> {
+  return reporterFingerprint(env, `${scope}|${id}`);
+}
+
+async function throttleOk(env: Env, fp: string, now: number, max: number): Promise<boolean> {
+  return (await rateLogCount(env, [fp, fp], now - REPORT_WINDOW_MS)) < max;
 }
 
 interface AccountSignalSnapshot {
@@ -797,7 +844,25 @@ function statusForRuleAction(action: string): "human_confirmed" | "whitelisted" 
 }
 
 const app = new Hono<{ Bindings: Env }>();
-app.use("*", cors());
+
+// CORS is scoped to the public read/report surface only. The admin and agent
+// routes are same-origin (the /admin panel) or server-to-server, and must NOT
+// advertise wildcard cross-origin access.
+const publicCors = cors();
+for (const route of [
+  "/v1/health",
+  "/v1/check",
+  "/v1/classify",
+  "/v1/confirm",
+  "/v1/report",
+  "/v1/appeal",
+  "/v1/whitelist",
+  "/v1/list",
+  "/v1/list/*",
+  "/v1/artifacts/*",
+]) {
+  app.use(route, publicCors);
+}
 
 const HOUR_MS = 3600_000;
 const DAY_MS = 24 * HOUR_MS;
@@ -838,7 +903,7 @@ app.get("/v1/check", async (c) => {
     { hits },
     { headers: { "Cache-Control": "public, max-age=15, s-maxage=30" } },
   );
-  void caches.default.put(cacheKey, resp.clone());
+  c.executionCtx.waitUntil(caches.default.put(cacheKey, resp.clone()));
   return resp;
 });
 
@@ -846,7 +911,26 @@ app.post("/v1/classify", async (c) => {
   // Cost endpoint — GitHub identity required (when enforcement is on).
   const who = await requireReporter(c);
   if (!who) return c.json({ error: "github_login_required" }, 401);
-  const parsed = Signals.parse(await c.req.json());
+  let parsed: Signals;
+  try {
+    parsed = Signals.parse(await c.req.json());
+  } catch (err) {
+    return c.json({ error: "bad_request", detail: (err as Error).message }, 400);
+  }
+  // Throttle — this is the paid-LLM + D1-write path, so it must never be
+  // unlimited. Keyed by a salted fingerprint of the GitHub identity (or the
+  // connecting IP when anonymous); fails closed when REPORT_SALT is unset so
+  // raw identities never land in rate_log.
+  const rateId = who.id === "anon" ? `ip:${c.req.header("cf-connecting-ip") ?? "unknown"}` : who.id;
+  const rateFp = await throttleFingerprint(c.env, "classify", rateId);
+  if (!rateFp) {
+    return c.json({ error: "report_salt_required", detail: "REPORT_SALT not configured" }, 503);
+  }
+  const rateNow = Date.now();
+  if (!(await throttleOk(c.env, rateFp, rateNow, CLASSIFY_MAX_PER_WINDOW))) {
+    return c.json({ error: "rate_limited", retryAfterMs: REPORT_WINDOW_MS }, 429);
+  }
+  await recordReportRate(c.env, rateFp, rateNow);
   const s: Signals = { ...parsed, handle: normalizeHandle(parsed.handle) };
   if (viewerScopedIgnore(s)) {
     return c.json({
@@ -977,7 +1061,12 @@ app.post("/v1/classify", async (c) => {
 async function submitReport(c: Ctx, source: string) {
   const who = await requireReporter(c);
   if (!who) return c.json({ error: "github_login_required" }, 401);
-  const parsed = Signals.parse(await c.req.json());
+  let parsed: Signals;
+  try {
+    parsed = Signals.parse(await c.req.json());
+  } catch (err) {
+    return c.json({ error: "bad_request", detail: (err as Error).message }, 400);
+  }
   const s: Signals = { ...parsed, handle: normalizeHandle(parsed.handle) };
   if (viewerScopedIgnore(s)) {
     return c.json({ ok: true, status: "viewer_ignored", reporters: 0, auto: false, ignored: true });
@@ -985,7 +1074,11 @@ async function submitReport(c: Ctx, source: string) {
   const uid = s.userId ?? null;
   const now = Date.now();
   const fp = await reporterFingerprint(c.env, who.id);
-  if (!fp) return c.json({ error: "report_salt_required" }, 503);
+  // Fail closed: without the salt we'd be storing raw `gh:<id>` identities,
+  // which SECURITY.md explicitly promises never happens.
+  if (!fp) {
+    return c.json({ error: "report_salt_required", detail: "REPORT_SALT not configured" }, 503);
+  }
   const aliases = reporterAliases(fp, who.id);
 
   const ban = await activeReporterBan(c.env, aliases, now);
@@ -1095,7 +1188,10 @@ app.post("/v1/confirm", (c) => submitReport(c, "block"));
 app.post("/v1/report", (c) => submitReport(c, "report"));
 
 const AppealBody = z.object({
-  handle: z.string().min(1),
+  handle: z
+    .string()
+    .trim()
+    .regex(/^@?[A-Za-z0-9_]{1,15}$/, "handle must be a valid X handle"),
   userId: z.string().regex(/^\d+$/).optional(),
   reason: z.string().max(500).optional(),
 });
@@ -1107,6 +1203,18 @@ app.post("/v1/appeal", async (c) => {
   } catch (err) {
     return c.json({ error: "bad_request", detail: (err as Error).message }, 400);
   }
+  // Unauthenticated endpoint → per-IP throttle (salted fingerprint, never the
+  // raw IP). Fails closed when REPORT_SALT is unset, like the report path.
+  const ip = c.req.header("cf-connecting-ip") ?? "unknown";
+  const rateFp = await throttleFingerprint(c.env, "appeal", `ip:${ip}`);
+  if (!rateFp) {
+    return c.json({ error: "report_salt_required", detail: "REPORT_SALT not configured" }, 503);
+  }
+  const now = Date.now();
+  if (!(await throttleOk(c.env, rateFp, now, APPEAL_MAX_PER_WINDOW))) {
+    return c.json({ error: "rate_limited", retryAfterMs: REPORT_WINDOW_MS }, 429);
+  }
+  await recordReportRate(c.env, rateFp, now);
   const handle = normalizeHandle(body.handle);
   const uid = body.userId ?? null;
   const cur = await findAccount(c.env, handle, uid);
@@ -1115,7 +1223,18 @@ app.post("/v1/appeal", async (c) => {
     return c.json({ ok: true, status: "not_listed", currentStatus: cur.status });
   }
 
-  const now = Date.now();
+  // Dedupe: one queued appeal per (handle, 24h). Repeat submissions still get
+  // the same 202 so callers can't probe, but the review_log stays clean.
+  const dup = await c.env.DB.prepare(
+    `SELECT 1 AS one FROM review_log
+      WHERE action='appeal_submitted' AND lower(handle)=lower(?) AND at>=?
+      LIMIT 1`,
+  )
+    .bind(cur.handle, now - DAY_MS)
+    .first<{ one: number }>()
+    .catch(() => null);
+  if (dup) return c.json({ ok: true, status: "appeal_queued", duplicate: true }, 202);
+
   const reasonHash = body.reason?.trim() ? ` reason_hash=${hash(body.reason.trim())}` : "";
   await c.env.DB.prepare(
     "INSERT INTO review_log (x_user_id,handle,action,actor,note,at) VALUES (?,?,?,?,?,?)",
@@ -1133,9 +1252,26 @@ app.post("/v1/appeal", async (c) => {
 });
 
 // ---- Admin (守门员) ----
-function admin(c: Ctx): boolean {
+// Constant-time string comparison: hash both sides so length and content
+// differences can't be probed via timing. SHA-256 digests are fixed-width,
+// and the XOR fold below never early-exits.
+async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [da, db] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(a)),
+    crypto.subtle.digest("SHA-256", enc.encode(b)),
+  ]);
+  const ua = new Uint8Array(da);
+  const ub = new Uint8Array(db);
+  let diff = 0;
+  for (let i = 0; i < ua.length; i++) diff |= (ua[i] ?? 0) ^ (ub[i] ?? 0);
+  return diff === 0;
+}
+
+async function admin(c: Ctx): Promise<boolean> {
   const t = c.env.ADMIN_TOKEN;
-  return !!t && c.req.raw.headers.get("x-admin-token") === t;
+  const got = c.req.raw.headers.get("x-admin-token") ?? "";
+  return !!t && !!got && (await timingSafeEqual(got, t));
 }
 
 const ReporterBanBody = z
@@ -1159,7 +1295,7 @@ async function reporterFpForAdmin(
 }
 
 app.get("/v1/admin/reporter-bans", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   const rows = await c.env.DB.prepare(
     `SELECT id, reporter_fp, reason, created_by, created_at, expires_at
        FROM reporter_bans
@@ -1170,7 +1306,7 @@ app.get("/v1/admin/reporter-bans", async (c) => {
 });
 
 app.post("/v1/admin/reporter-bans", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   let body: z.infer<typeof ReporterBanBody>;
   try {
     body = ReporterBanBody.parse(await c.req.json());
@@ -1190,7 +1326,7 @@ app.post("/v1/admin/reporter-bans", async (c) => {
 });
 
 app.delete("/v1/admin/reporter-bans/:id", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   const id = Number(c.req.param("id"));
   if (!Number.isFinite(id)) return c.json({ error: "bad_id" }, 400);
   const res = await c.env.DB.prepare("DELETE FROM reporter_bans WHERE id=?").bind(id).run();
@@ -1198,7 +1334,7 @@ app.delete("/v1/admin/reporter-bans/:id", async (c) => {
 });
 
 app.post("/v1/admin/reporter-fingerprints/backfill", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   if (!c.env.REPORT_SALT?.trim()) return c.json({ error: "report_salt_required" }, 503);
   const rows = await c.env.DB.prepare(
     `SELECT reporter_fp AS fp FROM reports WHERE reporter_fp LIKE 'gh:%'
@@ -1324,17 +1460,34 @@ interface SortCursor {
   rid: number;
 }
 
+// btoa()/atob() only handle latin-1, but sort_value can carry raw CJK strings
+// (account_created_at keeps unparseable date strings verbatim — see
+// normalizedAccountCreatedAt). Round-trip through UTF-8 bytes instead.
+function b64EncodeUtf8(s: string): string {
+  const bytes = new TextEncoder().encode(s);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i] ?? 0);
+  return btoa(bin);
+}
+
+function b64DecodeUtf8(s: string): string {
+  const bin = atob(s);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
 function encodeSortCursor(
   row: { sort_value: string | number | null; rid: number },
   time: number,
 ): string {
-  return btoa(JSON.stringify([row.sort_value ?? null, time, row.rid]));
+  return b64EncodeUtf8(JSON.stringify([row.sort_value ?? null, time, row.rid]));
 }
 
 function decodeSortCursor(raw: string | null): SortCursor | null {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(atob(raw));
+    const parsed = JSON.parse(b64DecodeUtf8(raw));
     if (!Array.isArray(parsed) || parsed.length < 3) return null;
     const [value, tie, rid] = parsed;
     if (value !== null && typeof value !== "string" && typeof value !== "number") return null;
@@ -1374,7 +1527,7 @@ function sortCursorWhere(sort: AdminSort, timeColumn: string, cursor: SortCursor
 }
 
 app.get("/v1/admin/queue", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   // Keyset pagination on last_scored DESC. Same dedup-by-handle CTE as before;
   // the cursor is the last_scored of the last row in the previous page, so the
   // next page strictly less-than. Total queue size is exposed via /v1/admin/stats
@@ -1505,7 +1658,7 @@ app.get("/v1/admin/queue", async (c) => {
 // view that backs /v1/admin/queue. Lets the admin panel tab chips show the
 // real total instead of "however many we've loaded into memory".
 app.get("/v1/admin/stats", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   const statusRows = await c.env.DB.prepare(
     "SELECT status, count(*) AS n FROM accounts GROUP BY status",
   ).all<{ status: string; n: number }>();
@@ -1640,13 +1793,22 @@ function reviewLogStmt(
   ).bind(xUserId, handle, action, "admin", note, now);
 }
 
+const DecideBody = z.object({
+  handle: z.string().min(1),
+  xUserId: z.string().regex(/^\d+$/).optional(),
+  // Unknown actions used to silently map to "rejected" via statusForAction —
+  // they are an explicit 400 now.
+  action: z.enum(["approve", "reject", "remove", "whitelist"]),
+});
+
 app.post("/v1/admin/decide", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
-  const body = (await c.req.json()) as {
-    handle: string;
-    xUserId?: string;
-    action: DecideAction;
-  };
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
+  let body: z.infer<typeof DecideBody>;
+  try {
+    body = DecideBody.parse(await c.req.json());
+  } catch (err) {
+    return c.json({ error: "bad_request", detail: (err as Error).message }, 400);
+  }
   const handle = normalizeHandle(body.handle);
   const xUserId = body.xUserId;
   const action = body.action;
@@ -1679,7 +1841,7 @@ const DecideBatchBody = z.object({
 });
 
 app.post("/v1/admin/decide-batch", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   let body: z.infer<typeof DecideBatchBody>;
   try {
     body = DecideBatchBody.parse(await c.req.json());
@@ -1716,7 +1878,7 @@ const WhitelistBatchBody = z.object({
 });
 
 app.delete("/v1/admin/whitelist-batch", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   let body: z.infer<typeof WhitelistBatchBody>;
   try {
     body = WhitelistBatchBody.parse(await c.req.json());
@@ -1745,7 +1907,7 @@ app.delete("/v1/admin/whitelist-batch", async (c) => {
 // Paginated AI/decision audit trail. Keyset pagination on the id PK
 // (DESC) — O(limit), no OFFSET scan, cheap on D1 at any size.
 app.get("/v1/admin/log", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   const before = Number(c.req.query("before")) || null;
   const limit = Math.min(100, Number(c.req.query("limit")) || 50);
   const rows = await c.env.DB.prepare(
@@ -1790,7 +1952,7 @@ const KeywordRulePatch = z.object({
 });
 
 app.get("/v1/admin/keyword-rules", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   const rows = await c.env.DB.prepare(
     "SELECT * FROM keyword_rules ORDER BY enabled DESC, hit_count DESC, id DESC",
   ).all<KeywordRule>();
@@ -1798,7 +1960,7 @@ app.get("/v1/admin/keyword-rules", async (c) => {
 });
 
 app.post("/v1/admin/keyword-rules", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   let body: z.infer<typeof KeywordRuleCreate>;
   try {
     body = KeywordRuleCreate.parse(await c.req.json());
@@ -1819,7 +1981,7 @@ app.post("/v1/admin/keyword-rules", async (c) => {
 });
 
 app.patch("/v1/admin/keyword-rules/:id", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   const id = Number(c.req.param("id"));
   if (!Number.isFinite(id)) return c.json({ error: "bad_id" }, 400);
   let body: z.infer<typeof KeywordRulePatch>;
@@ -1846,7 +2008,7 @@ app.patch("/v1/admin/keyword-rules/:id", async (c) => {
 });
 
 app.delete("/v1/admin/keyword-rules/:id", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   const id = Number(c.req.param("id"));
   if (!Number.isFinite(id)) return c.json({ error: "bad_id" }, 400);
   await c.env.DB.prepare("DELETE FROM keyword_rules WHERE id=?").bind(id).run();
@@ -1858,7 +2020,7 @@ app.delete("/v1/admin/keyword-rules/:id", async (c) => {
 // Doesn't write anything; doesn't bump hit_count. Used by the admin UI's
 // "试一下" button before commit. Returns count + up-to-5 sample handles.
 app.post("/v1/admin/keyword-rules/preview", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   const body = (await c.req.json()) as {
     pattern: string;
     field: "handle" | "display_name" | "bio" | "tweet" | "any";
@@ -1897,7 +2059,7 @@ app.post("/v1/admin/keyword-rules/preview", async (c) => {
 // and bumps the rule's hit_count. Returns a summary so the maintainer
 // can see how much the new rule cleaned up.
 app.post("/v1/admin/keyword-rules/apply-to-queue", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   const rules = await getKeywordRules(c.env);
   if (!rules.length) return c.json({ ok: true, matched: 0, perRule: [] });
 
@@ -2045,8 +2207,13 @@ const WhitelistAdd = z.object({
 });
 
 app.post("/v1/admin/whitelist", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
-  const body = WhitelistAdd.parse(await c.req.json());
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
+  let body: z.infer<typeof WhitelistAdd>;
+  try {
+    body = WhitelistAdd.parse(await c.req.json());
+  } catch (err) {
+    return c.json({ error: "bad_request", detail: (err as Error).message }, 400);
+  }
   const uid = body.xUserId ?? null;
   const now = Date.now();
   const reasons = JSON.stringify(["whitelisted by admin", body.note].filter(Boolean));
@@ -2080,7 +2247,7 @@ app.post("/v1/admin/whitelist", async (c) => {
 });
 
 app.delete("/v1/admin/whitelist", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   const handle = c.req.query("handle") ?? "";
   const xUserId = c.req.query("xUserId") || null;
   if (!handle) return c.json({ error: "handle_required" }, 400);
@@ -2103,7 +2270,7 @@ app.delete("/v1/admin/whitelist", async (c) => {
 });
 
 app.get("/v1/admin/whitelist", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   const sort = adminSort(c.req.query("sort"));
   const cursor = decodeSortCursor(c.req.query("before") || null);
   const cursorWhere = sortCursorWhere(sort, "last_scored", cursor);
@@ -2164,7 +2331,7 @@ app.get("/v1/admin/whitelist", async (c) => {
 // /v1/list but admin-scoped (returns more columns + uncacheable) so the
 // /admin panel can iterate it for "moved here by mistake" cleanup.
 app.get("/v1/admin/blacklist", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   const sort = adminSort(c.req.query("sort"));
   const cursor = decodeSortCursor(c.req.query("before") || null);
   const cursorWhere = sortCursorWhere(sort, "published_at", cursor);
@@ -2252,15 +2419,24 @@ app.get("/v1/artifacts/:key", async (c) => {
   const key = c.req.param("key");
   if (!key || key.includes("..") || key.includes("/")) return c.json({ error: "invalid_key" }, 400);
 
+  // Artifacts are immutable per version key — Workers on custom domains don't
+  // auto-cache, so use the Cache API explicitly (same pattern as /v1/check).
+  const cacheKey = new URL(c.req.url);
+  cacheKey.search = "";
+  const cached = await caches.default.match(cacheKey.toString());
+  if (cached) return cached;
+
   const obj = await c.env.ARTIFACTS.get(key);
   if (!obj) return c.json({ error: "not_found" }, 404);
 
-  return new Response(obj.body, {
+  const resp = new Response(obj.body, {
     headers: {
       "Content-Type": key.endsWith(".json") ? "application/json" : "application/octet-stream",
       "Cache-Control": "public, max-age=300, s-maxage=600",
     },
   });
+  c.executionCtx.waitUntil(caches.default.put(cacheKey.toString(), resp.clone()));
+  return resp;
 });
 
 app.get("/v1/list/meta", async (c) => {
@@ -2320,7 +2496,7 @@ app.get("/v1/list/meta", async (c) => {
       "Cache-Control": "public, max-age=30, s-maxage=60",
     },
   });
-  void caches.default.put(cacheKey, resp.clone());
+  c.executionCtx.waitUntil(caches.default.put(cacheKey, resp.clone()));
   return resp;
 });
 
@@ -2407,6 +2583,26 @@ app.get("/v1/list", async (c) => {
   const limit = Math.min(100, Math.max(1, Number(c.req.query("limit")) || 100));
   const before = Number(c.req.query("before")) || null;
   const since = Number(c.req.query("since")) || null;
+
+  // Workers on custom domains don't auto-cache despite s-maxage — wrap with
+  // the Cache API like /v1/check, keyed on the canonicalized query so
+  // equivalent URLs share a slot. Short TTL (30s) keeps the board fresh.
+  const cacheUrl = new URL(c.req.url);
+  cacheUrl.search = new URLSearchParams({
+    limit: String(limit),
+    before: String(before ?? ""),
+    since: String(since ?? ""),
+  }).toString();
+  const cacheKey = cacheUrl.toString();
+  const cached = await caches.default.match(cacheKey);
+  if (cached) {
+    const cachedEtag = cached.headers.get("etag");
+    if (cachedEtag && c.req.header("if-none-match") === cachedEtag) {
+      return new Response(null, { status: 304, headers: { ETag: cachedEtag } });
+    }
+    return cached;
+  }
+
   const rows = await c.env.DB.prepare(
     `WITH rep AS (
        SELECT handle, x_user_id, count(DISTINCT reporter_fp) AS n
@@ -2443,10 +2639,15 @@ app.get("/v1/list", async (c) => {
   const nextBefore = list.length === limit ? list[list.length - 1].published_at : null;
   const latestAt = list[0]?.published_at ?? null;
   const etag = `W/"l${latestAt ?? 0}-n${list.length}-b${before ?? 0}-s${since ?? 0}"`;
-  c.header("Cache-Control", "public, max-age=10, s-maxage=30");
-  c.header("ETag", etag);
-  if (c.req.header("if-none-match") === etag) return c.body(null, 304);
-  return c.json({ list, nextBefore, latestAt });
+  const resp = Response.json(
+    { list, nextBefore, latestAt },
+    { headers: { "Cache-Control": "public, max-age=10, s-maxage=30", ETag: etag } },
+  );
+  c.executionCtx.waitUntil(caches.default.put(cacheKey, resp.clone()));
+  if (c.req.header("if-none-match") === etag) {
+    return new Response(null, { status: 304, headers: { ETag: etag } });
+  }
+  return resp;
 });
 
 // CSP for the SSR HTML pages — strict by default, with X's avatar CDN +
@@ -2491,9 +2692,14 @@ app.get("/admin", (c) => {
 // Disabled (no-op) when WHITELIST_SYNC_TOKEN is unset — the rest of the
 // system works fine without it; this is purely a transparency + audit
 // enhancement. Cron trigger in wrangler.toml.
-async function mirrorToGitHub(env: Env): Promise<void> {
+type MirrorPublishResult = "skipped" | "committed" | "failed" | "disabled";
+
+async function mirrorToGitHub(
+  env: Env,
+): Promise<{ whitelist: MirrorPublishResult; blacklist: MirrorPublishResult }> {
   const token = env.WHITELIST_SYNC_TOKEN;
-  if (!token) return; // PAT not provided yet — mirror disabled.
+  // PAT not provided yet — mirror disabled.
+  if (!token) return { whitelist: "disabled", blacklist: "disabled" };
   const repo = env.WHITELIST_SYNC_REPO ?? "foru17/make-x-great-again";
 
   /** UTF-8 safe base64 (btoa() only handles latin-1). Uses TextEncoder rather
@@ -2639,7 +2845,7 @@ async function mirrorToGitHub(env: Env): Promise<void> {
     );
   }
 
-  await publish(
+  const whitelist = await publish(
     "data/whitelist/v1.json",
     {
       schema: 1,
@@ -2654,7 +2860,7 @@ async function mirrorToGitHub(env: Env): Promise<void> {
     `data(whitelist): sync · ${wlCount} total · ${today}`,
   );
 
-  await publish(
+  const blacklist = await publish(
     "data/blacklist/v1.json",
     {
       schema: 1,
@@ -2673,6 +2879,8 @@ async function mirrorToGitHub(env: Env): Promise<void> {
     },
     `data(blacklist): sync · ${blCount} total · ${today}`,
   );
+
+  return { whitelist, blacklist };
 }
 
 // =========================================================================
@@ -2690,12 +2898,12 @@ async function mirrorToGitHub(env: Env): Promise<void> {
 //
 // Auth: Bearer <AGENT_TOKEN> (independent secret from ADMIN_TOKEN — easier
 // to rotate, smaller blast radius).
-function agent(c: Ctx): { ok: true; agentId: string } | { ok: false } {
+async function agent(c: Ctx): Promise<{ ok: true; agentId: string } | { ok: false }> {
   const t = c.env.AGENT_TOKEN;
   if (!t) return { ok: false };
   const auth = c.req.raw.headers.get("authorization") ?? "";
   const tok = auth.replace(/^Bearer\s+/i, "").trim();
-  if (tok !== t) return { ok: false };
+  if (!tok || !(await timingSafeEqual(tok, t))) return { ok: false };
   // X-Agent-Id is a self-identifier (e.g. "hermes", "claude-luolei-laptop").
   // Used for audit + per-agent throttling later; doesn't grant authority.
   const id = (c.req.raw.headers.get("x-agent-id") ?? "").trim().toLowerCase();
@@ -2708,7 +2916,7 @@ function agent(c: Ctx): { ok: true; agentId: string } | { ok: false } {
 // or scored against a stale signals_hash. Ordered last_scored DESC so fresh
 // items get attention first. Capped to 100 per call to bound work.
 app.get("/v1/agent/queue", async (c) => {
-  const a = agent(c);
+  const a = await agent(c);
   if (!a.ok) return c.json({ error: "forbidden" }, 403);
   const limit = Math.min(100, Math.max(1, Number(c.req.query("limit")) || 30));
   const rows = await c.env.DB.prepare(
@@ -2777,7 +2985,7 @@ function isAgentFailureAttempt(body: z.infer<typeof AgentDecideBody>): boolean {
 }
 
 app.post("/v1/agent/decide", async (c) => {
-  const a = agent(c);
+  const a = await agent(c);
   if (!a.ok) return c.json({ error: "forbidden" }, 403);
   let body: z.infer<typeof AgentDecideBody>;
   try {
@@ -2880,7 +3088,7 @@ app.post("/v1/agent/decide", async (c) => {
 // GET /v1/agent/stats — quick "what has the agent been doing" health check.
 // Useful for the dashboard, the cron's startup self-check, and ops.
 app.get("/v1/agent/stats", async (c) => {
-  const a = agent(c);
+  const a = await agent(c);
   if (!a.ok) return c.json({ error: "forbidden" }, 403);
   const byStatus = await c.env.DB.prepare(
     `SELECT status, COUNT(*) n FROM accounts
@@ -2920,7 +3128,7 @@ app.get("/v1/agent/stats", async (c) => {
 // Returns the agent-staged rows so /admin can render them with full
 // agent reasoning (label, confidence, fired_signals, evidence, notes).
 app.get("/v1/admin/agent-list", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   const bucket = (c.req.query("bucket") || "").trim();
   const map: Record<string, string> = {
     blacklist: "agent_blacklist",
@@ -3032,7 +3240,7 @@ function agentPromoteStmts(
 }
 
 app.post("/v1/admin/agent-promote", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   let body: z.infer<typeof AgentPromoteBody>;
   try {
     body = AgentPromoteBody.parse(await c.req.json());
@@ -3071,7 +3279,7 @@ app.post("/v1/admin/agent-promote", async (c) => {
 });
 
 app.post("/v1/admin/agent-promote-batch", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   let body: z.infer<typeof AgentPromoteBatch>;
   try {
     body = AgentPromoteBatch.parse(await c.req.json());
@@ -3113,12 +3321,14 @@ app.post("/v1/admin/agent-promote-batch", async (c) => {
  *  you don't want to wait for the next 6h cron tick. Same code path as the
  *  scheduled handler; cron just calls mirrorToGitHub directly. */
 app.post("/v1/admin/sync-mirror", async (c) => {
-  if (!admin(c)) return c.json({ error: "forbidden" }, 403);
+  if (!(await admin(c))) return c.json({ error: "forbidden" }, 403);
   if (!c.env.WHITELIST_SYNC_TOKEN) {
     return c.json({ error: "mirror_disabled", reason: "WHITELIST_SYNC_TOKEN not set" }, 503);
   }
-  await mirrorToGitHub(c.env);
-  return c.json({ ok: true });
+  const results = await mirrorToGitHub(c.env);
+  const failed = results.whitelist === "failed" || results.blacklist === "failed";
+  if (failed) return c.json({ ok: false, error: "mirror_failed", results }, 502);
+  return c.json({ ok: true, results });
 });
 
 async function publishArtifacts(env: Env): Promise<void> {
@@ -3225,8 +3435,15 @@ async function publishArtifacts(env: Env): Promise<void> {
 
 export default {
   fetch: app.fetch,
-  scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): void {
-    ctx.waitUntil(mirrorToGitHub(env).catch((e) => console.warn("mirror error", e)));
-    ctx.waitUntil(publishArtifacts(env).catch((e) => console.warn("artifact publish error", e)));
+  scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): void {
+    // Dispatch by trigger (must match wrangler.toml [triggers].crons):
+    //   "0 */6 * * *"  → GitHub mirror only. Running it on every trigger was
+    //                    why the data repo got a sync commit every 10 minutes.
+    //   "*/10 * * * *" → R2 artifact publish (cheap, diff-tolerant).
+    if (event.cron === "0 */6 * * *") {
+      ctx.waitUntil(mirrorToGitHub(env).catch((e) => console.warn("mirror error", e)));
+    } else {
+      ctx.waitUntil(publishArtifacts(env).catch((e) => console.warn("artifact publish error", e)));
+    }
   },
 };

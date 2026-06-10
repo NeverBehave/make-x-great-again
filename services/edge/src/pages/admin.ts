@@ -655,7 +655,15 @@ const SCRIPT = String.raw`
     var parts=k.split('|'),xUserId=parts[0]||undefined,handle=parts[1];
     rowEl.classList.add('removing');
     api('/v1/admin/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({handle:handle,xUserId:xUserId,action:action})})
-      .then(function(){
+      .then(function(res){
+        // Only prune local state on a confirmed 2xx — a 403/500 must keep the
+        // row visible and tell the maintainer instead of lying about success.
+        if(!res.ok){
+          rowEl.classList.remove('removing');
+          setStatus('操作失败：HTTP '+res.status);
+          setTimeout(function(){setStatus('')},3500);
+          return;
+        }
         queue=queue.filter(function(a){return key(a)!==k});sel.delete(k);
         // Optimistic chip decrement so the count drops immediately; the next
         // refreshStats() reconciles against the server.
@@ -666,6 +674,11 @@ const SCRIPT = String.raw`
           var nEl=b.querySelector('.n');if(nEl)nEl.textContent=n;
         });
         refreshStats();
+      })
+      .catch(function(){
+        rowEl.classList.remove('removing');
+        setStatus('操作失败：网络错误');
+        setTimeout(function(){setStatus('')},3500);
       });
   }
   // Translate the local sel/wlSel/blSel key strings (which encode as
@@ -883,7 +896,7 @@ const SCRIPT = String.raw`
         if(j&&j.ok){
           var lines=(j.perRule||[]).map(function(p){
             var rule=rulesList.find(function(x){return x.id===p.id});
-            return '· '+(rule?rule.pattern:'rule#'+p.id)+'：'+p.hits+' 条';
+            return '· '+(rule?E(rule.pattern):'rule#'+p.id)+'：'+p.hits+' 条';
           }).join('\n');
           mxModal.confirm({
             title:'扫描完成',
@@ -1701,11 +1714,22 @@ const SCRIPT = String.raw`
       if(!ok)return;
       rowEl.classList.add('removing');
       api('/v1/admin/decide',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({handle:handle,xUserId:xUserId,action:'whitelist'})})
-        .then(function(){
+        .then(function(res){
+          if(!res.ok){
+            rowEl.classList.remove('removing');
+            setStatus('加白名单失败：HTTP '+res.status);
+            setTimeout(function(){setStatus('')},3500);
+            return;
+          }
           queue=queue.filter(function(a){return key(a)!==k});sel.delete(k);
           if(stats.queue!=null){stats.queue=Math.max(0,stats.queue-1);var c=$('cQ');if(c)c.textContent=fmtN(stats.queue)}
           renderRows();
           refreshStats();
+        })
+        .catch(function(){
+          rowEl.classList.remove('removing');
+          setStatus('加白名单失败：网络错误');
+          setTimeout(function(){setStatus('')},3500);
         });
     });
   }
