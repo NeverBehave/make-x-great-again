@@ -1,17 +1,11 @@
-import { isBlockedSync, warm as warmBlocklist, addBlocked } from "../lib/blocklist";
+import { addBlocked, isBlockedSync, warm as warmBlocklist } from "../lib/blocklist";
 import { BRAND } from "../lib/brand";
-import { onSettingsChange, getSettings } from "../lib/settings";
-import { bumpStats } from "../lib/store";
+import { type Cached, cacheGet, signalsHash } from "../lib/cache";
+import { extractFromArticle, extractProfile, extractThreadTopic } from "../lib/detect";
+import { type IndexEntry, lookupLocal, warmLocalIndex } from "../lib/local-index";
+import { getSettings, onSettingsChange } from "../lib/settings";
 import { bumpStat } from "../lib/stats";
-import { type Cached, cacheGet, cacheSet, signalsHash } from "../lib/cache";
-import {
-  AUTO_THRESHOLD,
-  extractFromArticle,
-  extractProfile,
-  extractThreadTopic,
-  heuristic,
-} from "../lib/detect";
-import { lookupLocal, warmLocalIndex, type IndexEntry } from "../lib/local-index";
+import { addBlockRecord, bumpStats } from "../lib/store";
 import type { Signals, Verdict } from "../lib/types";
 import {
   type BadgeSource,
@@ -19,40 +13,29 @@ import {
   STYLE,
   createBadge,
   createBubble,
-  createStatusBadge,
 } from "../lib/ui";
 
-async function submitAppeal(sig: Signals): Promise<void> {
-  try {
-    const s = await getSettings();
-    const base = s.edgeBase || BRAND.edgeBase;
-    await fetch(`${base}/v1/appeal`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        handle: sig.handle,
-        ...(sig.userId ? { userId: sig.userId } : {}),
-        reason: "extension appeal button",
-      }),
-    });
-  } catch (err) {
-    console.warn("[mxga] appeal failed", err);
-  }
+/** "误判申诉" — opens the GitHub appeal issue template. Zero remote requests
+ *  from the extension itself; the user files the appeal on GitHub. */
+function openAppeal(): void {
+  window.open(BRAND.appealNewIssue, "_blank", "noopener");
 }
-
-/** Send a message to the background script (admin-only: GitHub auth, health). */
-function send<T = unknown>(msg: unknown): Promise<{ ok: boolean; data?: T; error?: string }> {
-  return new Promise((r) =>
-    chrome.runtime.sendMessage(msg, (resp: { ok: boolean; data?: T; error?: string } | undefined) =>
-      r(resp ?? { ok: false }),
-    ),
-  );
-}
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r));
 
 function articleOf(node: Element | null): HTMLElement | null {
   return (node?.closest("article") as HTMLElement) ?? null;
+}
+
+/** Cheap author handle from the User-Name link href — no fiber walk, no
+ *  innerText. Used both as the scan() skip key and to re-verify a captured
+ *  anchor before a delayed hide fires (X recycles article nodes). */
+function handleFromArticle(art: HTMLElement): string | undefined {
+  const nameBlock = art.querySelector<HTMLElement>('[data-testid="User-Name"]');
+  if (!nameBlock) return undefined;
+  for (const a of nameBlock.querySelectorAll<HTMLAnchorElement>('a[href^="/"]')) {
+    const s = (a.getAttribute("href") ?? "").split("/").filter(Boolean);
+    if (s.length === 1 && /^[A-Za-z0-9_]{1,15}$/.test(s[0] ?? "")) return s[0];
+  }
+  return undefined;
 }
 
 function hideTweet(node: Element | null) {
@@ -79,22 +62,6 @@ function clearMounts(anchor: HTMLElement) {
     .forEach((n) => n.remove());
 }
 
-/** Lightweight "queued" marker — NOT a final mount, so scan() revisits it
- *  once the token bucket refills (newly loaded comments never get stuck). */
-function mountStatus(anchor: HTMLElement, kind: "analyzing" | "pending") {
-  const cls = kind === "pending" ? "xss-pending" : "xss-mount";
-  if (anchor.querySelector(`:scope > .${cls}`)) return;
-  const host = document.createElement("span");
-  host.className = cls; // pending = NOT final, scan() will revisit
-  host.style.display = "inline-flex";
-  const sr = host.attachShadow({ mode: "open" });
-  const st = document.createElement("style");
-  st.textContent = STYLE;
-  sr.append(st, createStatusBadge(kind));
-  anchor.appendChild(host);
-}
-const mountPending = (a: HTMLElement) => mountStatus(a, "pending");
-
 // ---- 5-second preview undo queue (PENDING_MS) ----
 const PENDING_MS = 5000;
 
@@ -106,57 +73,6 @@ interface PendingAction {
   ts: number;
 }
 
-const pendingActions = new Map<string, PendingAction>();
-
-/** Schedule a hide action with a 5-second undo window. */
-function scheduleHide(key: string, sig: Signals, anchor: HTMLElement) {
-  if (pendingActions.has(key)) return; // already pending
-  const timer = setTimeout(() => {
-    executeHide(key, sig, anchor);
-    pendingActions.delete(key);
-  }, PENDING_MS);
-  pendingActions.set(key, { key, sig, anchor, timer, ts: Date.now() });
-  // Update UI to show pending state
-  badgeForPending(anchor, sig);
-}
-
-/** Cancel a pending hide action (user clicked undo). */
-function cancelPending(key: string) {
-  const pending = pendingActions.get(key);
-  if (!pending) return;
-  clearTimeout(pending.timer);
-  pendingActions.delete(key);
-  // Restore the badge to its previous state
-  clearMounts(pending.anchor);
-}
-
-/** Execute the actual hide after the preview window expires. */
-function executeHide(key: string, sig: Signals, _anchor: HTMLElement) {
-  void addBlocked(key);
-  if (sig.userId) void addBlocked(sig.userId);
-  void bumpStats({ blocks: 1 });
-  void bumpStat("blocked");
-  hideTweet(
-    pendingActions.get(key)?.anchor ??
-      document.querySelector(`[data-xss-key="${key}"]`),
-  );
-}
-
-function badgeForPending(anchor: HTMLElement, sig: Signals) {
-  clearMounts(anchor);
-  mountBadge(anchor, () => {
-    const el = document.createElement("span");
-    el.className = "xss-badge pending";
-    el.innerHTML = `<span style="color:var(--warn)">⏳ 5秒后隐藏</span>
-      <button data-undo style="margin-left:6px;padding:1px 6px;border:1px solid var(--warn);background:transparent;color:var(--warn);border-radius:4px;font-size:10px;cursor:pointer">撤销</button>`;
-    el.querySelector("[data-undo]")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      cancelPending(sig.userId || `h:${sig.handle}`);
-    });
-    return el;
-  });
-}
-
 export default defineContentScript({
   matches: ["https://x.com/*", "https://twitter.com/*"],
   cssInjectionMode: "ui",
@@ -164,18 +80,11 @@ export default defineContentScript({
     let bubbleApi: ReturnType<typeof createBubble> | null = null;
     let dismissed = false;
     const anchorByKey = new Map<string, HTMLElement>();
-    const nodeKey = new WeakMap<HTMLElement, string>(); // virtualization-safe
-    const findings: Finding[] = [];
-    let active = 0;
-    // Token bucket instead of a hard per-page cap: sustained ~20/min, burst
-    // 40. Scrolling more keeps detecting (refills); never permanently stuck.
-    // Cache + L0 de-dup keep repeats free, so this only bounds bursts.
-    const TOK_CAP = 40;
-    let tokens = TOK_CAP;
-    setInterval(() => {
-      tokens = Math.min(TOK_CAP, tokens + 1);
-    }, 3000);
-    const takeToken = () => (tokens > 0 ? (tokens--, true) : false);
+    const nodeHandle = new WeakMap<HTMLElement, string>(); // virtualization-safe
+    let findings: Finding[] = [];
+    const pendingActions = new Map<string, PendingAction>();
+    const inFlight = new Set<string>(); // keys currently in process()
+    const hitPublicSeen = new Set<string>(); // hitPublic stat: once per account
 
     let settings = await getSettings();
     if (!settings.enabled) return; // master off → don't init (applies next load)
@@ -187,13 +96,79 @@ export default defineContentScript({
     await warmBlocklist();
     await warmLocalIndex();
 
-    const isReplyContext = () => /^\/[^/]+\/status\/\d+/.test(location.pathname);
     const keyOf = (s: Signals) => s.userId || `h:${s.handle}`;
+
+    /** Schedule a hide action with a 5-second undo window. */
+    function scheduleHide(key: string, sig: Signals, anchor: HTMLElement) {
+      if (pendingActions.has(key)) return; // already pending
+      // Tag the row so executeHide can still find it if X recycles the node.
+      articleOf(anchor)?.setAttribute("data-xss-key", key);
+      const timer = setTimeout(() => {
+        executeHide(key, sig);
+        pendingActions.delete(key);
+      }, PENDING_MS);
+      pendingActions.set(key, { key, sig, anchor, timer, ts: Date.now() });
+      // Update UI to show pending state
+      badgeForPending(anchor, sig);
+    }
+
+    /** Cancel a pending hide action (user clicked undo). */
+    function cancelPending(key: string) {
+      const pending = pendingActions.get(key);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      pendingActions.delete(key);
+      articleOf(pending.anchor)?.removeAttribute("data-xss-key");
+      // Restore the badge to its previous state
+      clearMounts(pending.anchor);
+    }
+
+    /** Execute the actual hide after the preview window expires. */
+    function executeHide(key: string, sig: Signals) {
+      void addBlocked(key);
+      if (sig.userId) void addBlocked(sig.userId);
+      void addBlockRecord({
+        id: key,
+        handle: sig.handle,
+        ...(sig.displayName ? { displayName: sig.displayName } : {}),
+        ...(sig.avatarUrl ? { avatarUrl: sig.avatarUrl } : {}),
+        source: "manual",
+        ts: Date.now(),
+      });
+      void bumpStats({ blocks: 1 });
+      void bumpStat("blocked");
+      // X recycles article nodes: only hide via the captured anchor if it
+      // still belongs to this account; otherwise use the tagged row, else
+      // abort the DOM hide (the block itself is already recorded).
+      const anchor = pendingActions.get(key)?.anchor ?? null;
+      const art = articleOf(anchor);
+      const sameAuthor =
+        !!art && handleFromArticle(art)?.toLowerCase() === sig.handle.toLowerCase();
+      const target = sameAuthor
+        ? anchor
+        : document.querySelector(`[data-xss-key="${CSS.escape(key)}"]`);
+      if (target) hideTweet(target);
+    }
+
+    function badgeForPending(anchor: HTMLElement, sig: Signals) {
+      clearMounts(anchor);
+      mountBadge(anchor, () => {
+        const el = document.createElement("span");
+        el.className = "xss-badge pending";
+        el.innerHTML = `<span style="color:var(--warn)">⏳ 5秒后隐藏</span>
+          <button data-undo style="margin-left:6px;padding:1px 6px;border:1px solid var(--warn);background:transparent;color:var(--warn);border-radius:4px;font-size:10px;cursor:pointer">撤销</button>`;
+        el.querySelector("[data-undo]")?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          cancelPending(keyOf(sig));
+        });
+        return el;
+      });
+    }
 
     function pushFinding(sig: Signals, v: Verdict, source: string) {
       if (!["spam", "porn_bot", "likely_spam"].includes(v.label)) return;
-      const id = sig.userId || sig.handle;
-      if (findings.some((f) => (f.userId || f.handle) === id)) return;
+      const id = keyOf(sig);
+      if (findings.some((f) => (f.userId || `h:${f.handle}`) === id)) return;
       const snippet = sig.triggeringComment || sig.recentTweets[0] || sig.bio;
       findings.push({
         handle: sig.handle,
@@ -221,7 +196,7 @@ export default defineContentScript({
           v,
           {
             onHide: () => scheduleHide(key, sig, anchor),
-            onAppeal: () => void submitAppeal(sig),
+            onAppeal: openAppeal,
           },
           note,
           source,
@@ -237,68 +212,88 @@ export default defineContentScript({
     function renderLocalIndex(anchor: HTMLElement, key: string, sig: Signals, entry: IndexEntry) {
       badgeFor(anchor, key, sig, entry.verdict, undefined, "list");
       pushFinding(sig, entry.verdict, "local-index");
-      void bumpStat("hitPublic");
+      if (!hitPublicSeen.has(key)) {
+        hitPublicSeen.add(key);
+        void bumpStat("hitPublic");
+      }
     }
 
     async function process(sig: Signals, anchor: HTMLElement) {
       const key = keyOf(sig);
-      anchorByKey.set(key, anchor);
+      if (inFlight.has(key)) return; // a concurrent scan is already on it
+      inFlight.add(key);
+      try {
+        anchorByKey.set(key, anchor);
 
-      // 0. Already blocked → hide, never render again.
-      if (isBlockedSync(key) || (sig.userId && isBlockedSync(sig.userId))) {
-        hideTweet(anchor);
-        return;
-      }
-
-      // 1. Check pending undo queue — skip if already scheduled.
-      if (pendingActions.has(key)) return;
-
-      // 2. Persistent cache (spam reused as-is; legit/uncertain only if signals
-      //    unchanged so new evidence can still re-trigger).
-      const cached = await cacheGet(key);
-      if (cached) {
-        const spammy = ["spam", "porn_bot", "likely_spam"].includes(cached.verdict.label);
-        if (spammy || cached.signalsHash === signalsHash(sig)) {
-          renderCached(anchor, key, sig, cached);
-          void bumpStats({ cacheHits: 1 });
+        // 0. Already blocked → hide, never render again.
+        if (isBlockedSync(key) || (sig.userId && isBlockedSync(sig.userId))) {
+          hideTweet(anchor);
           return;
         }
-      }
 
-      // 3. Local public index lookup (no remote requests, <50ms).
-      const entry = lookupLocal(sig.userId, sig.handle);
-      if (entry) {
-        renderLocalIndex(anchor, key, sig, entry);
-        return;
-      }
+        // 1. Check pending undo queue — skip if already scheduled.
+        if (pendingActions.has(key)) return;
 
-      // 4. Local public list did not match. Just show neutral/unhit state.
-      badgeFor(anchor, key, sig, null);
+        // 2. Persistent cache (spam reused as-is; legit/uncertain only if signals
+        //    unchanged so new evidence can still re-trigger).
+        const cached = await cacheGet(key);
+        if (cached) {
+          const spammy = ["spam", "porn_bot", "likely_spam"].includes(cached.verdict.label);
+          if (spammy || cached.signalsHash === signalsHash(sig)) {
+            renderCached(anchor, key, sig, cached);
+            void bumpStats({ cacheHits: 1 });
+            return;
+          }
+        }
+
+        // 3. Local public index lookup (no remote requests, <50ms).
+        const entry = lookupLocal(sig.userId, sig.handle);
+        if (entry) {
+          renderLocalIndex(anchor, key, sig, entry);
+          return;
+        }
+
+        // 4. Local public list did not match. Just show neutral/unhit state.
+        badgeFor(anchor, key, sig, null);
+      } finally {
+        inFlight.delete(key);
+      }
     }
 
     function scan() {
       const p = extractProfile();
       if (p) {
         const el = document.querySelector<HTMLElement>('[data-testid="UserName"]');
-        if (el) void process(p, el);
+        if (el) {
+          // Same skip rule as articles: untouched account + live mount → done.
+          const hasMount = !!el.querySelector(":scope > .xss-mount");
+          if (nodeHandle.get(el) !== p.handle || !hasMount) {
+            if (nodeHandle.get(el) !== p.handle) clearMounts(el);
+            nodeHandle.set(el, p.handle);
+            void process(p, el);
+          }
+        }
       }
       // Account-keyed, NOT node-tagged: X virtualizes the list and recycles
       // <article> nodes, so a permanent per-node flag would skip recycled
       // (new) spam. Re-evaluate a node when its account changed or our badge
-      // is missing; account-level cache/in-flight keep it cheap.
+      // is missing; account-level cache/in-flight keep it cheap. Cheap key
+      // first (link href only) — full extraction (fiber walk, innerText)
+      // runs only for nodes that actually need (re-)processing.
       const topic = extractThreadTopic();
       for (const art of document.querySelectorAll<HTMLElement>(
         'article[data-testid="tweet"]',
       )) {
-        const info = extractFromArticle(art);
+        const handle = handleFromArticle(art);
         const nameBlock = art.querySelector<HTMLElement>('[data-testid="User-Name"]');
-        if (!info || !nameBlock) continue;
-        if (topic && !info.threadTopic) info.threadTopic = topic;
-        const key = keyOf(info);
+        if (!handle || !nameBlock) continue;
         const hasMount = !!nameBlock.querySelector(":scope > .xss-mount");
-        if (nodeKey.get(art) === key && hasMount) continue;
-        if (nodeKey.get(art) !== key) clearMounts(nameBlock); // recycled node
-        nodeKey.set(art, key);
+        if (nodeHandle.get(art) === handle && hasMount) continue;
+        const info = extractFromArticle(art);
+        if (!info) continue;
+        if (topic && !info.threadTopic) info.threadTopic = topic;
+        if (nodeHandle.get(art) !== handle) clearMounts(nameBlock); // recycled node
+        nodeHandle.set(art, handle);
         void process(info, nameBlock);
       }
     }
@@ -357,14 +352,34 @@ export default defineContentScript({
     });
     ui.mount();
 
-    let t: ReturnType<typeof setTimeout>;
-    new MutationObserver(() => {
-      clearTimeout(t);
-      t = setTimeout(scan, 600);
-    }).observe(document.documentElement, { childList: true, subtree: true });
-    // Periodic tick so the pending backlog drains as tokens refill, even
-    // when the user stops scrolling (no new DOM mutations).
-    setInterval(scan, 4000);
+    // SPA navigation: flush pending hides (the user already chose to hide;
+    // the block is recorded even if the row's DOM is gone), then drop all
+    // per-page state so detached DOM nodes can be garbage-collected.
+    ctx.addEventListener(window, "wxt:locationchange", () => {
+      for (const [key, p] of pendingActions) {
+        clearTimeout(p.timer);
+        executeHide(key, p.sig);
+      }
+      pendingActions.clear();
+      anchorByKey.clear();
+      findings = [];
+      bubbleApi?.update(findings);
+    });
+
+    let debounce: ReturnType<typeof setTimeout> | undefined;
+    const observer = new MutationObserver(() => {
+      clearTimeout(debounce);
+      debounce = setTimeout(scan, 600);
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    ctx.onInvalidated(() => {
+      observer.disconnect();
+      clearTimeout(debounce);
+    });
+    // Periodic tick so newly virtualized rows are revisited even when the
+    // user stops scrolling (no new DOM mutations). ctx-bound: stops when
+    // the content script is invalidated.
+    ctx.setInterval(scan, 4000);
     scan();
   },
 });

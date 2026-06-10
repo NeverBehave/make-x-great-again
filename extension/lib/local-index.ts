@@ -1,6 +1,14 @@
 // Local public-member index — shipped with the extension, loaded at startup.
 // Provides O(1) lookup by numeric userId and handle. No remote requests.
-import type { Verdict } from "./types";
+import type { Label, Verdict } from "./types";
+
+const LABELS: ReadonlySet<string> = new Set<Label>([
+  "spam",
+  "porn_bot",
+  "likely_spam",
+  "uncertain",
+  "legit",
+]);
 
 export interface IndexEntry {
   userId: string;
@@ -26,17 +34,19 @@ export async function warmLocalIndex(): Promise<void> {
     userIdMap = new Map();
     handleMap = new Map();
 
+    const updatedAt = new Date().toISOString();
     for (const [userId, handle, label, confidence, reasons] of list) {
+      if (!LABELS.has(label)) continue; // unknown label → skip entry
       const entry: IndexEntry = {
         userId,
         handle,
         verdict: {
-          label: label as any,
+          label: label as Label,
           confidence,
           reasons,
         },
         source: "curated",
-        updatedAt: new Date().toISOString(),
+        updatedAt,
       };
       if (userId) userIdMap.set(userId, entry);
       if (handle) handleMap.set(handle.toLowerCase(), entry);

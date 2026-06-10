@@ -5,6 +5,19 @@ const KEY = "xss:blocked";
 
 let mem: Set<string> | null = null;
 
+// Keep the in-memory set in sync across contexts: when the options page
+// un-hides an account (or another tab hides one), every open X tab must see
+// the change without a reload.
+try {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes[KEY]) {
+      mem = new Set<string>((changes[KEY]?.newValue as string[]) ?? []);
+    }
+  });
+} catch {
+  /* not running in an extension context (e.g. tests) — non-fatal */
+}
+
 async function load(): Promise<Set<string>> {
   if (mem) return mem;
   try {
@@ -33,6 +46,16 @@ export async function addBlocked(id: string): Promise<void> {
   const s = await load();
   if (s.has(id)) return;
   s.add(id);
+  try {
+    await chrome.storage.local.set({ [KEY]: [...s] });
+  } catch {
+    /* non-fatal */
+  }
+}
+
+export async function removeBlocked(id: string): Promise<void> {
+  const s = await load();
+  if (!s.delete(id)) return;
   try {
     await chrome.storage.local.set({ [KEY]: [...s] });
   } catch {

@@ -4,35 +4,14 @@ export interface Settings {
   enabled: boolean; // master: passive detection on/off
   bubble: boolean; // show the corner bubble
   bubblePos: "tr" | "br"; // top-right / bottom-right
-  replyAuto: boolean; // auto-check every replier in a tweet's reply section
-  edgeBase: string; // advanced: override the edge service base URL
-  /** When true, the corner bubble auto-expands the card view whenever a
-   *  newly-discovered spam account appears (with an explicit block action).
-   *  When false, only the pill flashes and the count goes up — the user has
-   *  to click the pill to act. Toggle is also surfaced inline inside the
-   *  card itself ("下次自动弹出"). */
-  autoExpandOnFinding: boolean;
-  /** When true, any account the system has already concluded is spam is
-   *  silently enqueued to the paced block queue on EVERY page the user
-   *  visits — no badge, no card, no click required. Two sources count as
-   *  "system-confirmed":
-   *    - step 1 cache hit  → "cache_hit"  (this device LLM-classified it
-   *      as spam in a prior session and stored the verdict locally).
-   *    - step 2 list hit   → "list_hit"   (the public blacklist has it).
-   *  Fresh in-session LLM verdicts (step 3) still require user action so
-   *  the user has a chance to vet first-time classifications. Defaults
-   *  to OFF — the conservative choice for a Chrome Web Store rollout. */
-  autoBlockListHits: boolean;
+  edgeBase: string; // advanced: override the public-list site base URL (links only)
 }
 
 export const DEFAULTS: Settings = {
   enabled: true,
   bubble: true,
   bubblePos: "tr",
-  replyAuto: true,
   edgeBase: "",
-  autoExpandOnFinding: true,
-  autoBlockListHits: false,
 };
 
 const KEY = "xss:settings";

@@ -1,6 +1,5 @@
 // The background script for the consumer-side extension.
 // Zero remote requests: health check and blacklist size lookup are fully local.
-// GitHub login/auth is disabled.
 import type { BgRequest, BgResponse } from "../lib/types";
 
 export default defineBackground(() => {
@@ -17,14 +16,6 @@ export default defineBackground(() => {
             sendResponse({ ok: true, data: await getStats() });
           } else if (msg.type === "records") {
             sendResponse({ ok: true, data: { records: [] } });
-          } else if (msg.type === "gh_start") {
-            sendResponse({ ok: false, error: "GitHub login is disabled in the consumption-side extension." });
-          } else if (msg.type === "gh_poll") {
-            sendResponse({ ok: false, error: "GitHub login is disabled in the consumption-side extension." });
-          } else if (msg.type === "gh_status") {
-            sendResponse({ ok: true, data: { login: "" } });
-          } else if (msg.type === "gh_logout") {
-            sendResponse({ ok: true });
           } else {
             sendResponse({ ok: false, error: "unknown message" });
           }

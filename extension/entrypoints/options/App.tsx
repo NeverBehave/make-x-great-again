@@ -1,24 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { clearAllLocal, getGhLogin } from "../../lib/auth";
 import { BRAND } from "../../lib/brand";
 import { categorizeReason, categorizeReasons } from "../../lib/reason-category";
 import { type Settings, getSettings, setSetting } from "../../lib/settings";
 import {
   type BlockRecord,
   type CacheRow,
+  clearAllLocal,
   getBlocklist,
   getCacheRows,
   getStats,
   removeBlock,
 } from "../../lib/store";
-import type { BgResponse, Label } from "../../lib/types";
+import type { Label } from "../../lib/types";
 
 const REPO = BRAND.repo;
 const EDGE_DEFAULT = BRAND.edgeBase;
 
-function bg<T = Record<string, unknown>>(msg: unknown): Promise<BgResponse & { data?: T }> {
-  return new Promise((r) => chrome.runtime.sendMessage(msg, (x) => r(x ?? { ok: false })));
-}
 const when = (ts: number) => new Date(ts).toLocaleString("zh-CN", { hour12: false });
 const idTail = (id: string, h: string) =>
   /^\d+$/.test(id) && id !== h && !/^\d+$/.test(h) ? ` · ${id}` : "";
@@ -301,7 +298,7 @@ function Overview() {
       <div className="mb-8 grid grid-cols-4 gap-px overflow-hidden rounded-lg border border-border bg-border">
         <Card n={s.detections} l="AI 检测总数" />
         <Card n={s.cacheHits} l="缓存命中 · 省下的 LLM 调用" />
-        <Card n={bl} l="已拉黑账号" />
+        <Card n={bl} l="已隐藏账号" />
         <Card n={(d.spam ?? 0) + (d.porn_bot ?? 0)} l="判定为垃圾/色情bot" />
       </div>
       <SectionH>检测类别分布</SectionH>
@@ -358,8 +355,8 @@ function Blocklist() {
   };
   return (
     <Page
-      title="拉黑记录"
-      sub={`共 ${list.length} 条 · 取消拉黑用于纠正误判（账号会重新可见）`}
+      title="隐藏记录"
+      sub={`共 ${list.length} 条 · 取消隐藏用于纠正误判（账号会重新可见）`}
     >
       <input
         value={q}
@@ -428,7 +425,7 @@ function Blocklist() {
                       load();
                     }}
                   >
-                    取消拉黑
+                    取消隐藏
                   </Btn>
                 </td>
               </tr>
@@ -436,7 +433,7 @@ function Blocklist() {
           </tbody>
         </table>
       </div>
-      {!list.length && <div className="py-10 text-center text-fg-3">还没有拉黑记录</div>}
+      {!list.length && <div className="py-10 text-center text-fg-3">还没有隐藏记录</div>}
     </Page>
   );
 }
@@ -544,89 +541,16 @@ function Toggle({
 }
 
 function Settings() {
-  const [login, setLogin] = useState("");
-  const [flow, setFlow] = useState("");
-  const [device, setDevice] = useState<{ code: string; uri: string } | null>(null);
-  const [copiedCode, setCopiedCode] = useState(false);
   const [cleared, setCleared] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
   const [st, setSt] = useState<Settings | null>(null);
-  const refresh = () => getGhLogin().then(setLogin);
   useEffect(() => {
-    refresh();
     getSettings().then(setSt);
-    // Deep-link from the popup onboarding banner: ?login=1 → start Device
-    // Flow immediately, then strip the param so reload doesn't re-trigger.
-    if (typeof location !== "undefined" && /[?&]login=1\b/.test(location.search)) {
-      const url = new URL(location.href);
-      url.searchParams.delete("login");
-      url.searchParams.set("tab", "settings");
-      history.replaceState({}, "", url.toString());
-      // Wait a tick so the initial render with the login UI mounts before
-      // ghLogin() opens the GitHub verification tab.
-      setTimeout(() => {
-        getGhLogin().then((cur) => {
-          if (!cur) void ghLogin();
-        });
-      }, 60);
-    }
   }, []);
   const save = async <K extends keyof Settings>(k: K, v: Settings[K]) => {
     await setSetting(k, v);
     setSt((p) => (p ? { ...p, [k]: v } : p));
   };
-  async function copyDeviceCode() {
-    if (!device) return;
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(device.code);
-      } else {
-        throw new Error("clipboard unavailable");
-      }
-    } catch {
-      const ta = document.createElement("textarea");
-      ta.value = device.code;
-      ta.setAttribute("readonly", "");
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      ta.remove();
-    }
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 1500);
-  }
-  async function ghLogin() {
-    setFlow("正在获取设备码…");
-    setDevice(null);
-    setCopiedCode(false);
-    const s = await bg<{
-      user_code: string;
-      verification_uri: string;
-      device_code: string;
-      interval: number;
-    }>({ type: "gh_start" });
-    if (!s.ok || !s.data) {
-      setFlow(`失败：${s.error ?? "请确认 OAuth App 已勾选 Enable Device Flow"}`);
-      return;
-    }
-    const { user_code, verification_uri, device_code, interval } = s.data;
-    window.open(verification_uri, "_blank", "noopener");
-    setDevice({ code: user_code, uri: verification_uri });
-    setFlow("在打开的 GitHub 页面输入验证码，授权后会自动完成。");
-    const poll = async () => {
-      const r = await bg<{ login?: string }>({ type: "gh_poll", deviceCode: device_code });
-      if (r.ok && r.data?.login) {
-        setFlow("");
-        setDevice(null);
-        refresh();
-        return;
-      }
-      setTimeout(poll, Math.max(5, interval || 5) * 1000);
-    };
-    setTimeout(poll, (interval || 5) * 1000);
-  }
   return (
     <Page title="设置" sub="配置仅存于本机">
       <div className="max-w-[680px] space-y-9">
@@ -647,25 +571,13 @@ function Settings() {
               label="气泡位置：右上角"
               hint="关 = 右下角"
             />
-            <Toggle
-              on={st.replyAuto}
-              onChange={(v) => save("replyAuto", v)}
-              label="回复区自动匹配"
-              hint="在回复区自动匹配公开名单"
-            />
-            <Toggle
-              on={st.autoBlockListHits}
-              onChange={(v) => save("autoBlockListHits", v)}
-              label="对已确认的垃圾号自动拉黑"
-              hint="开启后：扫到的色情/垃圾账号会被静默后台拉黑（包括公榜命中 + 本机此前判过 spam 的缓存号），不弹卡片、不需要点确认。默认关闭。"
-            />
           </section>
         )}
 
         <section>
           <SectionH>数据与隐私</SectionH>
           <p className="mb-3 text-[13px] text-fg-2">
-            检测缓存、拉黑记录、统计均仅存于本机；除公开 X 数字 ID 外不存 PII。
+            检测缓存、隐藏记录、统计均仅存于本机；除公开 X 数字 ID 外不存 PII。
           </p>
           <div className="flex items-center gap-3">
             <Btn tier="danger" onClick={() => setClearOpen(true)}>
@@ -683,7 +595,7 @@ function Settings() {
               这会清空本机上的：
               <ul className="my-2 list-inside list-disc text-fg-3">
                 <li>本地检测缓存</li>
-                <li>你的拉黑历史 + 本地处理统计</li>
+                <li>你的隐藏历史 + 本地处理统计</li>
               </ul>
               <b className="text-fg">不可恢复。</b>
             </>
@@ -695,7 +607,6 @@ function Settings() {
             setClearOpen(false);
             await clearAllLocal();
             setCleared(true);
-            refresh();
           }}
         />
       </div>
@@ -707,7 +618,7 @@ const About = () => (
   <Page title="关于" sub={`${BRAND.name} · 公益、开源`}>
     <div className="max-w-[680px] space-y-4 text-[13px] leading-7 text-fg-2">
       <p>
-        基于 AI 的 X(Twitter) 反垃圾 / 色情机器人扩展。被动检测、本地优先、中心服务（Cloudflare）协同；用户一键拉黑即视为人工确认信号之一。
+        X(Twitter) 反垃圾 / 色情机器人扩展。完全被动、完全本地：名单随扩展打包，零远程请求；命中名单的账号可一键在本地隐藏（不调用 X 的拉黑接口）。
       </p>
       <div className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">
         <div className="bg-bg p-4">
@@ -772,7 +683,7 @@ const Mascot = () => (
 
 const TABS = [
   ["overview", "概览", Overview],
-  ["blocklist", "拉黑记录", Blocklist],
+  ["blocklist", "隐藏记录", Blocklist],
   ["cache", "检测缓存", Cache],
   ["settings", "设置", Settings],
   ["about", "关于", About],
@@ -785,7 +696,6 @@ function tabFromLocation(): TabId {
   const url = new URL(location.href);
   const fromQuery = url.searchParams.get("tab");
   const fromHash = url.hash.replace(/^#/, "");
-  if (url.searchParams.get("login") === "1") return "settings";
   if (fromQuery && tabIds.has(fromQuery as TabId)) return fromQuery as TabId;
   if (fromHash && tabIds.has(fromHash as TabId)) return fromHash as TabId;
   return "overview";

@@ -1,11 +1,12 @@
 // Single typed accessor over chrome.storage.local. Backward-safe: a legacy
 // string[] blocklist auto-migrates to records on first read. All local, no
 // PII beyond the public numeric id (governance unchanged).
+import { removeBlocked } from "./blocklist";
 import type { Verdict } from "./types";
 
 // "list_hit"  → public-blacklist match (step 2 of content.ts)
 // "cache_hit" → local cache says this account is spam (step 1 of content.ts)
-// Both are auto-block sources that fire when settings.autoBlockListHits is on.
+// (Legacy sources from the auto-block era are kept for old stored records.)
 export type BlockSource = "manual" | "block_all" | "list_hit" | "cache_hit";
 
 export interface BlockRecord {
@@ -74,6 +75,9 @@ export async function removeBlock(id: string): Promise<void> {
     K_BLOCK,
     list.filter((r) => r.id !== id),
   );
+  // Also reconcile the fast-path id set (xss:blocked) that content.ts hides
+  // by — otherwise un-hiding never takes effect on X pages.
+  await removeBlocked(id);
 }
 
 export async function blockedIdSet(): Promise<Set<string>> {
@@ -96,6 +100,15 @@ export async function bumpStats(patch: Partial<Stats> & { label?: string }): Pro
   s.blocks += patch.blocks ?? 0;
   if (patch.label) s.byLabel[patch.label] = (s.byLabel[patch.label] ?? 0) + 1;
   await set(K_STATS, s);
+}
+
+/** Clear all local extension data (privacy). */
+export async function clearAllLocal(): Promise<void> {
+  try {
+    await chrome.storage.local.clear();
+  } catch {
+    /* non-fatal */
+  }
 }
 
 export interface CacheRow {

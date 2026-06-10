@@ -136,6 +136,18 @@ svg { display: block; }
 }
 `;
 
+/** HTML-escape untrusted text before innerHTML interpolation (reasons and
+ *  display names can embed attacker-controlled strings from page content or
+ *  the bundled blacklist). */
+const esc = (s: string) =>
+  s.replace(/[<>&"]/g, (c) =>
+    ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c] ?? c,
+  );
+
+/** Only render avatar URLs that are plainly X CDN images. */
+const safeAvatarUrl = (url: string | undefined): string | undefined =>
+  url && /^https:\/\/pbs\.twimg\.com\//.test(url) ? url : undefined;
+
 // Lucide-style 24-viewBox stroke icons. No emoji (per design system).
 const P: Record<string, string> = {
   shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
@@ -183,7 +195,7 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
 
   const pill = document.createElement("button");
   pill.className = "pill";
-  pill.setAttribute("aria-label", "x-spam-sentinel 本页可疑账号");
+  pill.setAttribute("aria-label", `${BRAND.acronym} 本页可疑账号`);
 
   const card = document.createElement("div");
   card.className = "card";
@@ -218,7 +230,7 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
     if (!findings.length) {
       card.innerHTML = `
         <div class="hd">${icon("shield-check", "var(--brand)", 16)}
-          <span>x-spam-sentinel 已启用</span>
+          <span>${BRAND.acronym} 已启用</span>
           <span class="x" data-x>${icon("x", "currentColor", 14)}</span></div>
         <div class="sub" style="display:block;line-height:1.6">
           正在被动检查本页账号。发现可疑的垃圾/色情机器人时，会在这里提示并提供一键处理。</div>
@@ -246,13 +258,10 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
           .map((f) => {
             const m = LABEL[f.verdict.label];
             const col = `var(${m.varName})`;
-            const av = f.avatarUrl
-              ? `<img src="${f.avatarUrl}" width="26" height="26" style="border-radius:50%;flex:none" alt="">`
+            const avUrl = safeAvatarUrl(f.avatarUrl);
+            const av = avUrl
+              ? `<img src="${esc(avUrl)}" width="26" height="26" style="border-radius:50%;flex:none" alt="">`
               : `<span style="width:26px;height:26px;border-radius:50%;flex:none;background:var(--border)"></span>`;
-            const esc = (s: string) =>
-              s.replace(/[<>&"]/g, (c) =>
-                ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c] ?? c,
-              );
             const name = esc(f.displayName?.trim() || `@${f.handle}`);
             const snip = f.snippet
               ? esc(f.snippet.replace(/\s+/g, " ").trim()).slice(0, 60)
@@ -362,19 +371,6 @@ export interface BadgeActions {
  *  record → instant calm "known" marker, no processing implied. */
 export type BadgeSource = "fresh" | "list" | "cache";
 
-/** Animated transient states for newly-found accounts. */
-export function createStatusBadge(kind: "analyzing" | "pending"): HTMLElement {
-  const el = document.createElement("span");
-  if (kind === "analyzing") {
-    el.className = "xss-badge analyzing";
-    el.innerHTML = `<span class="xss-spin">${icon("shield", "var(--brand)", 13)}</span><span>分析中…</span>`;
-  } else {
-    el.className = "xss-badge pending";
-    el.innerHTML = `${icon("shield", "currentColor", 13)}<span>排队检测…</span>`;
-  }
-  return el;
-}
-
 export function createBadge(
   v: Verdict | null,
   a: BadgeActions,
@@ -409,7 +405,23 @@ export function createBadge(
     `${mark}${icon(meta.ic, color, 13)}<span style="color:${color}">${meta.zh} ${(v.confidence * 100).toFixed(0)}%</span>${tag}`;
 
   let pop: HTMLElement | null = null;
+  let hideTimer: ReturnType<typeof setTimeout> | undefined;
+  const hide = () => {
+    if (pop?.matches(":hover")) {
+      // Cursor is on the popover (e.g. blur fired mid-click) — stay open.
+      scheduleHide();
+      return;
+    }
+    pop?.remove();
+    pop = null;
+  };
+  const scheduleHide = () => {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(hide, 120);
+  };
+  const cancelHide = () => clearTimeout(hideTimer);
   const show = () => {
+    cancelHide();
     if (pop) return;
     pop = document.createElement("div");
     pop.className = "xss pop card";
@@ -417,26 +429,26 @@ export function createBadge(
     const spammy = ["spam", "porn_bot", "likely_spam"].includes(v.label);
     pop.innerHTML = `
       <h4 style="color:${color}">${meta.zh} · ${(v.confidence * 100).toFixed(0)}%</h4>
-      <ul>${v.reasons.map((r) => `<li>${r}</li>`).join("")}</ul>
-      ${note ? `<div style="color:var(--muted)">${note}</div>` : ""}
+      <ul>${v.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>
+      ${note ? `<div style="color:var(--muted)">${esc(note)}</div>` : ""}
       <div class="acts">
         ${spammy ? '<button data-h>隐藏</button>' : ""}
-        <button data-a>误判?</button>
+        <button data-a title="打开 GitHub 提交误判申诉 issue">误判申诉 ↗</button>
       </div>`;
     const r = el.getBoundingClientRect();
     pop.style.left = `${Math.max(8, r.left)}px`;
     pop.style.top = `${r.bottom + 6}px`;
     pop.querySelector("[data-h]")?.addEventListener("click", a.onHide);
     pop.querySelector("[data-a]")?.addEventListener("click", a.onAppeal);
+    // Keep the popover open while the cursor is over it, so its buttons are
+    // actually reachable.
+    pop.addEventListener("mouseenter", cancelHide);
+    pop.addEventListener("mouseleave", scheduleHide);
     el.getRootNode().appendChild?.(pop);
-  };
-  const hide = () => {
-    pop?.remove();
-    pop = null;
   };
   el.addEventListener("mouseenter", show);
   el.addEventListener("focus", show);
-  el.addEventListener("mouseleave", () => setTimeout(hide, 120));
-  el.addEventListener("blur", hide);
+  el.addEventListener("mouseleave", scheduleHide);
+  el.addEventListener("blur", scheduleHide);
   return el;
 }

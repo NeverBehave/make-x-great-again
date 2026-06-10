@@ -90,7 +90,7 @@ export function App() {
         <b className="text-[14px] font-semibold tracking-[-.005em]">{BRAND.acronym}</b>
         <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-fg-4">{BRAND.name}</span>
         <span
-          aria-label={status === null ? "检查中" : status.ok ? "服务在线" : "服务不可达"}
+          aria-label={status === null ? "检查中" : status.ok ? "本地名单已加载" : "名单加载失败"}
           className={`ml-auto inline-flex h-2 w-2 rounded-full ${
             status === null ? "bg-fg-4" : status.ok ? "bg-ok" : "bg-danger"
           }`}
@@ -114,8 +114,8 @@ export function App() {
 
       {/* Per-stat breakdown */}
       <div className="mt-2 grid grid-cols-2 gap-1.5">
-        <Stat label="命中公榜" value={stats?.hitPublic ?? 0} hint="直接拉黑，零成本" accent />
-        <Stat label="亲手拉黑" value={stats?.blocked ?? 0} hint="你按的拉黑按钮" />
+        <Stat label="命中名单" value={stats?.hitPublic ?? 0} hint="本地名单命中，零成本" accent />
+        <Stat label="亲手隐藏" value={stats?.blocked ?? 0} hint="你按的隐藏按钮" />
       </div>
 
       <div
@@ -128,17 +128,17 @@ export function App() {
         }`}
       >
         {status === null ? (
-          <span>检查服务…</span>
+          <span>加载本地名单…</span>
         ) : status.ok ? (
           <>
-            <span className="text-fg-3">公共名单</span>
+            <span className="text-fg-3">本地名单已加载</span>
             <span className="font-mono text-[13px] font-semibold tabular-nums tracking-tight">
               {fmt(status.n)}
               <span className="ml-1 font-sans text-[11px] font-normal text-fg-3">条</span>
             </span>
           </>
         ) : (
-          <span>服务不可达 · 检查网络</span>
+          <span>名单加载失败 · 试试重启浏览器</span>
         )}
       </div>
 

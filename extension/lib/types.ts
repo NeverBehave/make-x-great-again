@@ -32,14 +32,7 @@ export interface Signals {
 }
 
 /** Background messages — strictly local now (no remote classify/confirm). */
-export type BgRequest =
-  | { type: "health" }
-  | { type: "stats" }
-  | { type: "records" }
-  | { type: "gh_start" }
-  | { type: "gh_poll"; deviceCode: string }
-  | { type: "gh_status" }
-  | { type: "gh_logout" };
+export type BgRequest = { type: "health" } | { type: "stats" } | { type: "records" };
 
 export interface BgResponse {
   ok: boolean;
