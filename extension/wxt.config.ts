@@ -1,9 +1,12 @@
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "wxt";
 
-// Make X Great Again (MXGA) — strictly passive. No host permissions beyond
-// the content-script match (we only read the DOM already rendered for the
-// user) and zero remote requests: the blacklist ships inside the package.
+// Make X Great Again (MXGA) — passive by default. The blacklist ships inside
+// the package; the default "local hide" mode makes zero remote requests.
+// X-native actions (mute / block) are opt-in: only when the user switches
+// settings.actionMode does the extension request the optional x.com host
+// permission and act on their account via X's own first-party endpoints,
+// using their existing session. Nothing is ever sent to our own backend.
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],
   vite: () => ({ plugins: [tailwindcss()] }),
@@ -21,15 +24,24 @@ export default defineConfig({
     description:
       "Passive spam / porn-bot badges for X, powered by a bundled local blacklist. Zero remote requests. Public-good, open source.",
     permissions: ["storage"],
+    // Requested at runtime (chrome.permissions.request) only when the user
+    // turns on X mute/block mode — keeps the default install storage-only.
+    // Chrome uses optional_host_permissions; Firefox only added that key in
+    // 127, so for our 109+ target the host patterns go in optional_permissions.
+    ...(browser === "firefox"
+      ? { optional_permissions: ["*://x.com/*", "*://twitter.com/*"] }
+      : { optional_host_permissions: ["*://x.com/*", "*://twitter.com/*"] }),
     action: { default_title: "Make X Great Again (MXGA)" },
     options_ui: { open_in_tab: true },
     // Firefox / AMO requirements (ignored by the Chrome build):
     //  - gecko.id: stable add-on ID, keyed to a domain we control.
     //  - strict_min_version 109.0: the first Firefox release with Manifest V3
     //    support (we no longer ship any MAIN-world content script).
-    //  - data_collection_permissions "none": the consumer extension makes zero
-    //    remote requests; everything (blacklist, stats) is local. AMO requires
-    //    new listings to declare this since 2025-11-03.
+    //  - data_collection_permissions "none": no user data is ever sent to us
+    //    or any third party. The default (local) mode is fully offline; the
+    //    opt-in mute/block actions call X's own first-party endpoints with the
+    //    user's session and collect nothing. AMO requires new listings to
+    //    declare data collection since 2025-11-03.
     ...(browser === "firefox"
       ? {
           browser_specific_settings: {

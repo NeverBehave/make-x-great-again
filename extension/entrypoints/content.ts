@@ -3,10 +3,11 @@ import { BRAND } from "../lib/brand";
 import { type Cached, cacheGet, signalsHash } from "../lib/cache";
 import { extractFromArticle, extractProfile, extractThreadTopic } from "../lib/detect";
 import { type IndexEntry, lookupLocal, warmLocalIndex } from "../lib/local-index";
-import { getSettings, onSettingsChange } from "../lib/settings";
+import { type ActionMode, getSettings, onSettingsChange } from "../lib/settings";
 import { bumpStat } from "../lib/stats";
 import { addBlockRecord, bumpStats } from "../lib/store";
 import type { Signals, Verdict } from "../lib/types";
+import { performXAction, retryDelayForAttempt } from "../lib/x-action";
 import {
   type BadgeSource,
   type Finding,
@@ -23,6 +24,25 @@ function openAppeal(): void {
 
 function articleOf(node: Element | null): HTMLElement | null {
   return (node?.closest("article") as HTMLElement) ?? null;
+}
+
+/** User-facing verb for the configured action mode. */
+function actionVerb(mode: ActionMode): string {
+  return mode === "block" ? "拉黑" : mode === "mute" ? "静音" : "隐藏";
+}
+
+/** Fire X's native mute/block (best-effort, paced) with one retry. The local
+ *  hide/record is applied separately and always — the X call rides on top. */
+async function applyXAction(mode: ActionMode, sig: Signals): Promise<void> {
+  if (mode === "local") return;
+  const attempt = await performXAction(mode, sig.userId, sig.handle);
+  if (!attempt.ok) {
+    const delay = retryDelayForAttempt(attempt, 1);
+    if (delay > 0) {
+      await new Promise((r) => setTimeout(r, delay));
+      await performXAction(mode, sig.userId, sig.handle); // one best-effort retry
+    }
+  }
 }
 
 /** Cheap author handle from the User-Name link href — no fiber walk, no
@@ -123,8 +143,12 @@ export default defineContentScript({
       clearMounts(pending.anchor);
     }
 
-    /** Execute the actual hide after the preview window expires. */
+    /** Execute the action after the preview window expires. The local record
+     *  + visual hide always happen (so the row stays gone across navigation);
+     *  if the user opted into "mute"/"block", X's native action rides on top
+     *  via the user's own session (best-effort, paced). */
     function executeHide(key: string, sig: Signals) {
+      const mode = settings.actionMode;
       void addBlocked(key);
       if (sig.userId) void addBlocked(sig.userId);
       void addBlockRecord({
@@ -137,6 +161,7 @@ export default defineContentScript({
       });
       void bumpStats({ blocks: 1 });
       void bumpStat("blocked");
+      void applyXAction(mode, sig);
       // X recycles article nodes: only hide via the captured anchor if it
       // still belongs to this account; otherwise use the tagged row, else
       // abort the DOM hide (the block itself is already recorded).
@@ -152,10 +177,11 @@ export default defineContentScript({
 
     function badgeForPending(anchor: HTMLElement, sig: Signals) {
       clearMounts(anchor);
+      const verb = actionVerb(settings.actionMode);
       mountBadge(anchor, () => {
         const el = document.createElement("span");
         el.className = "xss-badge pending";
-        el.innerHTML = `<span style="color:var(--warn)">⏳ 5秒后隐藏</span>
+        el.innerHTML = `<span style="color:var(--warn)">⏳ 5秒后${verb}</span>
           <button data-undo style="margin-left:6px;padding:1px 6px;border:1px solid var(--warn);background:transparent;color:var(--warn);border-radius:4px;font-size:10px;cursor:pointer">撤销</button>`;
         el.querySelector("[data-undo]")?.addEventListener("click", (e) => {
           e.stopPropagation();
@@ -200,6 +226,7 @@ export default defineContentScript({
           },
           note,
           source,
+          actionVerb(settings.actionMode),
         ),
       );
     }
@@ -343,7 +370,7 @@ export default defineContentScript({
           onDismiss() {
             dismissed = true;
           },
-        }, settings.bubblePos);
+        }, settings.bubblePos, actionVerb(settings.actionMode));
         container.appendChild(bubble.el);
         if (!settings.bubble) bubble.el.style.display = "none";
         bubbleApi = bubble;

@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BRAND } from "../../lib/brand";
 import { categorizeReason, categorizeReasons } from "../../lib/reason-category";
-import { type Settings, getSettings, setSetting } from "../../lib/settings";
+import {
+  type ActionMode,
+  type Settings,
+  getSettings,
+  setSetting,
+} from "../../lib/settings";
 import {
   type BlockRecord,
   type CacheRow,
@@ -540,16 +545,66 @@ function Toggle({
   );
 }
 
+const X_ORIGINS = ["*://x.com/*", "*://twitter.com/*"];
+
+const ACTION_MODES: {
+  value: ActionMode;
+  label: string;
+  hint: string;
+  needsX: boolean;
+}[] = [
+  {
+    value: "local",
+    label: "本地隐藏（推荐）",
+    hint: "只在本扩展里隐藏 ta 的推文，X 完全无感、零联网，可随时在「隐藏记录」里恢复。",
+    needsX: false,
+  },
+  {
+    value: "mute",
+    label: "X 静音",
+    hint: "用你的 X 登录态调用 X 原生静音：你不再看到 ta，对方不知情、关注关系不变。需要授权访问 x.com。",
+    needsX: true,
+  },
+  {
+    value: "block",
+    label: "X 拉黑",
+    hint: "用你的 X 登录态调用 X 原生屏蔽：互相看不到、解除关注，最强。需要授权访问 x.com。高频批量拉黑可能触发 X 风控，请分批少量处理。",
+    needsX: true,
+  },
+];
+
+/** Ensure the optional x.com host permission before enabling an X action. */
+async function ensureXPermission(): Promise<boolean> {
+  try {
+    if (await chrome.permissions.contains({ origins: X_ORIGINS })) return true;
+    return await chrome.permissions.request({ origins: X_ORIGINS });
+  } catch {
+    return false;
+  }
+}
+
 function Settings() {
   const [cleared, setCleared] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
   const [st, setSt] = useState<Settings | null>(null);
+  const [permDenied, setPermDenied] = useState(false);
   useEffect(() => {
     getSettings().then(setSt);
   }, []);
   const save = async <K extends keyof Settings>(k: K, v: Settings[K]) => {
     await setSetting(k, v);
     setSt((p) => (p ? { ...p, [k]: v } : p));
+  };
+  const changeMode = async (mode: ActionMode) => {
+    if (mode !== "local") {
+      const ok = await ensureXPermission();
+      if (!ok) {
+        setPermDenied(true);
+        return;
+      }
+    }
+    setPermDenied(false);
+    await save("actionMode", mode);
   };
   return (
     <Page title="设置" sub="配置仅存于本机">
@@ -571,6 +626,50 @@ function Settings() {
               label="气泡位置：右上角"
               hint="关 = 右下角"
             />
+          </section>
+        )}
+
+        {st && (
+          <section>
+            <SectionH>处理方式</SectionH>
+            <p className="mb-3 text-[12px] text-fg-3">
+              点击「隐藏」按钮时，对识别出的垃圾号默认执行哪种处理。默认仅本地隐藏（零联网）；
+              选择 X 静音 / 拉黑会用你当前的 X 登录态调用 X 自家接口，不经过我们的服务器。
+            </p>
+            <div className="space-y-2">
+              {ACTION_MODES.map((m) => {
+                const active = st.actionMode === m.value;
+                return (
+                  <button
+                    type="button"
+                    key={m.value}
+                    onClick={() => changeMode(m.value)}
+                    className={`flex w-full items-start gap-3 rounded-lg border p-3 text-left transition ${
+                      active
+                        ? "border-fg bg-card-hi"
+                        : "border-border-2 hover:border-fg-3"
+                    }`}
+                  >
+                    <span
+                      className={`mt-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-full border ${
+                        active ? "border-fg" : "border-border-2"
+                      }`}
+                    >
+                      {active && <span className="h-2 w-2 rounded-full bg-fg" />}
+                    </span>
+                    <span>
+                      <span className="font-medium text-fg">{m.label}</span>
+                      <span className="block text-[12px] text-fg-3">{m.hint}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {permDenied && (
+              <p className="mt-2 text-[12px] text-danger">
+                未授权访问 x.com，已保持当前处理方式。X 静音 / 拉黑需要该权限才能调用 X 接口。
+              </p>
+            )}
           </section>
         )}
 
@@ -618,7 +717,7 @@ const About = () => (
   <Page title="关于" sub={`${BRAND.name} · 公益、开源`}>
     <div className="max-w-[680px] space-y-4 text-[13px] leading-7 text-fg-2">
       <p>
-        X(Twitter) 反垃圾 / 色情机器人扩展。完全被动、完全本地：名单随扩展打包，零远程请求；命中名单的账号可一键在本地隐藏（不调用 X 的拉黑接口）。
+        X(Twitter) 反垃圾 / 色情机器人扩展。被动检测、名单随扩展打包：默认「本地隐藏」模式零远程请求，不经过任何服务器。如在「设置 → 处理方式」里选择 X 静音 / 拉黑，则会用你当前的 X 登录态调用 X 自家接口对账号生效（仍不经过我们的服务器、不收集任何数据）。
       </p>
       <div className="grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">
         <div className="bg-bg p-4">

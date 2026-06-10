@@ -8,17 +8,50 @@ otherwise.
 
 ## [0.5.0] - 2026-06-10
 
+### Added
+
+- New **处理方式 (action mode)** setting controlling what clicking "隐藏" does
+  to a flagged account, with three options:
+  - **本地隐藏 (local)** — the default. Pure on-device visual hide
+    (`display:none` + a local hidden-list in `chrome.storage`); zero network,
+    X is never contacted, reversible from the options page. A fresh install
+    behaves exactly like the prior zero-remote build.
+  - **X 静音 (mute)** — opt-in. Calls X's own first-party
+    `POST /i/api/1.1/mutes/users/create.json` using the user's existing X
+    session (the page's `ct0` CSRF cookie + X's public web bearer). One-way:
+    the user stops seeing the account; it is not notified; the follow
+    relationship is unchanged.
+  - **X 拉黑 (block)** — opt-in. Calls X's own first-party
+    `POST /i/api/1.1/blocks/create.json` the same way. Mutual block: breaks
+    the follow relationship and hides both users from each other.
+- The mute/block requests go **only** to x.com — they never touch our backend
+  and collect/transmit no data to us or any third party (the user acts on
+  their own account via X's own API).
+- A global rate-limit queue for the X actions (`extension/lib/x-action.ts`):
+  cross-tab serialization via Web Locks, ~1.2s spacing + jitter, periodic
+  cooldowns (every 45 / 120 actions) and 429 back-off, to reduce the risk of
+  tripping X's automation heuristics during bulk cleanup.
+- Mode-aware UI: the 5-second undo badge and bubble show the active mode's verb
+  (隐藏 / 静音 / 拉黑).
+
 ### Changed
 
-- The extension is now a **passive, zero-remote consumer build**: the public
+- The extension is now **local-first / zero-remote by default**: the public
   blacklist (compiled by `scripts/compile-blacklist.js`, ~46k entries) ships
-  inside the package and is read locally; the extension makes **zero network
-  requests** and its only permission is `storage` (no host permissions, no
-  `alarms`). Firefox builds declare `data_collection_permissions: "none"`.
-- "拉黑" was renamed to "隐藏" across the UI: the extension no longer calls
-  X's `blocks/create.json` (or any X API). Matched accounts' posts are hidden
-  locally (`display:none` + a local hidden-list in `chrome.storage`) with a
-  5-second undo window.
+  inside the package and is read locally; in the default local mode the
+  extension makes **zero network requests** and its only granted permission is
+  `storage` (no `alarms`). Firefox builds declare
+  `data_collection_permissions: "none"`, which stays accurate even in
+  mute/block mode (the user acts on their own X account via X's API).
+- The x.com host permission is now **optional** and **runtime-requested**:
+  declared as `optional_host_permissions` (Chrome) / `optional_permissions`
+  (Firefox) and requested via `chrome.permissions.request` only when the user
+  switches to mute or block mode. A fresh install requests nothing; deny →
+  stays in local mode.
+- "拉黑" was renamed to "隐藏" across the UI. The local hide/record always
+  happens regardless of mode (so the row stays gone across navigation); for
+  mute/block the X action rides on top via the user's own session. The
+  5-second undo window still applies in every mode.
 - "误判申诉" now opens the GitHub appeal issue template in a new tab instead
   of POSTing to the edge service.
 - Scheduled jobs were split: R2 artifact publishing runs every 10 minutes

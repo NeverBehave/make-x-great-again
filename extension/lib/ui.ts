@@ -186,8 +186,13 @@ export interface BubbleHandlers {
   onDismiss: () => void;
 }
 
-/** Collapsed pill ⇄ expanded card. Default resting state = pill. */
-export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
+/** Collapsed pill ⇄ expanded card. Default resting state = pill.
+ *  `verb` is the action label (隐藏 / 静音 / 拉黑) per settings.actionMode. */
+export function createBubble(
+  h: BubbleHandlers,
+  pos: "tr" | "br" = "tr",
+  verb = "隐藏",
+) {
   const root = document.createElement("div");
   root.className = `xss xss-bubble${pos === "br" ? " br" : ""}`;
   root.setAttribute("role", "status");
@@ -277,12 +282,12 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
                 ${snip ? `<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${snip}</div>` : ""}
                 ${src}
               </div>
-              <button class="xss-act" data-hide="${f.userId || "h:" + f.handle}">隐藏</button>
+              <button class="xss-act" data-hide="${f.userId || "h:" + f.handle}">${verb}</button>
             </div>`;
           })
           .join("")}
       </div>
-      <button class="btn" data-hide-all>一键隐藏全部 (${findings.length})</button>
+      <button class="btn" data-hide-all>一键${verb}全部 (${findings.length})</button>
       <div class="row"><span class="lnk" data-each>逐个查看</span>
         <span class="lnk" data-ign>忽略本页</span></div>`;
     card.querySelector("[data-x]")?.addEventListener("click", collapse);
@@ -296,7 +301,7 @@ export function createBubble(h: BubbleHandlers, pos: "tr" | "br" = "tr") {
         const id = btn.dataset.hide;
         if (id) {
           h.onHideAll([id]);
-          btn.textContent = "已隐藏";
+          btn.textContent = `已${verb}`;
           (btn as HTMLButtonElement).disabled = true;
         }
       });
@@ -376,6 +381,7 @@ export function createBadge(
   a: BadgeActions,
   note?: string,
   source: BadgeSource = "fresh",
+  verb = "隐藏",
 ): HTMLElement {
   const el = document.createElement("span");
   el.tabIndex = 0;
@@ -432,7 +438,7 @@ export function createBadge(
       <ul>${v.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>
       ${note ? `<div style="color:var(--muted)">${esc(note)}</div>` : ""}
       <div class="acts">
-        ${spammy ? '<button data-h>隐藏</button>' : ""}
+        ${spammy ? `<button data-h>${esc(verb)}</button>` : ""}
         <button data-a title="打开 GitHub 提交误判申诉 issue">误判申诉 ↗</button>
       </div>`;
     const r = el.getBoundingClientRect();
