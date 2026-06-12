@@ -1,8 +1,13 @@
 {
   "schema": 1,
-  "generatedAt": 1781022045969,
-  "count": 131,
+  "generatedAt": 1781222443783,
+  "count": 132,
   "list": [
+    {
+      "handle": "nikmulberry",
+      "x_user_id": "1207500254284673024",
+      "last_scored": 1781202389001
+    },
     {
       "handle": "eldia_cl",
       "x_user_id": "18047052",
