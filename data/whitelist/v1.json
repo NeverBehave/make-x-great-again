@@ -1,8 +1,18 @@
 {
   "schema": 1,
-  "generatedAt": 1781287259349,
-  "count": 133,
+  "generatedAt": 1781330403110,
+  "count": 135,
   "list": [
+    {
+      "handle": "spacex",
+      "x_user_id": "34743251",
+      "last_scored": 1781326858672
+    },
+    {
+      "handle": "hejushang8",
+      "x_user_id": "1794938417656299521",
+      "last_scored": 1781324590667
+    },
     {
       "handle": "andreaarms60465",
       "x_user_id": "1656557317029265408",
