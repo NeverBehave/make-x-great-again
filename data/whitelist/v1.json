@@ -1,8 +1,18 @@
 {
   "schema": 1,
-  "generatedAt": 1781330403110,
-  "count": 135,
+  "generatedAt": 1781416812436,
+  "count": 137,
   "list": [
+    {
+      "handle": "gdioiui",
+      "x_user_id": "1882678524596867072",
+      "last_scored": 1781414347152
+    },
+    {
+      "handle": "xdownloaderbot",
+      "x_user_id": "1872675923067043840",
+      "last_scored": 1781414227179
+    },
     {
       "handle": "spacex",
       "x_user_id": "34743251",
