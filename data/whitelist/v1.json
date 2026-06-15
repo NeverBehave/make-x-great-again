@@ -1,8 +1,13 @@
 {
   "schema": 1,
-  "generatedAt": 1781416812436,
-  "count": 137,
+  "generatedAt": 1781503217407,
+  "count": 138,
   "list": [
+    {
+      "handle": "0xfunx",
+      "x_user_id": "1686801573132017664",
+      "last_scored": 1781490575373
+    },
     {
       "handle": "gdioiui",
       "x_user_id": "1882678524596867072",
