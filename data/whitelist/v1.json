@@ -1,8 +1,18 @@
 {
   "schema": 1,
-  "generatedAt": 1781503217407,
-  "count": 138,
+  "generatedAt": 1781589604056,
+  "count": 140,
   "list": [
+    {
+      "handle": "tison1096",
+      "x_user_id": "740784709878288384",
+      "last_scored": 1781582969591
+    },
+    {
+      "handle": "amiaoapp",
+      "x_user_id": "786174501427957761",
+      "last_scored": 1781575390419
+    },
     {
       "handle": "0xfunx",
       "x_user_id": "1686801573132017664",
