@@ -1,8 +1,13 @@
 {
   "schema": 1,
-  "generatedAt": 1781676004225,
-  "count": 141,
+  "generatedAt": 1781762431191,
+  "count": 142,
   "list": [
+    {
+      "handle": "xiaohu",
+      "x_user_id": null,
+      "last_scored": 1781746856777
+    },
     {
       "handle": "caiyue5",
       "x_user_id": "732437001572474880",
