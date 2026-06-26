@@ -1,8 +1,28 @@
 {
   "schema": 1,
-  "generatedAt": 1782129611233,
-  "count": 146,
+  "generatedAt": 1782475246130,
+  "count": 150,
   "list": [
+    {
+      "handle": "teacher_cao",
+      "x_user_id": null,
+      "last_scored": 1782464511405
+    },
+    {
+      "handle": "lifeprohelper",
+      "x_user_id": "1589820654068838402",
+      "last_scored": 1782456191638
+    },
+    {
+      "handle": "xiaomimimodevs",
+      "x_user_id": "2066799363746340864",
+      "last_scored": 1782455969471
+    },
+    {
+      "handle": "zcode_ai",
+      "x_user_id": "1991449975298162688",
+      "last_scored": 1782455896074
+    },
     {
       "handle": "yangshuibao",
       "x_user_id": null,
