@@ -1,8 +1,23 @@
 {
   "schema": 1,
-  "generatedAt": 1782475246130,
-  "count": 150,
+  "generatedAt": 1782540046594,
+  "count": 153,
   "list": [
+    {
+      "handle": "snail_9106",
+      "x_user_id": null,
+      "last_scored": 1782530013792
+    },
+    {
+      "handle": "shenaexcel",
+      "x_user_id": null,
+      "last_scored": 1782529969994
+    },
+    {
+      "handle": "enp39s0",
+      "x_user_id": "542497171",
+      "last_scored": 1782529906210
+    },
     {
       "handle": "teacher_cao",
       "x_user_id": null,
