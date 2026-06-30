@@ -1,8 +1,68 @@
 {
   "schema": 1,
-  "generatedAt": 1782540046594,
-  "count": 153,
+  "generatedAt": 1782842425141,
+  "count": 165,
   "list": [
+    {
+      "handle": "newscomauhq",
+      "x_user_id": "15250661",
+      "last_scored": 1782832497309
+    },
+    {
+      "handle": "espnuk",
+      "x_user_id": "89452962",
+      "last_scored": 1782832493000
+    },
+    {
+      "handle": "okxchinese",
+      "x_user_id": "1461224994705649671",
+      "last_scored": 1782832463957
+    },
+    {
+      "handle": "hongkongdoll_cn",
+      "x_user_id": "1587582305169727488",
+      "last_scored": 1782832444813
+    },
+    {
+      "handle": "saika_kawakita",
+      "x_user_id": "1399198882827960321",
+      "last_scored": 1782832426602
+    },
+    {
+      "handle": "pelositracker",
+      "x_user_id": "1540038673810350080",
+      "last_scored": 1782832417559
+    },
+    {
+      "handle": "gyaigyimii",
+      "x_user_id": "1145137598379282432",
+      "last_scored": 1782832410918
+    },
+    {
+      "handle": "piersmorgan",
+      "x_user_id": "216299334",
+      "last_scored": 1782832384919
+    },
+    {
+      "handle": "ign",
+      "x_user_id": "18927441",
+      "last_scored": 1782832377220
+    },
+    {
+      "handle": "ufc",
+      "x_user_id": "6446742",
+      "last_scored": 1782832376432
+    },
+    {
+      "handle": "10ronaldinho",
+      "x_user_id": "29479000",
+      "last_scored": 1782832374731
+    },
+    {
+      "handle": "x",
+      "x_user_id": "783214",
+      "last_scored": 1782832372604
+    },
     {
       "handle": "snail_9106",
       "x_user_id": null,
