@@ -1,8 +1,13 @@
 {
   "schema": 1,
-  "generatedAt": 1783231236858,
-  "count": 166,
+  "generatedAt": 1783296027272,
+  "count": 167,
   "list": [
+    {
+      "handle": "ninthbit_ai",
+      "x_user_id": null,
+      "last_scored": 1783288569541
+    },
     {
       "handle": "ryrenz",
       "x_user_id": "1901372809701400576",
