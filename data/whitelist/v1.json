@@ -1,8 +1,13 @@
 {
   "schema": 1,
-  "generatedAt": 1783425641406,
+  "generatedAt": 1783576838022,
   "count": 224,
   "list": [
+    {
+      "handle": "xiaohu",
+      "x_user_id": "1764818331822182400",
+      "last_scored": 1783575859486
+    },
     {
       "handle": "jackywine",
       "x_user_id": "1805875520430915586",
@@ -267,11 +272,6 @@
       "handle": "nicole_yang88",
       "x_user_id": "1654536386098364418",
       "last_scored": 1781750398045
-    },
-    {
-      "handle": "xiaohu",
-      "x_user_id": null,
-      "last_scored": 1781746856777
     },
     {
       "handle": "lonely__mh",
