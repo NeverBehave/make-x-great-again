@@ -4,7 +4,12 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const srcPath = path.resolve(__dirname, "../data/blacklist/v1.json");
-const destPath = path.resolve(__dirname, "../extension/public/blacklist-data.json");
+const destDir = path.resolve(__dirname, "../extension/public");
+const manifestPath = path.join(destDir, "blacklist-data.json");
+// AMO's validator refuses to parse any single JSON file > 5 MB. Shard well
+// under that; ~3.5 MB leaves headroom for future growth without touching the
+// packing logic.
+const SHARD_TARGET_BYTES = 3_500_000;
 
 // Must mirror the Label union in extension/lib/types.ts.
 const SUPPORTED_LABELS = new Set(["spam", "porn_bot", "likely_spam", "uncertain", "legit"]);
@@ -68,17 +73,59 @@ for (const item of parsed.list) {
 
 const compacted = [...byId.values()].map((v) => v.row);
 
-console.log("Writing compacted blacklist to:", destPath);
-fs.mkdirSync(path.dirname(destPath), { recursive: true });
-fs.writeFileSync(destPath, JSON.stringify(compacted), "utf-8");
+fs.mkdirSync(destDir, { recursive: true });
+
+// Clean up any stale shards from a previous run so a shrinking dataset
+// doesn't leave orphan files in the packaged extension.
+for (const name of fs.readdirSync(destDir)) {
+  if (/^blacklist-data-\d+\.json$/.test(name)) fs.unlinkSync(path.join(destDir, name));
+}
+
+// Pack rows into shards, each roughly SHARD_TARGET_BYTES of serialized JSON.
+// The manifest file (`blacklist-data.json`) is a tiny index the extension
+// reads first to discover the shard filenames.
+const shards = [];
+let current = [];
+let currentBytes = 2; // "[]"
+for (const row of compacted) {
+  const rowJson = JSON.stringify(row);
+  const addedBytes = rowJson.length + (current.length === 0 ? 0 : 1); // comma separator
+  if (currentBytes + addedBytes > SHARD_TARGET_BYTES && current.length > 0) {
+    shards.push(current);
+    current = [];
+    currentBytes = 2;
+  }
+  current.push(row);
+  currentBytes += rowJson.length + (current.length === 1 ? 0 : 1);
+}
+if (current.length > 0) shards.push(current);
+
+const shardFiles = [];
+shards.forEach((rows, i) => {
+  const filename = `blacklist-data-${String(i + 1).padStart(3, "0")}.json`;
+  const filePath = path.join(destDir, filename);
+  fs.writeFileSync(filePath, JSON.stringify(rows), "utf-8");
+  shardFiles.push({
+    name: filename,
+    count: rows.length,
+    bytes: fs.statSync(filePath).size,
+  });
+});
+
+const manifest = {
+  version: 1,
+  total: compacted.length,
+  shards: shardFiles.map((s) => s.name),
+};
+fs.writeFileSync(manifestPath, JSON.stringify(manifest), "utf-8");
 
 console.log(
   `Summary: kept=${compacted.length} dropped_no_numeric_id=${droppedNoNumericId} ` +
     `dropped_unsupported_label=${droppedBadLabel} dropped_bad_shape=${droppedBadShape} ` +
     `deduped_by_id=${dedupedById}`,
 );
-console.log(
-  "Done! Compacted blacklist size:",
-  (fs.statSync(destPath).size / 1024 / 1024).toFixed(2),
-  "MB",
-);
+console.log(`Wrote ${shardFiles.length} shard(s) + manifest to ${destDir}:`);
+for (const s of shardFiles) {
+  console.log(`  - ${s.name}: ${(s.bytes / 1024 / 1024).toFixed(2)} MB (${s.count} rows)`);
+}
+console.log(`  - blacklist-data.json (manifest): ${fs.statSync(manifestPath).size} bytes`);

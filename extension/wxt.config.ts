@@ -35,8 +35,10 @@ export default defineConfig({
     options_ui: { open_in_tab: true },
     // Firefox / AMO requirements (ignored by the Chrome build):
     //  - gecko.id: stable add-on ID, keyed to a domain we control.
-    //  - strict_min_version 109.0: the first Firefox release with Manifest V3
-    //    support (we no longer ship any MAIN-world content script).
+    //  - strict_min_version 140.0 / 142.0: `data_collection_permissions` was
+    //    added in Firefox 140 (desktop) and 142 (Android). Setting the min
+    //    lower makes AMO's linter warn that the key is unrecognized in the
+    //    declared range.
     //  - data_collection_permissions "none": no user data is ever sent to us
     //    or any third party. The default (local) mode is fully offline; the
     //    opt-in mute/block actions call X's own first-party endpoints with the
@@ -47,8 +49,11 @@ export default defineConfig({
           browser_specific_settings: {
             gecko: {
               id: "x-spam-sentinel@zuoluo.tv",
-              strict_min_version: "109.0",
+              strict_min_version: "140.0",
               data_collection_permissions: { required: ["none"] },
+            },
+            gecko_android: {
+              strict_min_version: "142.0",
             },
           },
         }

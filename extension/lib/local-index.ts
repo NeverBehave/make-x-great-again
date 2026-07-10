@@ -23,33 +23,50 @@ let userIdMap: Map<string, IndexEntry> | null = null;
 let handleMap: Map<string, IndexEntry> | null = null;
 let warmed = false;
 
-/** Warm the local index at startup (asynchronous, loads blacklist-data.json). */
+type Row = [string, string, string, number, string[]];
+interface Manifest {
+  version: number;
+  total: number;
+  shards: string[];
+}
+
+/** Warm the local index at startup (asynchronous, loads sharded blacklist). */
 export async function warmLocalIndex(): Promise<void> {
   if (warmed) return;
   try {
-    const url = chrome.runtime.getURL("blacklist-data.json");
-    const res = await fetch(url);
-    const list = (await res.json()) as [string, string, string, number, string[]][];
+    // AMO's validator refuses to parse any single JSON file > 5 MB, so the
+    // dataset is split across N shards listed in a tiny manifest file.
+    const manifestUrl = chrome.runtime.getURL("blacklist-data.json");
+    const manifest = (await (await fetch(manifestUrl)).json()) as Manifest;
+
+    const shardLists = await Promise.all(
+      manifest.shards.map(async (name) => {
+        const url = chrome.runtime.getURL(name);
+        return (await (await fetch(url)).json()) as Row[];
+      }),
+    );
 
     userIdMap = new Map();
     handleMap = new Map();
 
     const updatedAt = new Date().toISOString();
-    for (const [userId, handle, label, confidence, reasons] of list) {
-      if (!LABELS.has(label)) continue; // unknown label → skip entry
-      const entry: IndexEntry = {
-        userId,
-        handle,
-        verdict: {
-          label: label as Label,
-          confidence,
-          reasons,
-        },
-        source: "curated",
-        updatedAt,
-      };
-      if (userId) userIdMap.set(userId, entry);
-      if (handle) handleMap.set(handle.toLowerCase(), entry);
+    for (const list of shardLists) {
+      for (const [userId, handle, label, confidence, reasons] of list) {
+        if (!LABELS.has(label)) continue; // unknown label → skip entry
+        const entry: IndexEntry = {
+          userId,
+          handle,
+          verdict: {
+            label: label as Label,
+            confidence,
+            reasons,
+          },
+          source: "curated",
+          updatedAt,
+        };
+        if (userId) userIdMap.set(userId, entry);
+        if (handle) handleMap.set(handle.toLowerCase(), entry);
+      }
     }
     warmed = true;
   } catch (e) {
